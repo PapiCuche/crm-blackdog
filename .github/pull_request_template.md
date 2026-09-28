@@ -2,7 +2,8 @@
 
 Closes #
 
-<!-- ID del work item (p. ej., F1-02) y fase. "Refs #N" solo si el PR no cierra el issue. -->
+<!-- Usar Closes/Fixes/Resolves para el ÚNICO work item de este PR (1 issue = 1 rama = 1 PR).
+     Refs #N solo para referencias adicionales (p. ej., el issue maestro). Indicar ID (F1-02) y fase. -->
 
 ## Objetivo
 

@@ -21,7 +21,8 @@ TITLE_RE = re.compile(
 )
 SLUG = r"[a-z0-9]+(?:-[a-z0-9]+)*"
 BRANCH_RE = re.compile(rf"^(?:feature/f\d+-{SLUG}|(?:fix|hotfix|docs|chore)/{SLUG})$")
-ISSUE_RE = re.compile(r"\b(closes|fixes|resolves|refs)\s+#(\d+)\b", re.IGNORECASE)
+# Solo palabras de cierre: "Refs #N" puede aparecer, pero nunca identifica al work item.
+CLOSING_RE = re.compile(r"\b(?:closes|fixes|resolves)\s+#(\d+)\b", re.IGNORECASE)
 BRANCH_SECTION_RE = re.compile(r"^###\s+Rama\s*$\s*^(.+?)\s*$", re.MULTILINE)
 WORKABLE_STATUSES = {"status:ready", "status:in-progress"}
 FORBIDDEN_STATUSES = {"status:blocked", "status:done"}
@@ -84,10 +85,8 @@ class Result:
 
 
 def linked_issues(body: str) -> list[int]:
-    """Issues del work item: los de palabras de cierre; si no hay, los de "Refs"."""
-    refs = [(kw.lower(), int(n)) for kw, n in ISSUE_RE.findall(body)]
-    closing = [n for kw, n in refs if kw != "refs"]
-    return sorted(set(closing or [n for _, n in refs]))
+    """Work items cerrados por el PR (Closes/Fixes/Resolves). "Refs" se ignora."""
+    return sorted({int(n) for n in CLOSING_RE.findall(body)})
 
 
 def declared_branch(issue_body: str) -> str | None:
@@ -135,9 +134,16 @@ def evaluate(pr: dict, files: list[dict], issues: dict[int, dict | None]) -> Res
         )
     numbers = linked_issues(body)
     if not numbers:
-        res.errors.append("El cuerpo no referencia un issue (Closes #N / Fixes #N / Resolves #N / Refs #N)")
-    for n in numbers:
-        res.errors.extend(work_item_errors(n, issues.get(n), branch))
+        res.errors.append(
+            "El PR no cierra un work item: usar Closes/Fixes/Resolves #N (Refs solo para referencias adicionales)"
+        )
+    elif len(numbers) > 1:
+        res.errors.append(
+            f"El PR cierra {len(numbers)} work items ({', '.join(f'#{n}' for n in numbers)}): "
+            "1 issue = 1 rama = 1 PR"
+        )
+    else:
+        res.errors.extend(work_item_errors(numbers[0], issues.get(numbers[0]), branch))
     for section in missing_sections(body):
         res.errors.append(f"Falta la sección obligatoria '## {section}'")
 

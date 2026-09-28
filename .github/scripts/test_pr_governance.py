@@ -55,10 +55,10 @@ class GovernanceTest(unittest.TestCase):
 
     def test_missing_issue_fails(self):
         res = run(pr(body=BODY.replace("Closes #4", "")))
-        self.assertTrue(any("no referencia un issue" in e for e in res.errors))
+        self.assertTrue(any("no cierra un work item" in e for e in res.errors))
 
     def test_other_issue_keywords(self):
-        for kw in ("Fixes #4", "Resolves #4", "Refs #4", "closes #4"):
+        for kw in ("Fixes #4", "Resolves #4", "closes #4"):
             self.assertEqual(run(pr(body=BODY.replace("Closes #4", kw))).errors, [], kw)
 
     def test_missing_section_fails(self):
@@ -128,10 +128,30 @@ class WorkItemTest(unittest.TestCase):
     def test_pull_request_number_fails(self):
         self.assertFails(run(issues={4: {**issue(), "pull_request": {}}}), "es un PR")
 
-    def test_linked_issues_prefers_closing_keywords(self):
+    def test_linked_issues_uses_only_closing_keywords(self):
         self.assertEqual(linked_issues("Closes #3\nRefs #13"), [3])
-        self.assertEqual(linked_issues("Refs #13"), [13])
+        self.assertEqual(linked_issues("Refs #13"), [])
         self.assertEqual(linked_issues("Closes #3, fixes #5"), [3, 5])
+
+    def test_refs_only_fails(self):
+        self.assertFails(run(pr(body=BODY.replace("Closes #4", "Refs #4"))), "no cierra un work item")
+
+    def test_closes_passes(self):
+        self.assertEqual(run(pr(body=BODY)).errors, [])
+
+    def test_closes_plus_refs_validates_only_closing(self):
+        # #13 no está en el mapa de issues: si se validara, fallaría con "no existe".
+        self.assertEqual(run(pr(body=BODY.replace("Closes #4", "Closes #4\nRefs #13"))).errors, [])
+
+    def test_refs_then_resolves_validates_only_closing(self):
+        self.assertEqual(run(pr(body=BODY.replace("Closes #4", "Refs #13\nResolves #4"))).errors, [])
+
+    def test_multiple_closing_work_items_fail(self):
+        res = run(pr(body=BODY.replace("Closes #4", "Closes #4\nFixes #5")), issues={4: issue(), 5: issue()})
+        self.assertFails(res, "1 issue = 1 rama = 1 PR")
+
+    def test_same_issue_closed_twice_counts_once(self):
+        self.assertEqual(run(pr(body=BODY.replace("Closes #4", "Closes #4, resolves #4"))).errors, [])
 
     def test_declared_branch_parsing(self):
         self.assertEqual(declared_branch("### Rama\n\n`chore/project-automation`\n"), "chore/project-automation")

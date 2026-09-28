@@ -74,8 +74,8 @@ BACKLOG (roadmap: docs/fase-0/05, docs/phases/)
 |---|---|
 | Título | Conventional Commits: `feat|fix|docs|test|refactor|perf|chore|ci|build|security` + `(scope)` opcional + `: descripción` |
 | Rama | `feature/f<N>-<slug>`, `fix/<slug>`, `hotfix/<slug>`, `docs/<slug>`, `chore/<slug>` |
-| Issue | `Closes|Fixes|Resolves|Refs #N` en el cuerpo |
-| Work item real | Se consulta el issue por API (se validan los de `Closes/Fixes/Resolves`; si no hay, los de `Refs`). Debe existir, tener `work-item`, **no** tener `status:blocked` ni `status:done` (aunque también tenga otro estado) y tener `status:ready` o `status:in-progress`. Se aceptan ambos porque `work-item-state` puede cambiar el label mientras corre la governance. Además, la rama de su sección `### Rama` debe coincidir **exactamente** con la rama del PR |
+| Issue | **Exactamente un** work item cerrado con `Closes|Fixes|Resolves #N`: 0 falla y más de 1 falla (1 issue = 1 rama = 1 PR). `Refs #N` se permite solo para referencias adicionales (p. ej., el issue maestro) y nunca identifica al work item, porque no cerraría el issue ni actualizaría su estado |
+| Work item real | Se consulta por API el work item cerrado por el PR. Debe existir, tener `work-item`, **no** tener `status:blocked` ni `status:done` (aunque también tenga otro estado) y tener `status:ready` o `status:in-progress`. Se aceptan ambos porque `work-item-state` puede cambiar el label mientras corre la governance. Además, la rama de su sección `### Rama` debe coincidir **exactamente** con la rama del PR |
 | Secciones | Issue / Fase, Objetivo, Cambios, No incluye, Cómo se verificó, Definition of Done, Riesgos y deuda técnica, Autoría |
 | Tamaño | Líneas relevantes (adiciones + borrados): **≤ 400** pasa; **401–800** pasa con aviso; **> 800** falla, salvo con el label `large-pr-approved` (que convierte el fallo en aviso) |
 
