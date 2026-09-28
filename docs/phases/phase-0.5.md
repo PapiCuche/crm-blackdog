@@ -1,5 +1,7 @@
 # Fase 0.5 — Decisiones y scaffolding
 
+> La Fase 1 continúa en [phase-1.md](phase-1.md); sus work items son issues de GitHub (la tabla de PRs de abajo es el origen histórico).
+
 - **Estado:** cerrada (pendiente de merge del PR)
 - **Rama:** `feature/phase-0.5-architecture`
 - **Objetivo:** cerrar formalmente las decisiones de la Fase 0, documentar la arquitectura que guiará la implementación y dejar el scaffolding mínimo de ingeniería. **Sin funcionalidad de negocio.**

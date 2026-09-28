@@ -2,7 +2,7 @@
 
 CRM omnicanal SaaS multiempresa con agentes de IA (WhatsApp, Instagram, Messenger, TikTok), motor de precios, stock, pipeline comercial y cotizaciones.
 
-**Estado:** Fase 0.5 cerrada (decisiones y scaffolding). Siguiente: Fase 1 — infraestructura base. Aún no hay código de aplicación.
+**Estado:** Fase 1 — infraestructura base, en curso ([plan](docs/phases/phase-1.md), issue maestro #13). Aún no hay código de aplicación.
 
 ## Documentación
 
@@ -28,5 +28,7 @@ docs/       Documentación y ADRs
 Ver [infra/README.md](infra/README.md).
 
 ## Flujo de trabajo
+
+Agentes y contribuidores: leer primero [AGENTS.md](AGENTS.md). Cada incremento es un issue `work-item` ([delivery-automation.md](docs/architecture/delivery-automation.md)).
 
 GitHub Flow ([ADR-009](docs/adr/ADR-009-git-strategy.md)): ramas `feature/*` o `fix/*` → PR → CI → squash merge a `main`.

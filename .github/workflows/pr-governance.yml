@@ -1,0 +1,44 @@
+name: pr-governance
+
+on:
+  pull_request:
+    # labeled/unlabeled: para que añadir o quitar `large-pr-approved` reevalúe el tamaño.
+    types: [opened, edited, synchronize, reopened, ready_for_review, labeled, unlabeled]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: pr-governance-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  governance:
+    name: PR governance
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # El script se toma de la rama base: un PR no puede relajar su propia governance.
+      - name: Checkout base
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+
+      # Arranque: solo si la base todavía no contiene el script (el PR que lo introduce).
+      - name: Checkout PR (bootstrap)
+        if: hashFiles('.github/scripts/pr_governance.py') == ''
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Unit tests del script
+        working-directory: .github/scripts
+        run: python3 -m unittest -q test_pr_governance
+
+      - name: Validar PR
+        working-directory: .github/scripts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 pr_governance.py

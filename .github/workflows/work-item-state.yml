@@ -1,0 +1,48 @@
+name: work-item-state
+
+on:
+  pull_request:
+    types: [opened, ready_for_review, closed]
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: write
+
+jobs:
+  sync:
+    name: Sync work item status
+    # Solo PRs del propio repositorio (nunca forks).
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Actualizar labels de estado
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          ACTION: ${{ github.event.action }}
+          MERGED: ${{ github.event.pull_request.merged }}
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          case "$ACTION" in
+            opened|ready_for_review) add="status:in-progress"; remove="status:ready" ;;
+            closed)
+              if [ "$MERGED" = "true" ]; then add="status:done"; else add="status:ready"; fi
+              remove="status:in-progress" ;;
+            *) exit 0 ;;
+          esac
+          # Solo palabras clave de cierre (Closes/Fixes/Resolves); "Refs" no cambia estados.
+          issues=$(printf '%s' "${BODY:-}" \
+            | grep -oiE '\b(close[sd]?|fix(e[sd])?|resolve[sd]?)[[:space:]]+#[0-9]+' \
+            | grep -oE '[0-9]+$' | sort -u || true)
+          [ -z "$issues" ] && { echo "Sin issues de cierre referenciados."; exit 0; }
+          for n in $issues; do
+            if ! gh api "repos/$REPO/issues/$n/labels" --jq '.[].name' | grep -qx 'work-item'; then
+              echo "#$n no es un work item: se ignora."; continue
+            fi
+            gh api -X DELETE "repos/$REPO/issues/$n/labels/${remove//:/%3A}" >/dev/null 2>&1 || true
+            gh api -X POST "repos/$REPO/issues/$n/labels" -f "labels[]=$add" >/dev/null
+            echo "#$n: -$remove +$add"
+          done

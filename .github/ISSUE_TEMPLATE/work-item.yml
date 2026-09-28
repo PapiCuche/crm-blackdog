@@ -1,0 +1,100 @@
+name: Work item
+description: Unidad de trabajo del roadmap (un issue = una rama = un PR). Ver AGENTS.md.
+title: "[F?-??] "
+labels: ["work-item", "status:blocked"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Un work item debe poder ejecutarse **solo con este issue** + `AGENTS.md` + los ADR/documentos que enlace.
+        Nace en `status:blocked`; el mantenedor lo pasa a `status:ready` cuando sus dependencias están mergeadas.
+  - type: input
+    id: work_id
+    attributes:
+      label: ID / Fase
+      placeholder: "F1-02 · Fase 1 — Infraestructura base"
+    validations:
+      required: true
+  - type: input
+    id: branch
+    attributes:
+      label: Rama
+      description: "feature/f<N>-<slug>, fix/<slug>, hotfix/<slug>, docs/<slug> o chore/<slug>"
+      placeholder: "feature/f1-backend-skeleton"
+    validations:
+      required: true
+  - type: textarea
+    id: objective
+    attributes:
+      label: Objetivo
+      description: Qué resultado verificable produce este work item.
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencias
+      description: Work items (#N) que deben estar mergeados antes. "Ninguna" si aplica.
+    validations:
+      required: true
+  - type: textarea
+    id: includes
+    attributes:
+      label: Incluye
+    validations:
+      required: true
+  - type: textarea
+    id: excludes
+    attributes:
+      label: No incluye
+      description: Lo que pertenece a otros work items o fases (evita adelantar trabajo).
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Criterios de aceptación
+    validations:
+      required: true
+  - type: textarea
+    id: validations
+    attributes:
+      label: Validaciones
+      description: Comandos y checks de CI que deben pasar.
+    validations:
+      required: true
+  - type: textarea
+    id: security
+    attributes:
+      label: Impacto de seguridad / tenancy
+      description: Tenant context, RLS, permisos, secretos, PII, auditoría. "N/A" justificado si no aplica.
+    validations:
+      required: true
+  - type: textarea
+    id: adrs
+    attributes:
+      label: ADRs relacionados
+    validations:
+      required: true
+  - type: textarea
+    id: agent_notes
+    attributes:
+      label: Notas para el agente
+      description: Preguntas abiertas, riesgos conocidos, decisiones que NO debe tomar solo. "—" si no hay.
+    validations:
+      required: true
+  - type: checkboxes
+    id: readiness
+    attributes:
+      label: Checklist de preparación
+      options:
+        - label: Dependencias revisadas
+          required: true
+        - label: No duplica otro work item
+          required: true
+        - label: Scope definido
+          required: true
+        - label: No incluye trabajo de fases posteriores
+          required: true
+        - label: ADRs relevantes identificados
+          required: true

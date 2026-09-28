@@ -10,6 +10,8 @@
 | Workflow | Disparo | Estado |
 |---|---|---|
 | `security.yml` | PR + push a `main` + semanal | **Activo desde la Fase 0.5** |
+| `pr-governance.yml` (check `PR governance`) | Eventos de PR | **Activo desde A-01**: estructura del PR y tamaño ([delivery-automation.md](delivery-automation.md) §4) |
+| `work-item-state.yml` | PR abierto, ready o cerrado | **Activo desde A-01**: sincroniza los labels `status:*` del issue |
 | `backend.yml` | PR/push con cambios en `backend/**` | Se crea en la Fase 1 (cuando exista `pyproject.toml`) |
 | `frontend.yml` | PR/push con cambios en `frontend/**` | Se crea en la Fase 1 (cuando exista `package.json`) |
 
@@ -65,5 +67,5 @@ Se usan `paths` filtros para no ejecutar el pipeline del backend cuando solo cam
 
 Configurados en el ruleset `main-protection` (ver ADR-009):
 
-- **Activo:** `secret scanning (gitleaks)`.
+- **Activos:** `secret scanning (gitleaks)` y `PR governance` (este último añadido tras su primera ejecución verde).
 - **Se añadirán en la Fase 1:** `backend / checks`, `backend / tests`, `frontend / checks`, `frontend / build`.
