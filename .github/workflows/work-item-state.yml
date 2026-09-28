@@ -1,8 +1,11 @@
 name: work-item-state
 
 # Trusted (A-02): `pull_request_target` ejecuta este archivo tal como está en la rama base,
-# así que un PR no puede cambiar la lógica que usa `issues: write`. Sin checkout: solo API.
-# Datos del evento solo por variables de entorno (nunca `${{ }}` dentro de `run`).
+# y la lógica (`work_item_state.py`) sale de un checkout de la rama por defecto: un PR no
+# puede cambiar el código que usa `issues: write`. Nunca checkout ni ejecución del head.
+# Invariante: no se muta un work item que no corresponda exactamente al PR (un único issue
+# de cierre, issue real con `work-item`, `### Rama` == rama del PR) ni desde un estado
+# de origen no permitido. Datos del evento solo por variables de entorno.
 on:
   pull_request_target:
     types: [opened, ready_for_review, closed]
@@ -20,47 +23,25 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Actualizar labels de estado
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
-          ACTION: ${{ github.event.action }}
-          MERGED: ${{ github.event.pull_request.merged }}
-          BODY: ${{ github.event.pull_request.body }}
-        run: |
-          set -euo pipefail
-          # Solo palabras de cierre (Closes/Fixes/Resolves); "Refs" nunca identifica al work item.
-          issues=$(printf '%s' "${BODY:-}" \
-            | grep -oiE '\b(close[sd]?|fix(e[sd])?|resolve[sd]?)[[:space:]]+#[0-9]+' \
-            | grep -oE '[0-9]+$' | sort -u || true)
-          count=$(printf '%s' "$issues" | grep -c . || true)
-          if [ "$count" != "1" ]; then
-            echo "Se esperaba exactamente un work item de cierre y hay $count: no se cambia ningún estado."
-            exit 0
-          fi
-          n="$issues"
-          labels=$(gh api "repos/$REPO/issues/$n/labels" --jq '.[].name')
-          has() { printf '%s\n' "$labels" | grep -qx "$1"; }
-          if ! has work-item; then echo "#$n no es un work item: se ignora."; exit 0; fi
+      - name: Checkout trusted (rama por defecto, nunca el head del PR)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
 
-          case "$ACTION" in
-            opened|ready_for_review)
-              if has status:blocked || has status:done; then
-                echo "#$n está blocked/done: no pasa a in-progress."; exit 0
-              fi
-              add="status:in-progress"; remove="status:ready" ;;
-            closed)
-              if [ "$MERGED" = "true" ]; then
-                add="status:done"; remove="status:in-progress status:ready"
-              elif has status:in-progress; then
-                add="status:ready"; remove="status:in-progress"
-              else
-                echo "#$n no estaba in-progress: sin cambios."; exit 0
-              fi ;;
-            *) exit 0 ;;
-          esac
-          for r in $remove; do
-            gh api -X DELETE "repos/$REPO/issues/$n/labels/${r//:/%3A}" >/dev/null 2>&1 || true
-          done
-          gh api -X POST "repos/$REPO/issues/$n/labels" -f "labels[]=$add" >/dev/null
-          echo "#$n: -[$remove] +$add"
+      - name: Registrar la fuente trusted ejecutada
+        env:
+          TRUSTED_REF: ${{ github.event.repository.default_branch }}
+        run: |
+          echo "Trusted work-item-state source: $TRUSTED_REF @ $(git rev-parse HEAD)"
+
+      - name: Unit tests de la lógica de estado (trusted)
+        working-directory: .github/scripts
+        run: python3 -m unittest -q test_work_item_state
+
+      - name: Aplicar transición (solo si el work item corresponde al PR)
+        working-directory: .github/scripts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: python3 work_item_state.py

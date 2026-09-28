@@ -32,8 +32,25 @@ BACKLOG (roadmap: docs/fase-0/05, docs/phases/)
 | REVIEW | PR abierto, no draft, con CI terminado | Derivado del PR (sin label, para no duplicar estado) |
 | DONE | label `status:done` + issue cerrado | Workflow al mergear; GitHub cierra el issue por `Closes #N` |
 
-- Si un PR se cierra **sin merge**, el workflow devuelve el issue a `status:ready`.
-- El workflow solo actúa sobre issues con label `work-item`, solo con palabras clave de cierre (`Closes`, `Fixes`, `Resolves`; `Refs` no cambia estados) y solo para PRs del propio repositorio (nunca forks).
+- `work-item-state` es trusted (A-02): `pull_request_target` y un checkout **solo de la rama por defecto**. Ejecuta `.github/scripts/work_item_state.py`, que **reutiliza** la identificación del work item de `pr_governance.py` para evitar implementaciones divergentes.
+- **Invariante:** ningún workflow con permisos de escritura muta un work item que no corresponda exactamente al PR. Antes de escribir se exige:
+  - exactamente **un** issue de cierre (`Closes/Fixes/Resolves`; `Refs` nunca cuenta);
+  - que el issue exista y no sea un PR (`GET /issues/N` sin campo `pull_request`);
+  - que tenga el label `work-item`;
+  - que su `### Rama` coincida **exactamente** con la rama del PR, recibida como dato por la variable de entorno `PR_HEAD_REF`;
+  - PRs del mismo repositorio.
+
+  Si algo no se cumple: **ninguna mutación** (el paso termina bien y deja el motivo en el log).
+- **Transiciones permitidas:**
+
+| Evento | Estado de origen | Resultado |
+|---|---|---|
+| opened / ready_for_review | `status:ready` | `status:in-progress` (quita `ready`) |
+| opened / ready_for_review | `status:in-progress` | Sin cambio (idempotente) |
+| opened / ready_for_review | `blocked`, `done` (aunque haya otro estado) o sin estado | Sin cambio |
+| closed sin merge | `status:in-progress` (sin blocked/done) | `status:ready` |
+| closed sin merge | cualquier otro | Sin cambio |
+| closed con merge | cualquiera | Queda **solo** `status:done` (quita `ready`, `in-progress` y `blocked` si quedaron por inconsistencia) |
 
 ## 3. Roles
 
@@ -82,7 +99,7 @@ BACKLOG (roadmap: docs/fase-0/05, docs/phases/)
 - **Excluidos del tamaño:** `docs/**`, `*.lock`, `uv.lock`, `pnpm-lock.yaml`, `package-lock.json`, `**/migrations/**`, `generated/**` y `frontend/src/lib/api/**`. Nunca se excluyen archivos de aplicación para pasar el límite.
 - **Integridad (A-02):** `pr-governance-trusted.yml` usa `pull_request_target`, así que GitHub ejecuta la **versión del workflow que está en la rama base**. Además hace checkout **solo de la rama por defecto** (`github.event.repository.default_branch`) y ejecuta el `pr_governance.py` de ese checkout. En el Step Summary registra la ref y el SHA exactos ejecutados. Si un PR modifica `pr-governance-trusted.yml` o `.github/scripts/pr_governance.py`, esa versión **no** es la que lo evalúa; empezará a aplicarse cuando se mergee (tras revisión).
 - **Frontera de confianza verificada:** `test_workflow_security.py` (análisis estático, stdlib) comprueba que todo workflow `pull_request_target`:
-  - no referencia `pull_request.head.sha|ref`;
+  - no referencia `pull_request.head.sha`, y `pull_request.head.ref` solo como dato en una variable de `env:` (nunca en `ref:`, `uses:` ni `run`);
   - hace checkout solo de refs trusted;
   - no interpola `${{ }}` dentro de `run`;
   - no ejecuta instalaciones ni `eval`;
@@ -99,7 +116,7 @@ BACKLOG (roadmap: docs/fase-0/05, docs/phases/)
 | Ejecuta código del PR (backend, frontend, tests, builds) | `pull_request` | Token de solo lectura en forks; nunca con secretos de producción |
 | Trusted de metadata/governance (valida título, rama, body, labels, issues; sincroniza labels) | Puede usar `pull_request_target` | **No** hace checkout del head ni ejecuta código, scripts o acciones del PR; solo lee metadata por API; permisos mínimos; datos del evento solo por variables de entorno; revisión de seguridad específica en cada cambio |
 
-`pull_request_target` no se aplica de forma indiscriminada. Hoy lo usan solo `pr-governance-trusted.yml` (permisos de solo lectura) y `work-item-state.yml` (`issues: write`, sin checkout). Cualquier workflow nuevo con este trigger debe pasar `test_workflow_security.py` y una revisión de seguridad específica.
+`pull_request_target` no se aplica de forma indiscriminada. Hoy lo usan solo `pr-governance-trusted.yml` (permisos de solo lectura) y `work-item-state.yml` (`issues: write`, con checkout solo de la rama por defecto). Cualquier workflow nuevo con este trigger debe pasar `test_workflow_security.py` y una revisión de seguridad específica.
 
 ## 6. Contrato de handoff
 

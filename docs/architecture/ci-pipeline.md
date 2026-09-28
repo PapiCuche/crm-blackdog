@@ -12,7 +12,7 @@
 | `security.yml` | PR + push a `main` + semanal | **Activo desde la Fase 0.5** |
 | `pr-governance-trusted.yml` (check `PR governance (trusted)`) | `pull_request_target` | **Activo desde A-02**: frontera de governance; código trusted de `main`, solo lectura ([delivery-automation.md](delivery-automation.md) §4–§5) |
 | `pr-governance.yml` (check `PR governance`, legacy) | `pull_request` | Solo informativo tras A-02; se retira según OBS-A-02-1 |
-| `work-item-state.yml` | `pull_request_target` (abierto, ready, cerrado) | Trusted desde A-02: sincroniza los labels `status:*` del único work item de cierre; sin checkout |
+| `work-item-state.yml` | `pull_request_target` (abierto, ready, cerrado) | Trusted desde A-02: checkout solo de `main` y `work_item_state.py`; muta los labels `status:*` solo si el work item corresponde exactamente al PR ([delivery-automation.md](delivery-automation.md) §2) |
 | `backend.yml` | PR/push con cambios en `backend/**` | Se crea en la Fase 1 (cuando exista `pyproject.toml`) |
 | `frontend.yml` | PR/push con cambios en `frontend/**` | Se crea en la Fase 1 (cuando exista `package.json`) |
 

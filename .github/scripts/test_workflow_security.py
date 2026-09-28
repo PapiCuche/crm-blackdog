@@ -54,8 +54,14 @@ class TrustBoundaryTest(unittest.TestCase):
         self.assertRegex(text, r"(?m)^\s+name: PR governance \(trusted\)\s*$")
 
     def test_no_head_references(self):
+        # head.sha nunca; head.ref solo como DATO en una variable de entorno (env: KEY: ${{ ... }}).
+        env_ref = re.compile(r"^\s+[A-Z][A-Z0-9_]*:\s*\$\{\{\s*github\.event\.pull_request\.head\.ref\s*\}\}\s*$")
         for p in trusted_workflows():
-            self.assertNotRegex(p.read_text(), r"pull_request\.head\.(sha|ref)\b", p.name)
+            for line in p.read_text().splitlines():
+                if re.search(r"pull_request\.head\.sha\b", line):
+                    self.fail(f"{p.name}: head.sha en workflow trusted: {line.strip()}")
+                if re.search(r"pull_request\.head\.ref\b", line):
+                    self.assertRegex(line, env_ref, f"{p.name}: head.ref fuera de env: {line.strip()}")
 
     def test_checkout_only_trusted_refs(self):
         for p in trusted_workflows():
