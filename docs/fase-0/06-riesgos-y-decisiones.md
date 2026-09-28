@@ -112,13 +112,13 @@
 | D-REV-6 | Consentimientos por canal y propósito: `contact_consents` + `contact_consent_events`, consultados por `MessagingPolicyService` | ✅ APPROVED (revisión PR #1) | ADR-010, 02 E.5 |
 | D-REV-7 | `customer_window_expires_at` solo denormalizado; la ventana se recalcula al enviar | ✅ APPROVED (revisión PR #1) | ADR-010 §2 |
 | D-REV-8 | Imágenes locales fijadas por patch: PostgreSQL 18.6, Redis 8.8.3 (Mailpit: se fija el patch en F1-01) | ✅ APPROVED (revisión PR #1) | infra/docker/compose.yaml |
+| D-ENG-1 | Baseline exacta: Python 3.14.7, Django 5.2.17 LTS, Node 24.21.0 LTS, Next.js 16.3.x Active LTS (16.3.6 a la fecha; F1-09 fija la última patch publicada, 16.3.7 anunciada para el 30/09), React 19.2.8, TypeScript 6.0.3, pnpm 12.6.0, uv 0.12.19, Mailpit v1.31.3; UUIDv7 con la stdlib `uuid.uuid7()` | ✅ CLOSED (2026-09-28) | ADR-012 |
+| D-ENG-2 | Emulador S3 local: **Garage v2.4.1** (SeaweedFS como fallback); se añade a compose en F1-08 con tests de contrato boto3 | ✅ CLOSED (2026-09-28) | ADR-012 §6 |
 
 ### U.2 Decisiones abiertas — ingeniería (se resuelven al inicio de la Fase 1)
 
 | ID | Decisión | Recomendación | Bloquea |
 |---|---|---|---|
-| D-ENG-1 | Versiones exactas: Python, Django, Node, Next.js y librería UUIDv7 | Verificar el soporte vigente el día de inicio: Django LTS/estable + Python soportado (3.13/3.14), Node LTS, Next.js estable | Fase 1 |
-| D-ENG-2 | Emulador S3 local (MinIO ya no publica imágenes en Docker Hub) | **Garage** (v2.x) o SeaweedFS; prueba de 1 h con boto3 antes de decidir | Fase 1 |
 | D10-H | Proveedor de hosting de producción | Decidir antes del final de la Fase 6 (hace falta un endpoint público para los webhooks de la Fase 7) | Fase 7 |
 
 ### U.3 Decisiones abiertas — producto y dominio
@@ -167,5 +167,5 @@
 
 ## Qué necesito de ti para arrancar la Fase 1
 
-- **Nada bloqueante de producto.** La Fase 1 (infraestructura base) solo necesita D-ENG-1 y D-ENG-2, que resuelvo al inicio con verificación de versiones y una prueba corta, y que registraré como ADR.
+- **Nada bloqueante de producto.** D-ENG-1 y D-ENG-2 quedaron cerradas en ADR-012 (PR F1-01).
 - **En paralelo (calendario):** verificación del negocio en Meta y número del piloto (D-CH-3), y valores de descuento por rol (D-COM-5).

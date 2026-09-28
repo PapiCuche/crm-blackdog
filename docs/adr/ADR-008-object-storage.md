@@ -63,7 +63,7 @@ platform/{purpose}/{yyyy}/{mm}/{file_uuid}
 
 Un emulador S3-compatible en docker-compose, con el bucket creado por un contenedor de init y las mismas variables de entorno que en producción.
 
-> **Actualización 2026-09-28 (Fase 0.5):** al fijar las imágenes, se verificó que Docker Hub ya no devuelve etiquetas de `minio/minio` (MinIO dejó de distribuir imágenes de su edición comunitaria). No se adopta MinIO como dependencia local. El emulador se elige en la Fase 1 (decisión **D-ENG-2**) entre **Garage** (`dxflrs/garage`, v2.x mantenida) y **SeaweedFS** (modo S3). Como la interfaz es S3 estándar, la elección no afecta al código. Los tests unitarios usan `InMemoryStorage`; los de integración, el emulador elegido.
+> **Actualización 2026-09-28 (Fase 0.5):** al fijar las imágenes, se verificó que Docker Hub ya no devuelve etiquetas de `minio/minio` (MinIO dejó de distribuir imágenes de su edición comunitaria). No se adopta MinIO como dependencia local. El emulador se eligió en la Fase 1 (decisión **D-ENG-2**): **Garage v2.4.1**, con SeaweedFS como fallback (ver **ADR-012** §6). Como la interfaz es S3 estándar, la elección no afecta al código. Los tests unitarios usan `InMemoryStorage`; los de integración, el emulador elegido.
 
 ## Alternatives considered
 

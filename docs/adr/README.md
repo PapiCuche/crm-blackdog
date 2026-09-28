@@ -17,6 +17,7 @@ Registro formal de las decisiones de arquitectura. Cada ADR es **inmutable una v
 | [ADR-009](ADR-009-git-strategy.md) | GitHub Flow | Accepted | 2026-09-28 |
 | [ADR-010](ADR-010-messaging-policy.md) | MessagingPolicyService, ventana de atención y plantillas | Accepted | 2026-09-28 |
 | [ADR-011](ADR-011-observability-and-logs.md) | Observabilidad y separación de logs (aplicación / auditoría / IA) | Accepted | 2026-09-28 |
+| [ADR-012](ADR-012-engineering-runtime-baseline.md) | Baseline de runtimes, herramientas e imágenes; emulador S3 local (Garage) | Accepted | 2026-09-28 |
 
 ## Plantilla
 
