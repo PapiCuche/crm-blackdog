@@ -1,0 +1,51 @@
+name: pr-governance-trusted
+
+# Governance trusted (A-02, OBS-A-01-1). `pull_request_target` ejecuta ESTE archivo tal
+# como está en la rama base, así que el PR no puede modificar la governance que lo evalúa.
+# Reglas (docs/architecture/delivery-automation.md §5):
+#   - nunca checkout del head del PR ni ejecución de código, scripts o acciones del PR;
+#   - el script se toma de la rama por defecto (trusted);
+#   - solo metadata por API; permisos de solo lectura;
+#   - datos del evento solo por variables de entorno (nunca `${{ }}` dentro de `run`).
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened, ready_for_review, labeled, unlabeled]
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: read
+
+concurrency:
+  group: pr-governance-trusted-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  governance:
+    name: PR governance (trusted)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout trusted (rama por defecto, nunca el head del PR)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Registrar la fuente trusted ejecutada
+        env:
+          TRUSTED_REF: ${{ github.event.repository.default_branch }}
+        run: |
+          sha=$(git rev-parse HEAD)
+          echo "Trusted governance source: $TRUSTED_REF @ $sha"
+          printf '## Trusted source\n\n`%s` @ `%s` (no se ejecuta código del PR)\n' "$TRUSTED_REF" "$sha" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Unit tests del script (trusted)
+        working-directory: .github/scripts
+        run: python3 -m unittest -q test_pr_governance test_workflow_security
+
+      - name: Validar PR (solo metadata por API)
+        working-directory: .github/scripts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 pr_governance.py

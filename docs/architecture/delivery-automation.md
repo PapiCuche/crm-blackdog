@@ -12,7 +12,7 @@ BACKLOG (roadmap: docs/fase-0/05, docs/phases/)
   → READY ISSUE (work item con status:ready, dependencias mergeadas)
   → BUILDER (rama del issue, implementación, validaciones)
   → PR (template, "Closes #N", sin merge)
-  → GOVERNANCE (check "PR governance": estructura)
+  → GOVERNANCE (check "PR governance (trusted)": estructura + work item)
   → CI (security + backend + frontend)
   → REVIEWER (segundo agente o persona: lee el diff)
   → CHANGES REQUESTED ↺ BUILDER   |   APPROVED
@@ -56,7 +56,7 @@ BACKLOG (roadmap: docs/fase-0/05, docs/phases/)
 
 ### GitHub
 - Checks:
-  - `PR governance`: estructura del PR;
+  - `PR governance (trusted)`: estructura del PR y work item (frontera de seguridad; el legacy `PR governance` es solo informativo tras A-02);
   - `secret scanning (gitleaks)`;
   - `backend` y `frontend`, a medida que existan.
 - Ruleset `main-protection`:
@@ -68,7 +68,7 @@ BACKLOG (roadmap: docs/fase-0/05, docs/phases/)
 ### Humano (mantenedor)
 - **Único** que da la aprobación final de producto y hace el merge (squash).
 
-## 4. Qué valida `PR governance` (solo estructura, no calidad)
+## 4. Qué valida `PR governance (trusted)` (solo estructura, no calidad)
 
 | Regla | Detalle |
 |---|---|
@@ -80,8 +80,15 @@ BACKLOG (roadmap: docs/fase-0/05, docs/phases/)
 | Tamaño | Líneas relevantes (adiciones + borrados): **≤ 400** pasa; **401–800** pasa con aviso; **> 800** falla, salvo con el label `large-pr-approved` (que convierte el fallo en aviso) |
 
 - **Excluidos del tamaño:** `docs/**`, `*.lock`, `uv.lock`, `pnpm-lock.yaml`, `package-lock.json`, `**/migrations/**`, `generated/**` y `frontend/src/lib/api/**`. Nunca se excluyen archivos de aplicación para pasar el límite.
-- **Integridad:** el script se ejecuta **desde la rama base** para que un PR no pueda relajar su propia governance. Solo el PR que lo introduce usa su propia versión (arranque).
-- **Limitación conocida (OBS-A-01-1):** con `pull_request`, la **definición del workflow** (YAML) sigue perteneciendo al ref del PR, así que un PR podría modificarla. Se resuelve en **A-02 (#15)** con un trigger trusted. Hasta entonces, cualquier cambio en `.github/workflows/**` o `.github/scripts/**` exige revisión humana específica.
+- **Integridad (A-02):** `pr-governance-trusted.yml` usa `pull_request_target`, así que GitHub ejecuta la **versión del workflow que está en la rama base**. Además hace checkout **solo de la rama por defecto** (`github.event.repository.default_branch`) y ejecuta el `pr_governance.py` de ese checkout. En el Step Summary registra la ref y el SHA exactos ejecutados. Si un PR modifica `pr-governance-trusted.yml` o `.github/scripts/pr_governance.py`, esa versión **no** es la que lo evalúa; empezará a aplicarse cuando se mergee (tras revisión).
+- **Frontera de confianza verificada:** `test_workflow_security.py` (análisis estático, stdlib) comprueba que todo workflow `pull_request_target`:
+  - no referencia `pull_request.head.sha|ref`;
+  - hace checkout solo de refs trusted;
+  - no interpola `${{ }}` dentro de `run`;
+  - no ejecuta instalaciones ni `eval`;
+  - no usa acciones locales;
+  - no pide permisos de escritura salvo `issues: write` en `work-item-state`.
+- **Arranque:** el workflow trusted solo protege cuando ya está en `main`. El PR que lo introduce (A-02) todavía se protege con el legacy `PR governance`. Tras su merge, el ruleset pasa a requerir `PR governance (trusted)` en lugar del legacy (OBS-A-01-1 resuelto; retirada del legacy en OBS-A-02-1).
 - **Excepción:** los PRs de `dependabot[bot]` no siguen el template. Para ellos las reglas se informan como avisos y el check pasa, y la revisión humana sigue siendo obligatoria.
 - `large-pr-approved` solo lo aplica el mantenedor, de forma consciente.
 
@@ -92,7 +99,7 @@ BACKLOG (roadmap: docs/fase-0/05, docs/phases/)
 | Ejecuta código del PR (backend, frontend, tests, builds) | `pull_request` | Token de solo lectura en forks; nunca con secretos de producción |
 | Trusted de metadata/governance (valida título, rama, body, labels, issues; sincroniza labels) | Puede usar `pull_request_target` | **No** hace checkout del head ni ejecuta código, scripts o acciones del PR; solo lee metadata por API; permisos mínimos; datos del evento solo por variables de entorno; revisión de seguridad específica en cada cambio |
 
-`pull_request_target` no se aplica de forma indiscriminada. La migración de `PR governance` y `work-item-state` se evalúa en A-02 (#15).
+`pull_request_target` no se aplica de forma indiscriminada. Hoy lo usan solo `pr-governance-trusted.yml` (permisos de solo lectura) y `work-item-state.yml` (`issues: write`, sin checkout). Cualquier workflow nuevo con este trigger debe pasar `test_workflow_security.py` y una revisión de seguridad específica.
 
 ## 6. Contrato de handoff
 

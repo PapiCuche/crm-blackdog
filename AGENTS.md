@@ -76,7 +76,7 @@ El issue define **Incluye**, **No incluye**, **Criterios de aceptación** y **Va
 
 ## 7. Pull Request
 
-Usa `.github/pull_request_template.md`. El check **PR governance** exige:
+Usa `.github/pull_request_template.md`. El check requerido **PR governance (trusted)** (código de `main`, no del PR) exige:
 - título Conventional Commit;
 - rama válida;
 - que cierre **exactamente un** work item con `Closes/Fixes/Resolves #N`. Ese issue debe:
