@@ -34,7 +34,8 @@ backend/
 │   │   ├── base.py           settings comunes; lectura de env validada (fallo al arrancar si falta algo crítico)
 │   │   ├── local.py
 │   │   ├── test.py
-│   │   └── production.py
+│   │   ├── production.py     runtime (web/worker/ws/beat): solo DATABASE_URL (crm_app); rechaza credenciales del migrador
+│   │   └── migrate.py        job de migraciones: DATABASE_MIGRATOR_URL (crm_migrator); sin secretos de runtime
 │   ├── urls.py               /api/v1/…, /api/v1/o/<slug>/…, /webhooks/…, /health/…
 │   ├── asgi.py               HTTP + WebSocket (ProtocolTypeRouter)
 │   ├── wsgi.py               (no se usa en producción; útil para herramientas)
@@ -108,6 +109,15 @@ infra/
 │   └── .env.example          variables documentadas (sin valores reales)
 └── deploy/                   IaC / scripts de despliegue (cuando se elija hosting)
 ```
+
+**Procesos de despliegue y credenciales (ADR-002 §1.1):**
+
+| Proceso | Settings | Credencial de BD |
+|---|---|---|
+| `web`, `worker`, `ws`, `beat` | `config.settings.production` | `DATABASE_URL` → `crm_app` únicamente |
+| `migrate` (job efímero previo al despliegue de la nueva versión) | `config.settings.migrate` | `DATABASE_MIGRATOR_URL` → `crm_migrator` únicamente |
+
+La IaC define secretos separados para cada grupo; ningún proceso de runtime monta el secreto del migrador.
 
 ## 5. `docs/`
 

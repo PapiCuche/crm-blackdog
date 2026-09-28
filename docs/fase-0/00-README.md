@@ -23,7 +23,7 @@ Se divide en archivos para poder versionarlos y revisarlos por separado.
 
 ## Las 6 correcciones más importantes que propongo
 
-1. **Asignación con FKs reales, no polimórfica.** `assigned_type + assigned_id` no permite integridad referencial. Propongo `assigned_team_id`, `assigned_membership_id` y `assigned_ai_agent_id` con un `CHECK`. Además, una conversación puede tener equipo y usuario a la vez.
+1. **Asignación con FKs reales, no polimórfica.** El diseño original (tipo + ID genérico) no permite integridad referencial. Aprobado en ADR-007: `assigned_team_id`, `assigned_user_id` y `assigned_ai_agent_id` con un `CHECK` (usuario XOR IA) e historial `conversation_assignments`. Una conversación puede tener equipo y responsable directo a la vez.
 2. **Promociones: un solo modelo, no dos.** El prompt las modela dos veces (`price_type = promoción` en §38 y `promotions` en §42). Propongo que las promociones sean reglas en `promotions` y que `product_prices` contenga solo precios de listas.
 3. **Las promociones no se "activan" con un cron.** La vigencia se resuelve en el momento de la consulta (`starts_at/ends_at` + restricción de exclusión en PostgreSQL). Si un job falla, no debe quedar un precio promocional vivo.
 4. **Reordenar fases.** Las tools de IA de la Fase 7 (`create_lead`, `create_opportunity`, `create_quote`) dependen de dominios que llegan en las Fases 9–10. Además, el handoff (Fase 8) debe salir junto con la IA autónoma, no después.

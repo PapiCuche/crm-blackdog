@@ -50,7 +50,7 @@ ALTER TABLE conversations ADD CONSTRAINT conversations_single_direct_assignee
 
 - `CHECK` que exige **exactamente uno** de: `assigned_by_user_id`, `assigned_by_ai_agent_id` o `assigned_by_system = true`.
 - `crm_app` no tiene `UPDATE` ni `DELETE` sobre esta tabla.
-- *(Sustituye a la tabla `conversation_transfers` de `docs/fase-0/02-modelo-de-datos.md`.)*
+- *(Sustituye a la tabla `conversation_transfers` del borrador inicial de la Fase 0; `docs/fase-0/02-modelo-de-datos.md` ya usa este modelo.)*
 
 ### 3. Un único punto de escritura
 

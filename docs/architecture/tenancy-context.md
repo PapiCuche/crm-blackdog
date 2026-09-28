@@ -89,7 +89,7 @@ Request /api/v1/o/{org_slug}/contacts/…
         1. ¿ruta tenant (prefijo /api/v1/o/)? si no → pasa sin contexto (rutas de auth/plataforma)
         2. user autenticado? si no → 401
         3. org = platform_selectors.organization_by_slug(slug)          # tabla platform-owned
-        4. membership = user_scope(user) → organization_memberships      # política RLS por user_id
+        4. membership = user_scope(user) → organization_memberships      # sin tenant: la política SELECT deja ver solo las del usuario
                         WHERE organization_id = org.id AND status = ACTIVE
            no existe → 404
         5. org.status ∈ {ACTIVE, TRIAL}? si no → 403 ORG_SUSPENDED
@@ -99,7 +99,7 @@ Request /api/v1/o/{org_slug}/contacts/…
 
 - **Toda la vista** (autorización, serializers, servicios y serialización de la respuesta) se ejecuta dentro del `tenant_scope` → una transacción por petición en las rutas de tenant.
 - **Respuestas en streaming** (exportaciones grandes): prohibidas en las vistas de tenant; se generan con Celery y se descargan del storage con una URL firmada.
-- `user_scope(user)`: transacción corta con solo `app.user_id` fijado; la política de `organization_memberships` permite ver las propias membresías. Se usa para resolver la membresía y listar "mis organizaciones".
+- `user_scope(user)`: transacción corta con solo `app.user_id` fijado (sin `app.tenant_id`); la política SELECT de `organization_memberships` permite ver las propias membresías **solo porque no hay tenant activo**. Dentro de `tenant_scope` la misma política restringe al tenant, aunque `app.user_id` también esté fijado (ADR-002 §3.2). `user_scope` no permite escrituras en tablas tenant-owned. Se usa para resolver la membresía y listar "mis organizaciones".
 - Las rutas de plataforma (`/api/v1/auth/…`, `/api/v1/me/organizations`) no abren un `tenant_scope`; solo tocan tablas platform-owned o usan `user_scope`.
 - **Las vistas asíncronas de Django no se usan en las rutas de tenant** en el MVP (el contextvar funciona, pero una transacción no puede cruzar un `await` de forma segura con el ORM). Si se usan en el futuro, el acceso a BD va en `sync_to_async` con su propio scope.
 
@@ -146,7 +146,7 @@ POST /webhooks/meta/
   1. Verificar la firma (sin tocar tablas tenant)
   2. INSERT en webhook_ingress (platform-owned: provider, event_key, payload, received_at)
      ON CONFLICT DO NOTHING                                  ← sin tenant_scope
-  3. Encolar process_webhook(ingress_id)                      ← @platform_task
+  3. Encolar process_webhook_ingress(ingress_id)                      ← @platform_task
 Worker:
   4. route = resolvers.resolve_channel_account(platform, external_account_id)
        → función SECURITY DEFINER: devuelve (organization_id, channel_account_id) o nada
@@ -156,7 +156,8 @@ Worker:
 ```
 
 - El tenant **siempre** sale del resolver (ID de cuenta de canal único global), **nunca** de un campo del payload.
-- *(Refina `docs/fase-0/02`: la tabla de ingesta cruda es platform-owned, `webhook_ingress`; los eventos ya enrutados que se guardan para auditoría o reintento son tenant-owned.)*
+- El resolver es una función `SECURITY DEFINER` que cumple los requisitos de ADR-002 §3.3 (propietario explícito, `search_path` fijo, inputs tipados, retorno mínimo, sin SQL dinámico, `REVOKE ALL … FROM PUBLIC` + `GRANT EXECUTE … TO crm_app`).
+- `webhook_ingress` es platform-owned (sin RLS de tenant) y solo la usa el módulo `integrations`; su `organization_id` se rellena tras enrutar y es informativo. Los datos de negocio resultantes (contactos, mensajes, estados) se escriben en tablas tenant-owned dentro del `tenant_scope`.
 
 ## 6. Tools de IA
 
@@ -177,7 +178,7 @@ class Command(TenantCommand):            # manage.py rebuild_search_index --org 
 - `PlatformCommand`: sin tenant. Si necesita BYPASSRLS usa el alias de conexión `platform` (rol `crm_platform`, que solo se crea cuando haga falta), requiere `--reason` y audita.
 - **Django admin:** solo para tablas platform-owned en producción. Los datos de tenant se gestionan desde la aplicación (con permisos y auditoría). En desarrollo, el admin puede operar bajo un tenant elegido.
 - **Shell (`manage.py shell`):** arranca sin contexto; hay que usar `with tenant_scope(...)` explícitamente (lo recuerda un banner del shell).
-- **Migraciones:** se ejecutan con `crm_migrator` (`DATABASE_MIGRATOR_URL`). Las migraciones de datos que tocan tablas de tenant iteran por tenant o usan la capacidad BYPASSRLS del migrador de forma consciente y revisada en el PR.
+- **Migraciones:** se ejecutan con `crm_migrator` (`DATABASE_MIGRATOR_URL`) en un **job separado**; web, worker, ws y beat nunca reciben esa credencial (ADR-002 §1.1). Las migraciones de datos que tocan tablas de tenant iteran por tenant o usan la capacidad BYPASSRLS del migrador de forma consciente y revisada en el PR.
 
 ## 8. Tests (gate de CI)
 
@@ -186,7 +187,7 @@ class Command(TenantCommand):            # manage.py rebuild_search_index --org 
 | T1 | Sin contexto: `SELECT count(*)` en cada tabla tenant-owned con el rol `crm_app` → 0 | Políticas ausentes o mal escritas |
 | T2 | Contexto A: ninguna fila de B visible (tablas pobladas por factories en ambas organizaciones) | Fugas por política |
 | T3 | Contexto A: `INSERT` con `organization_id = B` → error | `WITH CHECK` ausente |
-| T4 | Introspección: `relrowsecurity` y `relforcerowsecurity` en toda tabla con `organization_id`; política `tenant_isolation` presente | Migraciones sin RLS |
+| T4 | Introspección: `relrowsecurity` y `relforcerowsecurity` en toda tabla con `organization_id`; política `tenant_isolation` presente (salvo `organization_memberships`, con sus 4 políticas específicas); **como máximo una política PERMISSIVE por tabla y comando** | Migraciones sin RLS |
 | T5 | Introspección de roles: `crm_app` no es propietario ni superusuario y no tiene BYPASSRLS | Configuración de roles |
 | T6 | Fuga por pool: dos peticiones secuenciales con A y B reutilizando la misma conexión → al inicio de la segunda, `current_setting` vacío | `SET` de sesión |
 | T7 | HTTP cruzado: recorrer **todas** las rutas del router de tenant con los IDs de B autenticado como A → 404 en detalle, update y delete; los listados no contienen B | Scoping de vistas y FKs recibidas |
@@ -196,5 +197,9 @@ class Command(TenantCommand):            # manage.py rebuild_search_index --org 
 | T11 | Webhook: payload con un `organization_id` falso → ignorado; el enrutado usa la cuenta de canal | Resolver |
 | T12 | Tools IA (desde la Fase 8): cada tool con un ID de B → `NOT_FOUND`; tools de contacto actual sin argumentos de ID | Tool scoping |
 | T13 | Estático: sin `SET app.`, sin `set_config(…, false)`, sin `.objects` de modelos tenant en módulos de plataforma, sin `all_tenants` fuera de `platform` | Regresiones de código |
+| T14 | Memberships con tenant: usuario miembro de A y B; `tenant_scope(A)` (con `app.user_id` fijado) + `SELECT` raw sobre `organization_memberships` → **solo** la membresía de A | Ampliación por la rama `user_id` de la política |
+| T15 | Memberships sin tenant: `user_scope(user)` → devuelve las membresías de A **y** B; INSERT/UPDATE/DELETE → rechazados | Política de resolución de organización |
+| T16 | SECURITY DEFINER (introspección): cada función `prosecdef` tiene `search_path` fijo en `proconfig`, propietario `crm_migrator`, **sin** EXECUTE para `PUBLIC` y con EXECUTE para `crm_app` | Funciones cross-tenant expuestas o secuestrables |
+| T17 | Credenciales: `web`/`worker`/`ws`/`beat` no arrancan si el entorno contiene `DATABASE_MIGRATOR_URL` o `CRM_MIGRATOR_PASSWORD`, o si el rol conectado es superusuario, tiene BYPASSRLS o es propietario de tablas | Credencial del migrador en el runtime |
 
 **Todos los tests de BD se ejecutan conectados como un rol equivalente a `crm_app`** (el fixture crea la BD con el migrador y conecta los tests con el rol de aplicación). Si los tests corren como superusuario, RLS no se prueba: el pipeline falla si detecta que el usuario de test tiene `rolsuper` o `rolbypassrls`.

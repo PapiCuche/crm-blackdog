@@ -31,9 +31,9 @@
 
 | # | Rama | Contenido | Verificación |
 |---|---|---|---|
-| 1 | `feature/f1-engineering-versions` | ADR-012 con versiones fijadas (D-ENG-1) y emulador S3 (D-ENG-2) tras una prueba corta | ADR revisado |
+| 1 | `feature/f1-engineering-versions` | ADR-012 con versiones fijadas (D-ENG-1): Python, Django, Node, Next.js, librería UUIDv7; imágenes Docker fijadas por patch (PostgreSQL 18.6 y Redis 8.8.3 ya fijadas; Mailpit todavía en `v1.31` → fijar patch) y emulador S3 (D-ENG-2) tras una prueba corta | ADR revisado |
 | 2 | `feature/f1-backend-skeleton` | `backend/` con uv, Django (settings por entorno validados), ASGI, `/health/live` y `/health/ready`, ruff/mypy/pytest configurados; `backend.yml` en CI | CI verde; `docker compose up` levanta la API |
-| 3 | `feature/f1-db-roles-rls-core` | Dos conexiones (`crm_app` / `crm_migrator`), operaciones de migración `EnableRLS` y `CompositeTenantFK`, función `app_current_tenant()`, `TenantModel`, `TenantManager`, `tenant_scope`, `user_scope`, verificación de conexión limpia | Tests T1–T6 y T13 con un modelo de prueba solo para tests |
+| 3 | `feature/f1-db-roles-rls-core` | Settings de runtime (solo `DATABASE_URL` → `crm_app`, con comprobación defensiva al arrancar) y settings del job de migraciones (`DATABASE_MIGRATOR_URL`); operaciones de migración `EnableRLS`, `CompositeTenantFK` y `SecurityDefinerFunction` (aplica REVOKE/GRANT); funciones `app_current_tenant()` / `app_current_user()`; `TenantModel`, `TenantManager`, `tenant_scope`, `user_scope`; verificación de conexión limpia | Tests T1–T6, T13, T16 y T17 con un modelo de prueba solo para tests (T14–T15 en la Fase 2, cuando exista `organization_memberships`) |
 | 4 | `feature/f1-tenancy-entrypoints` | Middleware HTTP (`/api/v1/o/{slug}/`) con `organizations` mínima y membresía **simulada en tests** (la tabla real llega en la Fase 2); `@tenant_task` / `@platform_task` + verificación al arrancar el worker; `TenantConsumerMixin`; `TenantCommand` | Tests T7 (harness genérico de rutas), T9, T10 |
 | 5 | `feature/f1-ids-sequences` | `core.ids.new_id()` (UUIDv7), `org_sequences` + `allocate()` | Test de concurrencia (N hilos → números únicos y sin huecos) |
 | 6 | `feature/f1-outbox-audit` | `outbox_events` + publisher Celery; `audit_logs` (particionada, append-only, redactor) + `audit.record` | Tests de transaccionalidad (rollback = sin evento ni auditoría) y de redacción |
@@ -53,4 +53,4 @@
 ### Qué necesito para iniciarla
 
 - Confirmación de este PR (merge).
-- Opcional: decisión D-ENG-3 (protección real de `main`).
+- D-ENG-3 ya está cerrada (ruleset `main-protection` activo).

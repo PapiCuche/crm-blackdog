@@ -28,7 +28,7 @@ Se necesitan desde la base: logging estructurado, IDs de correlación, reporte d
 ### 2. Correlación
 
 - `request_id`: generado en el proxy o en el middleware (UUIDv7), devuelto en la cabecera `X-Request-ID`.
-- `correlation_id`: se propaga por HTTP → outbox → headers de Celery → WS → llamadas a proveedores. Se guarda en `audit_logs`, `ai_runs`, `webhook_events` y `outbox_events`.
+- `correlation_id`: se propaga por HTTP → outbox → headers de Celery → WS → llamadas a proveedores. Se guarda en `audit_logs`, `ai_runs`, `webhook_ingress` y `outbox_events`.
 - Implementación: `contextvars` + structlog (procesadores que añaden `request_id`, `correlation_id`, `organization_id`, `user_id`, `actor_type`), y señales de Celery para propagarlos.
 
 ### 3. Errores: interfaz `ErrorReporter`

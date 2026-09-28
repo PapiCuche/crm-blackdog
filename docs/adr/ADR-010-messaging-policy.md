@@ -17,12 +17,13 @@
 
 | Dónde | Campos |
 |---|---|
-| `conversations` | `last_inbound_at`, `customer_window_expires_at` (derivado: `last_inbound_at + capabilities.window_hours`), `window_status` (OPEN/CLOSED, calculado al leer) |
+| `conversations` | `last_inbound_at` (**fuente de verdad** de la ventana), `customer_window_expires_at` (denormalizado **solo** para UI, ordenación e índices; ver §2 regla 0) |
 | `channel_accounts` | `status`, `quality_rating`, `messaging_limit_tier`, capacidades efectivas |
 | `ChannelCapabilities` (código, por adapter) | `window_hours`, `supports_free_form`, `supports_templates`, `supports_human_agent_tag`, `human_agent_window_hours`, `max_text_length`, `media_types`, `supports_read_receipts` |
 | `message_templates` | `channel_account_id`, `name`, `language`, `category` (MARKETING/UTILITY/AUTHENTICATION), `approval_status` (APPROVED/PENDING/REJECTED/PAUSED/DISABLED), `components`, `variables_schema`, `purpose` (QUOTE_SENT, FOLLOW_UP, REENGAGE…), `last_synced_at` |
 | `messages` (salientes) | `send_mode` (FREE_FORM/TEMPLATE/HUMAN_AGENT_TAG), `template_id`, `template_language`, `template_variables` (JSONB), `policy_decision` (JSONB snapshot de la decisión), `delivery_status`, `provider_error_code`, `provider_error_title`, `provider_error_detail`, `failed_at` |
-| `contacts` | `marketing_opt_in` + origen y fecha (necesario para plantillas MARKETING), `is_blocked` |
+| `contacts` | `is_blocked` |
+| `contact_consents` (+ `contact_consent_events`) | Consentimiento vigente por contacto, **canal** (WHATSAPP/INSTAGRAM/MESSENGER/TIKTOK/EMAIL/SMS/PHONE/ANY) y **propósito** (MARKETING/PROMOTIONS/FOLLOW_UP/TRANSACTIONAL/ALL_PROACTIVE…), con `status`, `source`, `granted_at`, `revoked_at`, `evidence`; el historial de cambios queda en `contact_consent_events` (modelo en `docs/fase-0/02` E.5) |
 
 ### 2. `MessagingPolicyService`
 
@@ -45,13 +46,15 @@ PolicyDecision(
   template?: (id, name, language, category, required_variables),
   window_expires_at?,
   reasons: [WINDOW_CLOSED, TEMPLATE_NOT_APPROVED, TEMPLATE_MISSING_FOR_LANGUAGE,
-            NO_MARKETING_OPT_IN, CONTACT_BLOCKED, CHANNEL_DISCONNECTED, CHANNEL_QUALITY_LOW,
+            CONSENT_MISSING, CONSENT_REVOKED, CONTACT_BLOCKED, CHANNEL_DISCONNECTED, CHANNEL_QUALITY_LOW,
             AI_DISABLED, QUIET_HOURS, RATE_LIMITED, INTERNAL_NOTE_NOT_SENDABLE, …],
   evaluated_at
 )
 ```
 
 **Reglas (orden de evaluación):**
+
+0. **La ventana se recalcula siempre**: `window_open = now() < last_inbound_at + capabilities.window_hours`, usando las **capacidades vigentes del adapter** y las reglas actuales del canal. `customer_window_expires_at` **no** se usa para autorizar (puede estar desactualizado si cambian las reglas del canal o si falla su actualización).
 
 1. Mensaje interno o nota → BLOCKED (`INTERNAL_NOTE_NOT_SENDABLE`).
 2. Cuenta de canal desconectada o en error → BLOCKED.
@@ -62,7 +65,11 @@ PolicyDecision(
    - `initiated_by = USER` y el canal admite HUMAN_AGENT_TAG dentro de su plazo → HUMAN_AGENT_TAG.
    - En otro caso → TEMPLATE_REQUIRED: busca una plantilla APPROVED para el `purpose` y el idioma del contacto (con idioma de respaldo de la organización). Si no existe → BLOCKED (`TEMPLATE_NOT_APPROVED` / `TEMPLATE_MISSING_FOR_LANGUAGE`).
    - La IA **nunca** usa HUMAN_AGENT_TAG.
-7. `purpose = MARKETING` → exige `marketing_opt_in` y una plantilla de categoría MARKETING.
+7. **Consentimientos** (`contact_consents`):
+   - Si existe una revocación aplicable (mismo canal o `ANY`; mismo propósito o `ALL_PROACTIVE`) → BLOCKED (`CONSENT_REVOKED`), salvo `purpose = CUSTOMER_REPLY` dentro de la ventana (responder a quien escribe no es un mensaje proactivo).
+   - Si el propósito lo **exige** (MARKETING y PROMOTIONS siempre; otros según la configuración de la organización por canal) → requiere un consentimiento GRANTED vigente para ese canal (o `ANY`) y propósito; si no → BLOCKED (`CONSENT_MISSING`).
+   - `purpose = MARKETING` exige además una plantilla de categoría MARKETING fuera de la ventana.
+   - Un mensaje entrante con una palabra de baja ("STOP", "BAJA", configurable) registra la revocación (`source = KEYWORD_STOP`).
 8. Automatizaciones o seguimientos: respetan las horas de silencio de la organización (reprogramación, no descarte) y los rate limits por contacto.
 
 **Uso:**
@@ -74,7 +81,8 @@ PolicyDecision(
 
 ### 3. Fases
 
-- **Fase 6 (Inbox + Sandbox):** servicio, capacidades del adapter Sandbox (con una ventana configurable para probar), columnas de conversación y mensaje.
+- **Fase 4 (Contactos):** `contact_consents` y su historial (registro manual e importación).
+- **Fase 6 (Inbox + Sandbox):** servicio (incluida la evaluación de consentimientos), capacidades del adapter Sandbox (con una ventana configurable para probar), columnas de conversación y mensaje.
 - **Fase 7 (WhatsApp):** plantillas (sincronización y estados), HUMAN_AGENT_TAG no aplica, errores reales de Meta, envío de cotizaciones por plantilla UTILITY.
 - **Fase 12:** capacidades de Instagram y Messenger.
 

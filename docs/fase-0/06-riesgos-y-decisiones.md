@@ -37,12 +37,12 @@
 | T9 | **Latencia de la respuesta IA** (debounce + LLM + tools = 5–15 s) | A | M | Indicador "escribiendo…", modelos rápidos para intents simples, límite de tool calls, streaming en el copiloto (P1) |
 | T10 | **Deprecación de modelos por los proveedores** | A | M | Modelos como datos; sincronización que marca RETIRED; alerta al Admin si un agente usa un modelo en deprecación; fallback configurado |
 | T11 | **Diferencias de tool calling entre proveedores** | M | M | Formato neutro + tests de contrato por adapter con respuestas grabadas (cassettes) |
-| T12 | **Crecimiento de tablas** (`messages`, `audit_logs`, `webhook_events`, `ai_llm_calls`) | M | M | Particionamiento por mes desde el inicio en las tablas de log; retención |
+| T12 | **Crecimiento de tablas** (`messages`, `audit_logs`, `webhook_ingress`, `ai_llm_calls`) | M | M | Particionamiento por mes desde el inicio en las tablas de log; retención |
 | T13 | **Next.js + Django = dos runtimes que desplegar** | M | B | docker-compose idéntico en dev y prod; imágenes versionadas; health checks |
 | T14 | **"Temporal que se vuelve permanente"** | A | M | Toda deuda consciente se registra como ADR o issue con etiqueta `tech-debt` y fase objetivo |
 | T15 | **Dependencias de infraestructura que dejan de distribuirse** (caso real: MinIO dejó de publicar imágenes comunitarias en Docker Hub) | M | M | Interfaces propias (`ObjectStorageService`, adapters) + estándares abiertos (S3); versiones fijadas y revisadas por Dependabot |
-| T16 | **`main` sin protección técnica** (repositorio privado en una cuenta gratuita de GitHub) | A | M | Cumplir el flujo por proceso; resolver D-ENG-3 antes de que haya más de un contribuidor o agente haciendo push |
-| T17 | **Tests que no prueban RLS** por ejecutarse como superusuario | M | A | Los tests conectan con un rol equivalente a `crm_app`; el pipeline falla si el rol de test tiene `rolsuper` o `rolbypassrls` (tenancy-context T1–T13) |
+| T16 | **Revisión humana no forzada técnicamente**: el ruleset protege `main`, pero con 0 aprobaciones requeridas (único mantenedor) | M | M | Revisión por un segundo agente o persona por proceso (plantilla de PR); subir a 1 aprobación cuando haya un segundo revisor con escritura |
+| T17 | **Tests que no prueban RLS** por ejecutarse como superusuario | M | A | Los tests conectan con un rol equivalente a `crm_app`; el pipeline falla si el rol de test tiene `rolsuper` o `rolbypassrls` (tenancy-context T1–T17) |
 
 ---
 
@@ -103,6 +103,15 @@
 | D-MIGR | El ERD documenta ~95 tablas, pero se crean gradualmente: cada migración corresponde a funcionalidad real | ✅ APPROVED | 05 §S |
 | D-ROADMAP | Nuevo orden de fases sin dependencias hacia fases futuras | ✅ APPROVED | 05 §S |
 | D-CI | CI: backend (formato, lint, tests, migraciones), frontend (formato, lint, typecheck, tests), seguridad (secretos, dependencias), sin herramientas redundantes | ✅ APPROVED | ci-pipeline |
+| D-ENG-3 | Protección real de `main`: repositorio público + ruleset `main-protection` (PR obligatorio, resolución de conversaciones, check `secret scanning (gitleaks)`, sin force-push ni borrado). Aprobaciones requeridas = 0 temporalmente (único mantenedor) | ✅ CLOSED (2026-09-28) | ADR-009 |
+| D-REV-1 | RLS de `organization_memberships`: una única política SELECT condicional (tenant activo → solo ese tenant; sin tenant → solo las del usuario); escrituras solo con tenant; como máximo una política PERMISSIVE por comando | ✅ APPROVED (revisión PR #1) | ADR-002 §3.2 |
+| D-REV-2 | Aislamiento de `crm_migrator`: web/worker/ws/beat solo reciben `DATABASE_URL` (`crm_app`) y rechazan la credencial del migrador; `CREATEDB` solo en el bootstrap local | ✅ APPROVED (revisión PR #1) | ADR-002 §1.1 |
+| D-REV-3 | Requisitos obligatorios de funciones SECURITY DEFINER, incluido `REVOKE ALL … FROM PUBLIC` + `GRANT EXECUTE … TO crm_app` | ✅ APPROVED (revisión PR #1) | ADR-002 §3.3 |
+| D-REV-4 | gitleaks sin allowlists por archivo | ✅ APPROVED (revisión PR #1) | ci-pipeline |
+| D-REV-5 | Avatar global en `platform_files` (platform-owned); avatar opcional por organización en `organization_memberships.avatar_file_id` | ✅ APPROVED (revisión PR #1) | ADR-008, 02 E.2/E.4 |
+| D-REV-6 | Consentimientos por canal y propósito: `contact_consents` + `contact_consent_events`, consultados por `MessagingPolicyService` | ✅ APPROVED (revisión PR #1) | ADR-010, 02 E.5 |
+| D-REV-7 | `customer_window_expires_at` solo denormalizado; la ventana se recalcula al enviar | ✅ APPROVED (revisión PR #1) | ADR-010 §2 |
+| D-REV-8 | Imágenes locales fijadas por patch: PostgreSQL 18.6, Redis 8.8.3 (Mailpit: se fija el patch en F1-01) | ✅ APPROVED (revisión PR #1) | infra/docker/compose.yaml |
 
 ### U.2 Decisiones abiertas — ingeniería (se resuelven al inicio de la Fase 1)
 
@@ -110,7 +119,6 @@
 |---|---|---|---|
 | D-ENG-1 | Versiones exactas: Python, Django, Node, Next.js y librería UUIDv7 | Verificar el soporte vigente el día de inicio: Django LTS/estable + Python soportado (3.13/3.14), Node LTS, Next.js estable | Fase 1 |
 | D-ENG-2 | Emulador S3 local (MinIO ya no publica imágenes en Docker Hub) | **Garage** (v2.x) o SeaweedFS; prueba de 1 h con boto3 antes de decidir | Fase 1 |
-| D-ENG-3 | Protección de `main`: los repositorios privados en cuentas gratuitas de GitHub no aplican reglas de protección | Plan GitHub Pro/Team, **o** repositorio público, **o** cumplirlo por proceso temporalmente | Fase 1 (recomendado) |
 | D10-H | Proveedor de hosting de producción | Decidir antes del final de la Fase 6 (hace falta un endpoint público para los webhooks de la Fase 7) | Fase 7 |
 
 ### U.3 Decisiones abiertas — producto y dominio
@@ -160,5 +168,4 @@
 ## Qué necesito de ti para arrancar la Fase 1
 
 - **Nada bloqueante de producto.** La Fase 1 (infraestructura base) solo necesita D-ENG-1 y D-ENG-2, que resuelvo al inicio con verificación de versiones y una prueba corta, y que registraré como ADR.
-- **Recomendado:** decidir D-ENG-3 (protección real de `main`).
 - **En paralelo (calendario):** verificación del negocio en Meta y número del piloto (D-CH-3), y valores de descuento por rol (D-COM-5).

@@ -31,13 +31,20 @@ class ObjectStorageService(Protocol):
 
 ### 2. Metadatos en BD, bytes en storage
 
-La tabla `files` (tenant-owned) guarda `storage_key`, `original_name`, `mime_type` (detectado por magic bytes, no confiado del cliente), `size_bytes`, `sha256`, `purpose`, `scan_status` y el autor. **Nunca** los bytes.
+Hay dos tablas de metadatos, según el propietario del objeto:
+
+- **`files` (tenant-owned, RLS):** objetos de una organización (adjuntos, media, PDFs, imports, KB, avatar por organización de una membresía).
+- **`platform_files` (platform-owned):** objetos que no pertenecen a ninguna organización. Hoy, solo el **avatar global del usuario** (`users.avatar_platform_file_id`). Una tabla global como `users` **nunca** referencia `files`, que es tenant-owned.
+
+Ambas guardan `storage_key`, `original_name`, `mime_type` (detectado por magic bytes, no confiado del cliente), `size_bytes`, `sha256`, `purpose`, `scan_status` y el autor. **Nunca** los bytes.
 
 ### 3. Esquema de claves
 
 ```text
 org/{organization_id}/{purpose}/{yyyy}/{mm}/{file_uuid}
   purpose ∈ message-media | quote-pdf | import | avatar | kb | attachment
+platform/{purpose}/{yyyy}/{mm}/{file_uuid}
+  purpose ∈ user-avatar
 ```
 
 - Las claves no contienen nombres originales (evita path traversal y fugas en logs).

@@ -24,7 +24,7 @@ services:
       retries: 20
 
   redis:
-    image: redis:8.8-alpine
+    image: redis:8.8.3-alpine
     command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
     ports:
       - "127.0.0.1:6379:6379"

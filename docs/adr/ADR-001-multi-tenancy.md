@@ -27,15 +27,15 @@ Además:
 | Clase | Ejemplos | `organization_id` | RLS |
 |---|---|---|---|
 | **Tenant-owned** | contacts, conversations, messages, products, product_prices, roles, ai_agents, audit_logs de la organización | NOT NULL | Sí, con FORCE |
-| **Membership-bridge** | organization_memberships | NOT NULL | Sí, con una política adicional por `user_id` (el usuario ve sus propias membresías para resolver su organización) |
-| **Platform-owned** | organizations, users, permissions, ai_providers, ai_models, webhook_ingress | No (o nullable) | No usan la política de tenant; acceso solo mediante selectores de plataforma |
+| **Membership-bridge** | organization_memberships | NOT NULL | Sí, con FORCE y **una única política SELECT condicional**: con tenant activo, solo filas de ese tenant; sin tenant y con `app.user_id`, solo las membresías del usuario. Las escrituras exigen tenant activo. No se usa una segunda política permisiva (se sumaría con OR). Detalle en ADR-002 §3.2 |
+| **Platform-owned** | organizations, users, platform_files, permissions, ai_providers, ai_models, webhook_ingress | No (o nullable) | No usan la política de tenant; acceso solo mediante selectores de plataforma |
 
 ### 3. Identidad y membresía
 
 - `users` es la identidad global de la persona (login, MFA).
 - `organization_memberships (organization_id, user_id, status, …)`, con UNIQUE (`organization_id`, `user_id`), es la **pertenencia**.
 - Los roles se asignan a la membresía (`membership_roles`), no al usuario global.
-- **Convención de FKs de negocio a personas:** las columnas se llaman `*_user_id` (p. ej., `assigned_user_id`, `created_by_user_id`) y tienen una **FK compuesta** `(organization_id, *_user_id) → organization_memberships(organization_id, user_id)`. Esto garantiza en la base de datos que la persona referenciada es miembro de la misma organización. *(Esto actualiza la convención `*_membership_id` de `docs/fase-0/02-modelo-de-datos.md`.)*
+- **Convención de FKs de negocio a personas:** las columnas se llaman `*_user_id` (p. ej., `assigned_user_id`, `created_by_user_id`) y tienen una **FK compuesta** `(organization_id, *_user_id) → organization_memberships(organization_id, user_id)`. Esto garantiza en la base de datos que la persona referenciada es miembro de la misma organización. *(`docs/fase-0/02-modelo-de-datos.md` §E.0 aplica esta convención.)*
 - El Superadmin tiene `users.is_platform_staff = true` y **ninguna membresía implícita**. Para ver datos de un tenant necesita una sesión de impersonación explícita, con tiempo limitado y auditada.
 
 ### 4. Resolución del tenant en cada petición

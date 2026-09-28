@@ -49,7 +49,7 @@ Se usan `paths` filtros para no ejecutar el pipeline del backend cuando solo cam
 
 | Control | Herramienta | Nota |
 |---|---|---|
-| Secret scanning | **gitleaks** (binario fijado por versión y verificado por SHA-256) | Escanea el historial completo en cada PR y push; configuración en `.gitleaks.toml` |
+| Secret scanning | **gitleaks** (binario fijado por versión y verificado por SHA-256) | Escanea el historial completo en cada PR y push; `.gitleaks.toml` usa las reglas por defecto **sin allowlists**. Una excepción futura debe ser por regla y patrón exacto, nunca por archivo |
 | Dependencias | **Dependabot** (alertas + PRs de actualización) | `github-actions` desde ya; `uv`/`pip` y `npm` al crear los manifiestos. En los pipelines: `pip-audit` y `pnpm audit` |
 | Acciones de terceros | Fijadas por **SHA de commit** | Evita ataques a la cadena de suministro vía tags movidos |
 | Permisos del token | `permissions: contents: read` por defecto | Mínimo privilegio |
@@ -61,6 +61,9 @@ Se usan `paths` filtros para no ejecutar el pipeline del backend cuando solo cam
 - `pre-commit` (opcional, recomendado): ruff, prettier, gitleaks `protect --staged`. Mismas versiones que CI.
 - `make check` (Fase 1) ejecuta localmente lo mismo que CI.
 
-## 6. Checks requeridos para merge (cuando el plan de GitHub permita protección de ramas)
+## 6. Checks requeridos para merge
 
-`security / gitleaks` (desde ya) · `backend / checks` · `backend / tests` · `frontend / checks` · `frontend / build` (a partir de la Fase 1).
+Configurados en el ruleset `main-protection` (ver ADR-009):
+
+- **Activo:** `secret scanning (gitleaks)`.
+- **Se añadirán en la Fase 1:** `backend / checks`, `backend / tests`, `frontend / checks`, `frontend / build`.

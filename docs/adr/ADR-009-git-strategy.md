@@ -31,7 +31,7 @@
 - Sin force-push ni borrado de `main`. Historial lineal.
 - **Squash merge** por defecto: un PR = un commit con mensaje Conventional Commit. Un merge commit solo con justificación (p. ej., preservar commits de una migración compleja).
 
-> **Nota operativa:** en repositorios **privados** de cuentas personales gratuitas, GitHub no aplica las reglas de protección de ramas (requieren un plan de pago o que el repositorio sea público). Hasta tenerlo, la regla se cumple por proceso y el CI corre igualmente en los PRs.
+> **Estado de implementación (2026-09-28):** el repositorio es público y `main` está protegida con el ruleset **`main-protection`** (activo, sin bypass): PR obligatorio, resolución de conversaciones obligatoria, check requerido `secret scanning (gitleaks)`, bloqueo de force-push y de borrado. **Desviación temporal:** `required_approving_review_count = 0` porque hoy hay un único mantenedor humano y GitHub no permite aprobar un PR propio. La revisión por un segundo agente o persona se exige por proceso. Se sube a 1 en cuanto exista un segundo revisor con acceso de escritura. Los checks `backend` y `frontend` se añadirán al ruleset en la Fase 1.
 
 ### Tamaño de los PR (D12)
 

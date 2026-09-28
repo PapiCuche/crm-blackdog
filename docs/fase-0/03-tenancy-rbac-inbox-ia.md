@@ -14,10 +14,10 @@
 
 | # | Capa | Mecanismo concreto |
 |---|---|---|
-| 1 | **Resolución del tenant** | Middleware: usuario autenticado → organización activa (URL `/{org_slug}/…` en el frontend; cabecera `X-Organization` en la API) → verifica que exista una `organization_memberships` en estado ACTIVE → `request.ctx = ExecutionContext(org, membership, perms)`. Sin membresía válida: **404** (no 403, para no revelar la existencia de la organización) |
-| 2 | **Contexto de BD** | Todo request corre en una transacción (`ATOMIC_REQUESTS` o equivalente en las vistas) que ejecuta `SET LOCAL app.current_org_id = '<uuid>'`. `SET LOCAL` muere con la transacción, así que es compatible con PgBouncer en modo transacción |
-| 3 | **Políticas RLS** | En cada tabla con tenant: `ENABLE` + **`FORCE ROW LEVEL SECURITY`** y `CREATE POLICY tenant_isolation USING (organization_id = current_setting('app.current_org_id', true)::uuid) WITH CHECK (organization_id = current_setting('app.current_org_id', true)::uuid)`. Si la variable no está definida, `current_setting(..., true)` devuelve NULL y la consulta no ve nada |
-| 4 | **Roles de BD** | `crm_app` (runtime: no es propietario de las tablas, no tiene BYPASSRLS y tiene revocado UPDATE/DELETE en tablas append-only); `crm_migrator` (propietario, solo para migraciones); `crm_platform` (BYPASSRLS, solo para jobs de plataforma explícitos, con un alias de conexión aparte y auditado) |
+| 1 | **Resolución del tenant** | Middleware: usuario autenticado → organización activa (URL `/o/{org_slug}/…` en el frontend y `/api/v1/o/{org_slug}/…` en la API; la URL solo selecciona, no autoriza) → verifica que exista una `organization_memberships` en estado ACTIVE → `request.ctx = ExecutionContext(org, membership, perms)`. Sin membresía válida: **404** (no 403, para no revelar la existencia de la organización) |
+| 2 | **Contexto de BD** | Todo request corre en una transacción (`ATOMIC_REQUESTS` o equivalente en las vistas) que fija `app.tenant_id` y `app.user_id` con `set_config(…, true)` (equivalente a `SET LOCAL`), ver [tenancy-context](../architecture/tenancy-context.md). Muere con la transacción, así que es compatible con PgBouncer en modo transacción |
+| 3 | **Políticas RLS** | En cada tabla con tenant: `ENABLE` + **`FORCE ROW LEVEL SECURITY`** y `CREATE POLICY tenant_isolation USING (organization_id = app_current_tenant()) WITH CHECK (organization_id = app_current_tenant())`, donde `app_current_tenant()` = `NULLIF(current_setting('app.tenant_id', true), '')::uuid` (tras un `set_config` local, la variable puede quedar como `''` y no como NULL). Sin contexto, la consulta no ve nada. `organization_memberships` usa una política SELECT especial que **no amplía** la visibilidad cuando hay tenant activo (ADR-002 §3.2) |
+| 4 | **Roles de BD** | `crm_app` (runtime: no es propietario de las tablas, no tiene BYPASSRLS y tiene revocado UPDATE/DELETE en tablas append-only); `crm_migrator` (propietario con BYPASSRLS, **solo** en el job de migraciones: su credencial nunca llega a web, worker, ws ni beat); `crm_platform` (opcional, BYPASSRLS, solo para comandos de plataforma explícitos y auditados). Ver ADR-002 |
 | 5 | **ORM** | `TenantModel` base con `organization` FK NOT NULL. Manager por defecto `TenantManager` que filtra por el contexto actual (contextvar) y **lanza una excepción si no hay contexto** en lugar de devolver todo. El manager `all_tenants` existe solo para `platform`, y import-linter prohíbe usarlo fuera de ese módulo |
 | 6 | **Escrituras** | `organization_id` se asigna **siempre desde el contexto** en el servicio, nunca desde el payload. Los serializers no exponen `organization` como campo escribible |
 | 7 | **FKs recibidas por la API** (la fuga clásica) | Un `TenantPrimaryKeyRelatedField` valida que el ID recibido (p. ej., `contact_id` al crear un lead) pertenezca al tenant. RLS también lo cubre en lecturas, pero **las comprobaciones de FK de PostgreSQL ignoran RLS**: sin esta validación, alguien podría vincular un registro a un contacto de otra organización. [RECOMENDACIÓN] Para relaciones críticas, añadir **FKs compuestas** `(organization_id, contact_id) → contacts(organization_id, id)` vía SQL en las migraciones |
@@ -30,7 +30,7 @@
 ### Verificación automática (obligatoria en CI)
 
 1. **Suite de aislamiento cruzado:** un test parametrizado recorre **todas las rutas registradas** del router DRF, crea datos en las organizaciones A y B, autentica como A y verifica que cualquier acceso a IDs de B devuelve 404 (GET, PATCH, DELETE) y que ningún listado contiene filas de B. Si se añade un endpoint nuevo, entra automáticamente en el test.
-2. **Test de RLS:** una consulta sin `app.current_org_id` devuelve 0 filas en cada tabla con tenant.
+2. **Test de RLS:** una consulta sin `app.tenant_id` devuelve 0 filas en cada tabla con tenant (lista completa de tests: tenancy-context §8).
 3. **Test de esquema:** toda tabla que herede de `TenantModel` tiene política RLS y `FORCE` (introspección de `pg_policies`/`pg_class`).
 4. **Test de restricciones únicas:** todo UNIQUE de una tabla con tenant incluye `organization_id` (introspección).
 5. **Test de tools de IA:** cada tool se ejecuta con el contexto de A intentando referenciar entidades de B → `NOT_FOUND`.
@@ -57,10 +57,10 @@ Políticas adicionales (no binarias): discount_policies, price_lists.required_pe
 **Tres niveles de verificación:**
 
 1. **Permiso** (¿puede hacer esta acción?): `ctx.require("quotes.approve")`.
-2. **Alcance** (¿sobre qué registros?): `OWN` (asignados a mí o creados por mí) · `TEAM` (de mis equipos) · `BRANCH` (de mi sucursal) · `ALL`. Se aplica en los `selectors` como filtro de queryset **y** en la verificación por objeto.
+2. **Alcance** (¿sobre qué registros?): `OWN` (asignados a mí o creados por mí) · `TEAM` (de mis equipos) · `BRANCH` (de mi sucursal) · `ORGANIZATION` (toda la organización). Se aplica en los `selectors` como filtro de queryset **y** en la verificación por objeto.
 3. **Política** (¿con qué límites?): descuento máximo, listas de precios visibles, montos.
 
-[DECISIÓN D7] ¿Necesitamos alcance por sucursal y equipo desde el MVP? Recomiendo **sí en el modelo** (columna `scope`) y usar OWN/ALL en la UI inicial. Añadirlo después obliga a revisar todos los selectors.
+[DECISIÓN D7] ¿Necesitamos alcance por sucursal y equipo desde el MVP? Recomiendo **sí en el modelo** (columna `scope`) y usar OWN/ORGANIZATION en la UI inicial. *(Cerrada: D7 / ADR-003.)* Añadirlo después obliga a revisar todos los selectors.
 
 ### Reglas anti-escalada de privilegios
 
@@ -100,12 +100,12 @@ Políticas adicionales (no binarias): discount_policies, price_lists.required_pe
 |---|---|---|---|---|---|---|---|
 | organization.manage, roles.manage, ai_credentials.manage, integrations.manage | ✅ | ⚙️ (si el Owner lo otorga) | — | — | — | — | — |
 | users.manage / teams.manage | ✅ | ✅ | teams (propio) | — | — | — | — |
-| conversations.view | ALL | ALL | TEAM | OWN + sin asignar | OWN + sin asignar | — | ALL (lectura) |
+| conversations.view | ORG | ORG | TEAM | OWN + sin asignar | OWN + sin asignar | — | ORG (lectura) |
 | messages.send | ✅ | ✅ | ✅ | OWN | OWN | — | — |
 | conversations.supervise / take | ✅ | ✅ | ✅ | take | take | — | — |
-| contacts.view | ALL | ALL | TEAM | OWN (+ búsqueda limitada) | ALL | ALL | ALL |
+| contacts.view | ORG | ORG | TEAM | OWN (+ búsqueda limitada) | ORG | ORG | ORG |
 | contacts.export | ✅ | ✅ | — | — | — | ⚙️ | — |
-| leads / opportunities | ALL | ALL | TEAM | OWN | view | view ALL | view |
+| leads / opportunities | ORG | ORG | TEAM | OWN | view | view ORG | view |
 | quotes.create / send | ✅ | ✅ | ✅ | ✅ | — | — | — |
 | quotes.approve | ✅ | ✅ | ✅ | — | — | — | — |
 | discount_policies (máx.) | sin límite | sin límite | p. ej., 10 % | p. ej., 3 % | 0 % | — | — |
@@ -120,7 +120,7 @@ Políticas adicionales (no binarias): discount_policies, price_lists.required_pe
 | reports.* | ✅ | ✅ | ventas + atención | propios | atención propia | marketing | ✅ lectura |
 | audit.view | ✅ | ⚙️ | — | — | — | — | — |
 
-⚙️ = desactivado por defecto; el Owner puede activarlo.
+⚙️ = desactivado por defecto; el Owner puede activarlo. ORG = scope `ORGANIZATION`.
 
 ### ¿Y los agentes de IA?
 
@@ -147,7 +147,7 @@ Cada tool declara el permiso de negocio equivalente, y el servicio que invoca lo
 | Eje | Campo | Valores |
 |---|---|---|
 | Ciclo de vida | `status` | OPEN · PENDING · WAITING_CUSTOMER · WAITING_INTERNAL · RESOLVED · CLOSED |
-| Quién atiende | `assigned_team_id` + `assigned_membership_id` / `assigned_ai_agent_id` | Equipo y persona **a la vez** (la conversación está en la cola de Ventas y la tiene María) |
+| Quién atiende | `assigned_team_id` + `assigned_user_id` / `assigned_ai_agent_id` (ADR-007) | Equipo y persona **a la vez** (la conversación está en la cola de Ventas y la tiene María) |
 | Cómo atiende la IA | `attention_mode` | AI_AUTONOMOUS · AI_ASSISTED · HUMAN |
 | (transitorio) Handoff | `handoff_status` | NONE · REQUESTED · ACCEPTED |
 
@@ -155,7 +155,7 @@ Cada tool declara el permiso de negocio equivalente, y el servicio que invoca lo
 
 **Invariantes entre ejes (validadas en el servicio):**
 - `attention_mode = AI_AUTONOMOUS` ⇒ `assigned_ai_agent_id IS NOT NULL` y el nivel de autonomía de la versión del agente ≥ 2.
-- `assigned_membership_id IS NOT NULL` ⇒ `attention_mode ∈ {HUMAN, AI_ASSISTED}` (con un humano asignado, la IA no envía sola).
+- `assigned_user_id IS NOT NULL` ⇒ `attention_mode ∈ {HUMAN, AI_ASSISTED}` (con un humano asignado, la IA no envía sola).
 - Kill switch activo ⇒ ninguna conversación en AI_AUTONOMOUS (se migran en bloque a HUMAN y a la cola por defecto).
 - **Nivel de autonomía del agente = techo** y `attention_mode` = estado actual. Un agente de nivel 1 solo puede estar en AI_ASSISTED.
 
@@ -170,17 +170,17 @@ Cada tool declara el permiso de negocio equivalente, y el servicio que invoca lo
 | RESOLVED | Resuelta; puede reabrirse | Inbound dentro de `conversation_reopen_window_hours` → OPEN (misma conversación) |
 | CLOSED | Terminal | Inbound después de CLOSED → **nueva conversación** (con enlace a la anterior) |
 
-**Filtros derivados (no son estados):** "No respondidos" = `waiting_since IS NOT NULL`; "Archivados" = `is_archived`; "Mis conversaciones" = `assigned_membership_id = yo`; "Sin asignar" = sin equipo ni usuario ni IA; "Transferencias" = `handoff_status = REQUESTED`; "Tiempo esperando > X" = `now() - waiting_since`. **[INCONSISTENCIA]** "Pendientes" (filtro §12) y PENDING (estado §13) deben significar lo mismo. Con la definición de arriba, coinciden.
+**Filtros derivados (no son estados):** "No respondidos" = `waiting_since IS NOT NULL`; "Archivados" = `is_archived`; "Mis conversaciones" = `assigned_user_id = yo`; "Sin asignar" = sin equipo ni usuario ni IA; "Transferencias" = `handoff_status = REQUESTED`; "Tiempo esperando > X" = `now() - waiting_since`. **[INCONSISTENCIA]** "Pendientes" (filtro §12) y PENDING (estado §13) deben significar lo mismo. Con la definición de arriba, coinciden.
 
 **3. Tomar, asignar y concurrencia:**
-- **Tomar conversación** es atómico: `UPDATE conversations SET assigned_membership_id = :me, version = version + 1 WHERE id = :id AND assigned_membership_id IS NULL AND version = :v`. Si afecta a 0 filas → "María la tomó hace un instante".
-- Reasignar/transferir: `SELECT … FOR UPDATE` + verificación de versión + registro en `conversation_transfers` + evento, en la misma transacción.
+- **Tomar conversación** es atómico: `UPDATE conversations SET assigned_user_id = :me, assignment_version = assignment_version + 1 WHERE id = :id AND assigned_user_id IS NULL AND assigned_ai_agent_id IS NULL` (ADR-007). Si afecta a 0 filas → "María la tomó hace un instante".
+- Reasignar/transferir: `SELECT … FOR UPDATE` + verificación de versión + registro en `conversation_assignments` + evento (siempre vía `AssignmentService`), en la misma transacción.
 - **Carrera IA ↔ humano:** si un humano toma la conversación mientras la IA está generando, el worker `outbound` revalida justo antes de enviar que `assigned_ai_agent_id` y `version` siguen siendo los mismos. Si cambiaron, la respuesta de la IA **se descarta** (`ai_runs.status = SUPERSEDED`) y se guarda como sugerencia visible para el humano.
 - **Presencia y "está escribiendo":** eventos efímeros por WS (no se persisten) para evitar que dos agentes respondan a la vez: "Carlos está respondiendo…".
 
 **4. Debounce de mensajes entrantes (crítico para la IA):** los clientes escriben en ráfagas ("hola" / "precio del 16 pro" / "256"). La IA espera `ai_debounce_seconds` (configurable, 3–6 s) desde el último mensaje y procesa el lote completo. Se implementa con una tarea programada con ETA que se reprograma, más un lock por conversación en Redis. Sin esto, la IA responde tres veces.
 
-**5. Ventana de 24 h (WhatsApp, Instagram, Messenger):** `customer_window_expires_at = last_inbound_at + 24 h`. Si la ventana está cerrada, el editor del Inbox **deshabilita el texto libre** y ofrece plantillas aprobadas (WhatsApp) o la etiqueta HUMAN_AGENT (IG/Messenger, 7 días, solo para humanos). La IA tampoco puede enviar texto libre fuera de ventana.
+**5. Ventana de 24 h (WhatsApp, Instagram, Messenger):** `customer_window_expires_at` se guarda denormalizado para UI e índices, pero la autorización la calcula `MessagingPolicyService` desde `last_inbound_at` y las capacidades vigentes del adapter, justo antes de cada envío (ADR-010). Si la ventana está cerrada, el editor del Inbox **deshabilita el texto libre** y ofrece plantillas aprobadas (WhatsApp) o la etiqueta HUMAN_AGENT (IG/Messenger, 7 días, solo para humanos). La IA tampoco puede enviar texto libre fuera de ventana.
 
 **6. Notas internas blindadas (tres barreras):**
 1. En la BD: `CHECK` que impide que un mensaje INTERNAL tenga `external_message_id`.
