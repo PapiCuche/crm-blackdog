@@ -1,0 +1,5 @@
+# Configuración de gitleaks: reglas por defecto, SIN allowlists.
+# Si algún día aparece un falso positivo, añadir una excepción lo más específica
+# posible (regla + patrón exacto), justificada en el PR. Nunca excluir archivos completos.
+[extend]
+useDefault = true

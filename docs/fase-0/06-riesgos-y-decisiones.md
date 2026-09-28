@@ -37,121 +37,135 @@
 | T9 | **Latencia de la respuesta IA** (debounce + LLM + tools = 5–15 s) | A | M | Indicador "escribiendo…", modelos rápidos para intents simples, límite de tool calls, streaming en el copiloto (P1) |
 | T10 | **Deprecación de modelos por los proveedores** | A | M | Modelos como datos; sincronización que marca RETIRED; alerta al Admin si un agente usa un modelo en deprecación; fallback configurado |
 | T11 | **Diferencias de tool calling entre proveedores** | M | M | Formato neutro + tests de contrato por adapter con respuestas grabadas (cassettes) |
-| T12 | **Crecimiento de tablas** (`messages`, `audit_logs`, `webhook_events`, `ai_llm_calls`) | M | M | Particionamiento por mes desde el inicio en las tablas de log; retención |
+| T12 | **Crecimiento de tablas** (`messages`, `audit_logs`, `webhook_ingress`, `ai_llm_calls`) | M | M | Particionamiento por mes desde el inicio en las tablas de log; retención |
 | T13 | **Next.js + Django = dos runtimes que desplegar** | M | B | docker-compose idéntico en dev y prod; imágenes versionadas; health checks |
 | T14 | **"Temporal que se vuelve permanente"** | A | M | Toda deuda consciente se registra como ADR o issue con etiqueta `tech-debt` y fase objetivo |
+| T15 | **Dependencias de infraestructura que dejan de distribuirse** (caso real: MinIO dejó de publicar imágenes comunitarias en Docker Hub) | M | M | Interfaces propias (`ObjectStorageService`, adapters) + estándares abiertos (S3); versiones fijadas y revisadas por Dependabot |
+| T16 | **Revisión humana no forzada técnicamente**: el ruleset protege `main`, pero con 0 aprobaciones requeridas (único mantenedor) | M | M | Revisión por un segundo agente o persona por proceso (plantilla de PR); subir a 1 aprobación cuando haya un segundo revisor con escritura |
+| T17 | **Tests que no prueban RLS** por ejecutarse como superusuario | M | A | Los tests conectan con un rol equivalente a `crm_app`; el pipeline falla si el rol de test tiene `rolsuper` o `rolbypassrls` (tenancy-context T1–T17) |
 
 ---
 
 ## Inconsistencias detectadas en el prompt maestro
 
-| # | Dónde | Inconsistencia | Propuesta |
+| # | Dónde | Inconsistencia | Resolución | Estado |
+|---|---|---|---|---|
+| I1 | §38 vs §42 | Promoción como `price_type` y también como entidad `promotions` | Solo `promotions`; las listas sustituyen a los tipos de precio | ✅ CLOSED — ADR-006 |
+| I2 | §15 | `assigned_type` + `assigned_id` polimórfico | FKs explícitas + CHECK + historial `conversation_assignments` | ✅ CLOSED — ADR-007 |
+| I3 | §17 vs §13/§14 | `HANDOFF_REQUESTED` sin enum | `handoff_status` + `ai_handoffs` | ✅ Aceptado (se implementa en la Fase 9) |
+| I4 | §12 vs §13 | Filtro "Pendientes" frente al estado PENDING; "Archivados" no es un estado | Propuesta en D-INB-1 | ⏳ OPEN (D-INB-1) |
+| I5 | §103 | Tools IA dependían de entidades de fases futuras | Roadmap corregido (05 §S) | ✅ CLOSED |
+| I6 | §103 | Handoff después de la IA autónoma | La IA de la Fase 8 no envía de forma autónoma; la autonomía llega con el handoff (Fase 9) | ✅ CLOSED |
+| I7 | §7 | Owner frente a Superadmin | Superadmin = staff de plataforma | ✅ CLOSED — D1 |
+| I8 | §58 vs §118 | `search_customer()` en agentes públicos | Tools ligadas al contacto y la conversación actuales; audience PUBLIC/INTERNAL | ✅ CLOSED — ADR-005 |
+| I9 | §47 | VIEWED sin mecanismo | Propuesta en D-COM-3 | ⏳ OPEN (D-COM-3) |
+| I10 | §54, §47 | Envíos sin considerar la ventana de 24 h ni las plantillas | `MessagingPolicyService` | ✅ CLOSED — ADR-010 |
+| I11 | §8, §33 | "Ventas > Ventas" sin tabla | `orders` + `order_items` + `payment_methods` | ✅ Aceptado (Fase 5) |
+| I12 | §53 | `due_date` + `due_time` separados | `due_at` + `is_all_day` | ✅ Aceptado (Fase 5) |
+| I13 | §46 | Reservas sin momento definido | Propuesta en D-INV-2 | ⏳ OPEN (D-INV-2) |
+| I14 | §65 | Confianza del LLM tratada como fiable | Señal compuesta + calibración; el control de datos dinámicos es el Output Guard | ✅ Aceptado — ADR-005 |
+| I15 | §57 vs §14 | Nivel de autonomía frente a modo de atención | El nivel es el techo; el modo es el estado actual | ✅ Aceptado |
+| I16 | §96 | `ai_decisions` separada | Integrada en `ai_runs` | ✅ Aceptado |
+| I17 | §66 | SSRF por `base_url` configurable | Allowlist | ✅ Aceptado — ADR-005, security-boundaries B9 |
+
+---
+
+## U. Decisiones
+
+**Estados:** ✅ **APPROVED/CLOSED** (decidido y registrado) · ⏳ **OPEN** (pendiente) · 🔁 **REFINED** (aprobado con matices respecto a la propuesta original).
+**Bloqueo:** indica la **primera fase** (numeración nueva de 05 §S) que necesita la decisión cerrada.
+
+### U.1 Decisiones cerradas el 2026-09-28
+
+| ID | Decisión aprobada | Estado | Registro |
 |---|---|---|---|
-| I1 | §38 vs §42 | Promoción como `price_type` y también como entidad `promotions` → dos fuentes de verdad | Solo `promotions`; las listas sustituyen a los tipos de precio (K.2) |
-| I2 | §15 | `assigned_type` + `assigned_id` polimórfico: sin integridad referencial y sin equipo y usuario simultáneos | Tres FKs + CHECK + `assignee_kind` generado (I.1) |
-| I3 | §17 vs §13/§14 | `HANDOFF_REQUESTED` no pertenece a ningún enum definido | `handoff_status` + `ai_handoffs` |
-| I4 | §12 vs §13 | Filtro "Pendientes" frente al estado PENDING; "Archivados" no es un estado | Definir PENDING = en cola sin tomar; archivado = flag (D-INB-1) |
-| I5 | §103 | Las tools de IA (Fase 7) dependen de leads y oportunidades (Fase 9) y cotizaciones (Fase 10) | Reordenar (S) |
-| I6 | §103 | Handoff (Fase 8) después de agentes autónomos (Fase 7) | Fusionar en la Fase 8 |
-| I7 | §7 | "Owner" y "Superadmin" como roles de organización: ¿quién está por encima de quién? | Superadmin = staff de plataforma, fuera de la organización (D1) |
-| I8 | §58 vs §118 | `search_customer()`/`get_customer_history()` en agentes públicos contradicen la seguridad IA del §118 | Tools ligadas a la conversación; `search_customer` solo interna (J.4) |
-| I9 | §47 | VIEWED sin mecanismo para detectarlo | Enlace público con token o eliminar el estado (D-COM-3) |
-| I10 | §54, §47 (SENT) | Seguimiento automático y envío de cotización sin considerar la ventana de 24 h y las plantillas de WhatsApp | Plantillas UTILITY + `message_templates` + UI de ventana |
-| I11 | §8, §33 vs §96 | Menú "Ventas > Ventas" y datos de "Ganado" sin tabla que los registre | `orders` + `order_items` + `payment_methods` (sin facturación) |
-| I12 | §53 | `due_date` + `due_time` separados | `due_at` timestamptz + `is_all_day` |
-| I13 | §46 vs §105 | "Reservas" sin definir cuándo se reserva | Reservar al aceptar la cotización (D-INV-2) |
-| I14 | §65 | Umbrales de confianza del LLM tratados como fiables | Señal compuesta + calibración con feedback (J.8) |
-| I15 | §57 vs §14 | Nivel de autonomía (agente) y modo de atención (conversación) se solapan | El nivel es el techo; el modo es el estado actual (I.1) |
-| I16 | §96 | `ai_decisions` separada de la ejecución | Integrada en `ai_runs` |
-| I17 | §66 | "Modelos locales" sin considerar SSRF de `base_url` configurable | Allowlist y proveedor local solo en self-hosted (M.2 #10) |
+| D1 | Superadmin = exclusivamente personal interno de la plataforma. Owner = rol máximo de la organización | ✅ APPROVED | ADR-001 |
+| D2 | Un usuario en varias organizaciones mediante `organization_memberships` | ✅ APPROVED | ADR-001 |
+| D3 | Organización activa en la URL: `/o/{organization_slug}/…` (frontend) y `/api/v1/o/{slug}/…` (API). La URL nunca autoriza: se valida membresía, permisos y contexto de tenant | 🔁 APPROVED (la API también usa la ruta, en lugar de la cabecera propuesta) | ADR-001, tenancy-context |
+| D4 | PostgreSQL RLS como defensa adicional; no sustituye validación de `organization_id`, scoping, RBAC ni membresía | ✅ APPROVED | ADR-002 |
+| D5 | Sesión con cookie HttpOnly segura; nada sensible en `localStorage` | ✅ APPROVED (topología same-origin) | ADR-003 |
+| D6 | MFA obligatorio antes de producción para Owner, Admin y usuarios con permisos sensibles | ✅ APPROVED (flag `warn`/`enforce` hasta producción) | ADR-003 |
+| D7 | Scopes OWN / TEAM / BRANCH / ORGANIZATION como atributo de la concesión (sin duplicar permisos) | 🔁 APPROVED (`ALL` renombrado a `ORGANIZATION`) | ADR-003 |
+| D8 | UUIDv7 + numeración comercial por organización concurrency-safe (`COT-000001`) | 🔁 APPROVED (sin año en el número) | ADR-004 |
+| D9 | GitHub Flow: `main` protegida, `feature/*`, `fix/*`, PR obligatorio, squash merge, tags | ✅ APPROVED | ADR-009 |
+| D10 | Abstracción S3-compatible; sin blobs pesados en PostgreSQL; entorno local con Docker; el hosting no bloquea | ✅ APPROVED (el proveedor de hosting sigue abierto: D10-H) | ADR-008 |
+| D11 | PostgreSQL 18 | ✅ APPROVED | ADR-002 |
+| D12 | Equipo humano pequeño apoyado por agentes IA; incrementos pequeños; sin PRs gigantes | ✅ APPROVED | ADR-009 |
+| D13 | UI en español; frontend y backend preparados para i18n | ✅ APPROVED | repository-structure |
+| D-PROMO | `price_lists` + `product_prices` para listas; `promotions` + `promotion_items` para promociones; `PricingService` como autoridad única; vigencia por timestamps al calcular (sin cron como mecanismo principal) | ✅ APPROVED | ADR-006 |
+| D-ASSIGN | `assigned_team_id` / `assigned_user_id` / `assigned_ai_agent_id` + CHECK (usuario XOR IA) + historial `conversation_assignments` | ✅ APPROVED | ADR-007 |
+| D-AITOOLS | Agentes públicos sin `search_customer` global; solo el contacto y la conversación actuales o recursos autorizados; tenant, permisos, scoping, auditoría y validación en cada tool | ✅ APPROVED | ADR-005 §C |
+| D-AIGUARD | Output Guard: respuesta → claims → evidencia de tools → validación → envío; no depender solo de regex | ✅ APPROVED | ADR-005 §D |
+| D-MSGPOL | Ventana de atención, plantillas, idioma, variables y errores modelados en el dominio de canales; `MessagingPolicyService` antes de todo envío | ✅ APPROVED | ADR-010 |
+| D-STORAGE | `ObjectStorageService` (S3, R2, emulador local, cualquier S3-compatible); la BD guarda metadatos y claves | ✅ APPROVED | ADR-008 |
+| D-PGVECTOR | pgvector preparado pero **no** dependencia de la Fase 1; se incorpora con la base de conocimiento | ✅ APPROVED | ADR-002 §6 |
+| D-OBS | Logging estructurado, correlation/request IDs, `ErrorReporter` (Sentry), health checks, auditoría; logs de aplicación, auditoría e IA separados | ✅ APPROVED | ADR-011 |
+| D-MIGR | El ERD documenta ~95 tablas, pero se crean gradualmente: cada migración corresponde a funcionalidad real | ✅ APPROVED | 05 §S |
+| D-ROADMAP | Nuevo orden de fases sin dependencias hacia fases futuras | ✅ APPROVED | 05 §S |
+| D-CI | CI: backend (formato, lint, tests, migraciones), frontend (formato, lint, typecheck, tests), seguridad (secretos, dependencias), sin herramientas redundantes | ✅ APPROVED | ci-pipeline |
+| D-ENG-3 | Protección real de `main`: repositorio público + ruleset `main-protection` (PR obligatorio, resolución de conversaciones, check `secret scanning (gitleaks)`, sin force-push ni borrado). Aprobaciones requeridas = 0 temporalmente (único mantenedor) | ✅ CLOSED (2026-09-28) | ADR-009 |
+| D-REV-1 | RLS de `organization_memberships`: una única política SELECT condicional (tenant activo → solo ese tenant; sin tenant → solo las del usuario); escrituras solo con tenant; como máximo una política PERMISSIVE por comando | ✅ APPROVED (revisión PR #1) | ADR-002 §3.2 |
+| D-REV-2 | Aislamiento de `crm_migrator`: web/worker/ws/beat solo reciben `DATABASE_URL` (`crm_app`) y rechazan la credencial del migrador; `CREATEDB` solo en el bootstrap local | ✅ APPROVED (revisión PR #1) | ADR-002 §1.1 |
+| D-REV-3 | Requisitos obligatorios de funciones SECURITY DEFINER, incluido `REVOKE ALL … FROM PUBLIC` + `GRANT EXECUTE … TO crm_app` | ✅ APPROVED (revisión PR #1) | ADR-002 §3.3 |
+| D-REV-4 | gitleaks sin allowlists por archivo | ✅ APPROVED (revisión PR #1) | ci-pipeline |
+| D-REV-5 | Avatar global en `platform_files` (platform-owned); avatar opcional por organización en `organization_memberships.avatar_file_id` | ✅ APPROVED (revisión PR #1) | ADR-008, 02 E.2/E.4 |
+| D-REV-6 | Consentimientos por canal y propósito: `contact_consents` + `contact_consent_events`, consultados por `MessagingPolicyService` | ✅ APPROVED (revisión PR #1) | ADR-010, 02 E.5 |
+| D-REV-7 | `customer_window_expires_at` solo denormalizado; la ventana se recalcula al enviar | ✅ APPROVED (revisión PR #1) | ADR-010 §2 |
+| D-REV-8 | Imágenes locales fijadas por patch: PostgreSQL 18.6, Redis 8.8.3 (Mailpit: se fija el patch en F1-01) | ✅ APPROVED (revisión PR #1) | infra/docker/compose.yaml |
+
+### U.2 Decisiones abiertas — ingeniería (se resuelven al inicio de la Fase 1)
+
+| ID | Decisión | Recomendación | Bloquea |
+|---|---|---|---|
+| D-ENG-1 | Versiones exactas: Python, Django, Node, Next.js y librería UUIDv7 | Verificar el soporte vigente el día de inicio: Django LTS/estable + Python soportado (3.13/3.14), Node LTS, Next.js estable | Fase 1 |
+| D-ENG-2 | Emulador S3 local (MinIO ya no publica imágenes en Docker Hub) | **Garage** (v2.x) o SeaweedFS; prueba de 1 h con boto3 antes de decidir | Fase 1 |
+| D10-H | Proveedor de hosting de producción | Decidir antes del final de la Fase 6 (hace falta un endpoint público para los webhooks de la Fase 7) | Fase 7 |
+
+### U.3 Decisiones abiertas — producto y dominio
+
+| ID | Decisión | Recomendación | Bloquea |
+|---|---|---|---|
+| D14 | Retención y supresión de datos | Soft delete + papelera 30 días + anonimización para el derecho de supresión | Fase 4 |
+| D-PRC-1 | ¿Precios con IGV incluido? | Incluido (B2C); configurable por lista | Fase 3 |
+| D-PRC-2 | Monedas | PEN activa; modelo multimoneda sin conversión | Fase 3 |
+| D-PRC-3 | Promociones apilables | No en el MVP | Fase 3 |
+| D-PRC-4 | Listas derivadas | Derivada por defecto + explícita si existe | Fase 3 |
+| D-PRC-5 | Redondeo | Configurable; por defecto enteros (confirmar) | Fase 3 |
+| D-PRC-6 | Listas que la IA pública puede comunicar | Regular (+ Efectivo/Transferencia opcionales) | Fase 8 |
+| D-CAT-1 | Condición del producto: columna u opción | Columna | Fase 3 |
+| D-INV-1 | Seriales/IMEI en el MVP | No (modelo preparado) | Fase 3 |
+| D-INV-2 | Momento de la reserva de stock | Al aceptar la cotización, con vencimiento | Fase 5 |
+| D-INV-3 | Stock visible para cliente e IA: exacto o nivel | Nivel (Disponible / Últimas unidades / Agotado) | Fase 8 |
+| D-COM-1 | Lead y oportunidad | Mantener ambos, con reglas de conversión | Fase 5 |
+| D-COM-2 | ¿Cotización siempre ligada a una oportunidad? | Sí (auto-crear) | Fase 5 |
+| D-COM-3 | Estado VIEWED | Enlace público con token (P1) | Fase 5 |
+| D-COM-4 | Motor de PDF | WeasyPrint | Fase 5 |
+| D-COM-5 | Límites de descuento por rol | **Necesito los valores reales** | Fase 5 |
+| D-COM-6 | Métodos de pago iniciales | Efectivo, Transferencia, Tarjeta, Yape, Plin, Financiamiento (confirmar) | Fase 5 |
+| D-COM-7 | Pipelines iniciales | Retail (+ Mayoristas si ya hay operación) | Fase 5 |
+| D-INB-1 | Significado de PENDING | En cola sin tomar (= filtro "Pendientes") | Fase 6 |
+| D-INB-2 | Política de reapertura | RESOLVED + 72 h reabre; CLOSED crea una nueva | Fase 6 |
+| D-INB-3 | Cierre automático | RESOLVED → CLOSED a los 7 días | Fase 6 |
+| D-CH-5 | Asignación automática por defecto | Round robin por equipo con disponibilidad | Fase 6 |
+| D-CH-1 | Cloud API directa o BSP | Cloud API directa | Fase 7 |
+| D-CH-2 | Números de WhatsApp por organización | Varios en el modelo; uno en el MVP | Fase 7 |
+| D-CH-3 | Número del piloto (migrar, nuevo o coexistencia) | **Decisión de negocio**; iniciar los trámites de Meta ya | Fase 7 |
+| D-CH-4 | Retención de media | Todo, con retención configurable | Fase 7 |
+| D-CH-6 | Transcripción de notas de voz | Sí, como modelo del gateway | Fase 8 |
+| D-IA-1 | Proveedor de embeddings | OpenAI o Voyage, configurable | Fase 9 (base de conocimiento) |
+| D-IA-2 | Debounce | 4 s configurable | Fase 8 |
+| D-IA-3 | Autonomía inicial | Sombra → asistida → nivel 2 por métricas | Fase 9 |
+| D-IA-4 | ¿La IA crea cotizaciones? | Solo borrador + aprobación humana | Fase 10 |
+| D-IA-5 | ¿Agentes públicos leen notas internas? | No | Fase 8 |
+| D-IA-6 | ¿La IA se identifica como asistente virtual? | Sí | Fase 8 |
+| D-IA-7 | Fuera de horario | IA consulta; handoffs en cola con aviso | Fase 9 |
+| D-IA-8 | Catálogo de modelos y precios por token | Mantenido por la plataforma | Fase 8 |
+| D-IA-9 | API keys por organización (BYO) o de plataforma | BYO en el MVP | Fase 8 |
+| D-IA-10 | Idioma de respuesta | Español; idioma del cliente si escribe en otro | Fase 8 |
 
 ---
 
-## U. Decisiones pendientes
+## Qué necesito de ti para arrancar la Fase 1
 
-**Leyenda de bloqueo:** 🔴 bloquea la Fase 0.5/1 · 🟠 bloquea la Fase 2–5 · 🟡 bloquea la Fase 6+.
-
-### Plataforma, tenancy y acceso
-
-| ID | Decisión | Opciones | Mi recomendación | Bloquea |
-|---|---|---|---|---|
-| D1 | ¿Qué es "Superadmin"? | (a) staff de la plataforma SaaS; (b) rol de organización por encima del Admin | **(a)**. En la organización: Owner > Admin | 🔴 |
-| D2 | ¿Un usuario puede pertenecer a varias organizaciones? | Sí / No | **Sí** (membresías) | 🔴 |
-| D3 | ¿Cómo se identifica la organización activa? | Subdominio (`acme.crm.com`) / segmento de ruta (`/acme/inbox`) / solo sesión | **Segmento de ruta** en el frontend + cabecera en la API (multipestaña correcta, un solo certificado). Subdominios cuando se abra el SaaS | 🔴 |
-| D4 | ¿RLS de PostgreSQL desde el inicio? | Sí / solo filtro en la app | **Sí** | 🔴 |
-| D5 | Topología de dominios y auth | Same-origin vía proxy / subdominios same-site / JWT | **Same-origin** (`app.dominio.com` y `/api`), sesión con cookie HttpOnly | 🔴 |
-| D6 | ¿MFA obligatorio para quién? | Todos / roles sensibles / opcional | **Obligatorio para Owner, Admin y roles con permisos sensibles**; opcional para el resto | 🔴 |
-| D7 | ¿Alcances OWN/TEAM/BRANCH/ALL desde el MVP? | Sí / solo ALL | **Sí en el modelo**; en la UI inicial, OWN/ALL | 🔴 |
-| D8 | Identificadores | UUIDv7 + número humano / bigint | **UUIDv7 + secuencias por organización** | 🔴 |
-| D9 | Estrategia de Git | GitHub Flow + tags / GitFlow | **GitHub Flow** (ver S) | 🔴 |
-| D10 | Hosting y object storage | VPS con Docker (Hetzner, DigitalOcean) / cloud gestionado (AWS, GCP) / PaaS (Render, Railway) | Para el MVP: **VPS o PaaS con Postgres gestionado (con pgvector y PITR) + S3-compatible (R2 o S3)**. Evitar Kubernetes | 🔴 |
-| D11 | Versión de PostgreSQL | 16 / 17 / 18 | **17 o 18** según lo que soporte el proveedor elegido (pgvector obligatorio) | 🔴 |
-| D12 | ¿Tamaño del equipo y ritmo? | — | Necesito saberlo para dimensionar fases y el alcance del MVP | 🔴 |
-| D13 | Idioma de la UI | Solo español / i18n desde el inicio | **Español (es-PE), con claves i18n preparadas** (costo bajo, ahorra un refactor) | 🔴 |
-| D14 | Retención y supresión de datos | Solo soft delete / anonimización / purga | **Soft delete + papelera 30 días + anonimización** para el derecho de supresión | 🟠 |
-
-### Catálogo, precios e inventario
-
-| ID | Decisión | Opciones | Mi recomendación | Bloquea |
-|---|---|---|---|---|
-| D-PRC-1 | ¿Precios con IGV incluido? | Incluido / excluido / por lista | **Incluido** (retail B2C); mayorista configurable por lista | 🟠 |
-| D-PRC-2 | Monedas | Solo PEN / PEN + USD | **PEN activa**, modelo multimoneda preparado, sin conversión | 🟠 |
-| D-PRC-3 | Promociones apilables | Sí / No | **No en el MVP** (solo la de mayor prioridad) | 🟠 |
-| D-PRC-4 | Listas derivadas ("Efectivo = Regular − 3 %") | Sí / precios explícitos por lista | **Ambas**: derivada por defecto y explícita si existe | 🟠 |
-| D-PRC-5 | Redondeo | 2 decimales / terminación .90 / enteros | Configurable; por defecto **enteros** (habitual en retail de tecnología en Perú; confirmar) | 🟠 |
-| D-PRC-6 | ¿Qué listas puede comunicar la IA pública? | Solo Regular / Regular + Efectivo / … | **Regular + (opcional) Efectivo/Transferencia**, indicando la condición | 🟡 |
-| D-INV-1 | ¿Seriales/IMEI en el MVP? | Sí / No | **No**, modelo preparado | 🟠 |
-| D-INV-2 | ¿Cuándo se reserva stock? | Al crear la cotización / al aceptarla / al confirmar el pago | **Al aceptar la cotización**, con vencimiento (p. ej., 48 h) | 🟠 |
-| D-INV-3 | ¿Stock visible para el cliente/IA: número exacto o nivel? | Exacto / nivel (Disponible, Últimas unidades, Agotado) | **Nivel**, con umbral configurable (no revelar inventario exacto a la competencia) | 🟡 |
-| D-CAT-1 | ¿Condición (nuevo/usado/open box) como columna o como opción? | Columna / opción | **Columna** (afecta a garantía, filtros y reportes) | 🟠 |
-
-### Inbox y canales
-
-| ID | Decisión | Opciones | Mi recomendación | Bloquea |
-|---|---|---|---|---|
-| D-INB-1 | Significado de PENDING | En cola sin tomar / pospuesto / "pendiente de algo" | **En cola sin tomar** (coincide con el filtro "Pendientes") | 🟠 |
-| D-INB-2 | Política de reapertura | Siempre reabrir / nueva conversación tras CLOSED / ventana | **RESOLVED + ventana (72 h) reabre; CLOSED crea una nueva** | 🟠 |
-| D-INB-3 | Cierre automático | Nunca / RESOLVED → CLOSED tras X días | **RESOLVED → CLOSED a los 7 días** (configurable) | 🟠 |
-| D-CH-1 | ¿Cloud API de Meta directa o un BSP (360dialog, Twilio, Gupshup)? | Directa / BSP | **Cloud API directa** (sin sobrecoste por mensaje ni intermediario; el adapter permite cambiar) | 🟠 |
-| D-CH-2 | ¿Cuántos números de WhatsApp por organización? | Uno / varios (por sucursal) | **Varios** soportados en el modelo; el MVP arranca con uno | 🟠 |
-| D-CH-3 | ¿Migrar el número actual de la tienda (WhatsApp Business app) a la Cloud API? | Migrar / número nuevo / coexistencia | Evaluar la **coexistencia** (app + API en el mismo número) si Meta la tiene disponible para la cuenta; si no, **número nuevo para el piloto**. **Implica cambios operativos importantes: decisión de negocio** | 🟠 |
-| D-CH-4 | ¿Descargar y guardar toda la media? ¿Retención? | Todo / solo documentos / con TTL | **Todo**, con retención configurable (p. ej., 1 año para media, indefinida para documentos de venta) | 🟠 |
-| D-CH-5 | Asignación automática por defecto | Manual / round robin / carga | **Round robin por equipo** con disponibilidad y límite de conversaciones concurrentes | 🟠 |
-| D-CH-6 | ¿Transcribir notas de voz? ¿Con qué proveedor? | Sí (OpenAI u otro) / No | **Sí**, configurado como un modelo más del gateway (`modality = TRANSCRIPTION`) | 🟡 |
-
-### IA
-
-| ID | Decisión | Opciones | Mi recomendación | Bloquea |
-|---|---|---|---|---|
-| D-IA-1 | Proveedor de embeddings para la KB | OpenAI / Voyage / otro | **OpenAI o Voyage**, configurable; guardar `embedding_model_id` para poder re-embeddear | 🟡 |
-| D-IA-2 | Debounce | 2–8 s | **4 s**, configurable por organización | 🟡 |
-| D-IA-3 | Autonomía inicial en producción | 1 / 2 / 3 | **Nivel 1 (asistida) → 2** por métricas | 🟡 |
-| D-IA-4 | ¿La IA crea cotizaciones en el MVP? | Solo borrador con aprobación / no | **Borrador + aprobación humana** (§51) — en P1 dentro de la Fase 8/9 | 🟡 |
-| D-IA-5 | ¿Los agentes públicos leen notas internas? | Sí / No | **No** (el copiloto interno sí) | 🟡 |
-| D-IA-6 | ¿La IA se identifica como asistente virtual? | Sí / No | **Sí**, en el primer mensaje | 🟡 |
-| D-IA-7 | Comportamiento fuera de horario | IA sigue / IA informa y encola / solo mensaje fijo | **IA sigue con consultas de precio y stock; los handoffs se encolan con un mensaje de horario** | 🟡 |
-| D-IA-8 | ¿Quién mantiene el catálogo de modelos y precios por token? | Plataforma / cada organización | **Plataforma** (el Admin de la organización solo habilita) | 🟡 |
-| D-IA-9 | ¿Las API keys las aporta cada organización o las paga la plataforma? | BYO key / plataforma / ambas | **BYO key** en el MVP (cada organización configura sus cuentas, como pide §67); "plataforma" como opción SaaS futura | 🟡 |
-| D-IA-10 | Idioma de respuesta de la IA | Solo español / detectar idioma | **Español**, con respuesta en el idioma del cliente si escribe en otro | 🟡 |
-
-### Comercial
-
-| ID | Decisión | Opciones | Mi recomendación | Bloquea |
-|---|---|---|---|---|
-| D-COM-1 | Lead y oportunidad | Mantener ambos / solo oportunidad + lifecycle en el contacto | **Mantener ambos** con las reglas de conversión de L.1 | 🟡 |
-| D-COM-2 | ¿Cotización siempre ligada a una oportunidad? | Sí (auto-crear) / opcional | **Sí** | 🟡 |
-| D-COM-3 | Estado VIEWED | Enlace público / quitar el estado | **Enlace público con token** (P1); sin él, no se muestra VIEWED | 🟡 |
-| D-COM-4 | Motor de PDF | WeasyPrint / servicio externo | **WeasyPrint** | 🟡 |
-| D-COM-5 | Límites de descuento iniciales | — | Necesito tus valores reales por rol (vendedor X %, supervisor Y %) | 🟡 |
-| D-COM-6 | Métodos de pago iniciales | — | Propuesta: Efectivo, Transferencia, Tarjeta, Yape, Plin, Financiamiento. **Confirmar** | 🟡 |
-| D-COM-7 | Pipelines iniciales | Solo Retail / Retail + Mayoristas | **Retail** (y Mayoristas si ya hay operación) | 🟡 |
-
----
-
-## Qué necesito de ti para arrancar la Fase 0.5 / 1
-
-Respuestas a las decisiones 🔴: **D1, D2, D3, D4, D5, D6, D7, D8, D9, D10, D11, D12, D13**.
-
-Con ellas escribo los ADRs, preparo el esqueleto del repositorio (Fase 0.5) y el plan detallado de la Fase 1 (archivos, migraciones y tests), sin avanzar a la siguiente fase hasta que la actual esté estable (§123).
-
-**En paralelo, fuera del código:** iniciar la verificación del negocio en Meta Business Manager y decidir el número para el piloto (D-CH-3). Es el camino crítico de calendario más probable.
+- **Nada bloqueante de producto.** La Fase 1 (infraestructura base) solo necesita D-ENG-1 y D-ENG-2, que resuelvo al inicio con verificación de versiones y una prueba corta, y que registraré como ADR.
+- **En paralelo (calendario):** verificación del negocio en Meta y número del piloto (D-CH-3), y valores de descuento por rol (D-COM-5).

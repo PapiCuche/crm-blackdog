@@ -201,7 +201,7 @@ Al guardar un ítem o la cotización:
 | 15 | **Amenaza interna** | Un vendedor exporta toda la base de clientes antes de irse | Alto | `contacts.export` sensible, alcances OWN, auditoría de exportaciones y búsquedas masivas, alertas por volumen |
 | 16 | **Abuso de impersonación** | Staff de plataforma mirando datos de clientes | Alto | Sesiones con motivo, tiempo limitado, banner, auditoría y (P2) consentimiento del Owner |
 | 17 | **Cadena de suministro** | Paquete npm/PyPI comprometido | Alto | Lockfiles (uv/pnpm), Dependabot/Renovate, `pip-audit` y `pnpm audit` en CI, versiones fijadas, sin `postinstall` innecesarios |
-| 18 | **Datos personales** (Ley 29733 de Protección de Datos Personales de Perú y su reglamento vigente) | Retención indefinida, falta de consentimiento para marketing, sin derecho de supresión | Legal / reputacional | `marketing_opt_in` con origen y fecha; proceso de supresión que **anonimiza** (el soft delete no basta para un derecho de supresión); política de retención configurable; registro de tratamiento. **Validar con asesoría legal** |
+| 18 | **Datos personales** (Ley 29733 de Protección de Datos Personales de Perú y su reglamento vigente) | Retención indefinida, falta de consentimiento para comunicaciones proactivas, sin derecho de supresión | Legal / reputacional | Consentimientos por canal y propósito en `contact_consents` (con evidencia e historial); proceso de supresión que **anonimiza** (el soft delete no basta para un derecho de supresión); política de retención configurable; registro de tratamiento. **Validar con asesoría legal** |
 | 19 | **Backups** | Backup sin cifrar o no probado | Alto | PITR (WAL) + snapshots diarios cifrados, retención de 30 días, **prueba de restauración mensual** documentada |
 | 20 | **Fuga por la IA de datos internos** | La IA lee una nota interna ("costo 3 900, margen bajo") y la repite | Alto | Los agentes públicos no reciben notas internas ni costos; detector de fugas en la salida |
 
@@ -226,9 +226,9 @@ HSTS, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cr
 | `id`, `organization_id` (nullable para eventos de plataforma), `occurred_at` | |
 | `actor_type` | USER / AI_AGENT / SYSTEM / INTEGRATION / PLATFORM_STAFF |
 | `actor_id`, `actor_label` | ID + nombre legible congelado ("Carlos Ruiz", "Alex IA") |
-| `impersonated_by_id` | Si ocurrió durante una impersonación |
+| `impersonated_by_user_id` | Si ocurrió durante una impersonación |
 | `action` | `dominio.entidad.verbo` (lista abajo) |
-| `entity_type`, `entity_id`, `entity_label` | "quote", uuid, "COT-2026-000123" |
+| `entity_type`, `entity_id`, `entity_label` | "quote", uuid, "COT-000123" |
 | `changes` | JSONB `{campo: [antes, después]}`, **redactado** |
 | `metadata` | JSONB (motivo, batch_id, tool, conversación…) |
 | `ip`, `user_agent`, `request_id`, `correlation_id` | Trazabilidad |
@@ -279,7 +279,7 @@ Append-only (sin UPDATE ni DELETE para `crm_app`), particionada por mes, retenci
 
 | Tarea | Cola | Disparo | Idempotencia |
 |---|---|---|---|
-| `integrations.process_webhook_event(event_id)` | webhooks | Endpoint | Estado del evento + upserts únicos |
+| `integrations.process_webhook_ingress(ingress_id)` | webhooks | Endpoint | Estado del evento + upserts únicos |
 | `integrations.retry_failed_webhooks` | scheduled | Beat 1 min | `next_attempt_at` |
 | `channels.download_media(attachment_id)` | media | message.received | `download_status` |
 | `channels.transcribe_audio(attachment_id)` | media | Media de tipo audio descargada | `transcript IS NULL` |
@@ -337,8 +337,8 @@ Append-only (sin UPDATE ni DELETE para `crm_app`), particionada por mes, retenci
 
 | Grupo | Quién se une | Para qué |
 |---|---|---|
-| `user.{membership_id}` | Cada sesión del usuario | Notificaciones personales, asignaciones, contadores |
-| `org.{org_id}.inbox.all` | Usuarios con `conversations.view` ALL | Lista global |
+| `org.{org_id}.user.{user_id}` | Cada sesión del usuario | Notificaciones personales, asignaciones, contadores |
+| `org.{org_id}.inbox.all` | Usuarios con `conversations.view` y scope `ORGANIZATION` | Lista global |
 | `org.{org_id}.team.{team_id}` | Integrantes del equipo | Cola del equipo |
 | `org.{org_id}.conv.{conversation_id}` | Quien tiene abierta la conversación y permiso | Mensajes, escribiendo, estados |
 | `org.{org_id}.admin` | `dashboard.admin.view` | Salud de servicios, alertas |
@@ -357,8 +357,8 @@ Append-only (sin UPDATE ni DELETE para `crm_app`), particionada por mes, retenci
 | `message.ai_suggestion` | `{conversation_id, suggestion_id, content}` (modo asistido) |
 | `ai.run.status` | `{conversation_id, state: thinking \| calling_tool(name) \| done}` → indicador "IA escribiendo…" |
 | `typing.started/stopped` | `{conversation_id, actor}` (efímero, cliente → servidor → sala) |
-| `presence.changed` | `{membership_id, availability}` |
-| `conversation.read` | `{conversation_id, membership_id, last_read_message_id}` (sincroniza no leídos entre pestañas) |
+| `presence.changed` | `{user_id, availability}` |
+| `conversation.read` | `{conversation_id, user_id, last_read_message_id}` (sincroniza no leídos entre pestañas) |
 | `notification.created` | Notificación + contador |
 | `task.due` / `task.overdue` | `{task_id, title, due_at}` |
 | `opportunity.moved` / `opportunity.updated` | `{id, stage_id, version}` |
@@ -384,12 +384,12 @@ POST /webhooks/meta/   (y /webhooks/tiktok/ con su propio esquema de firma)
   2. Verifica X-Hub-Signature-256 = HMAC_SHA256(app_secret, raw_body), con compare_digest.
      Falla → 401 + contador de métricas (sin persistir el payload completo).
   3. Divide el payload (Meta agrupa varias entradas: entry[].changes[].value.messages[] / statuses[])
-     en **un webhook_event por ítem lógico**, con event_key:
+     en **una fila de `webhook_ingress` por ítem lógico**, con event_key:
        mensaje  → "wa:msg:{message.id}"
        estado   → "wa:status:{status.id}:{status.status}"   (un evento por transición)
        IG/FB    → "ig:msg:{mid}" / "fb:msg:{mid}" ; reacciones, lecturas y postbacks con su propio ID
   4. INSERT … ON CONFLICT (provider, event_key) DO NOTHING (los duplicados se descartan aquí).
-  5. Encola process_webhook_event para los insertados (transaction.on_commit).
+  5. Encola process_webhook_ingress para los insertados (transaction.on_commit).
   6. Responde 200 en < 1 s SIEMPRE que la firma sea válida (aunque luego falle el procesamiento):
      Meta reintenta y puede deshabilitar el webhook si respondemos lento o con errores.
 ```
@@ -397,10 +397,11 @@ POST /webhooks/meta/   (y /webhooks/tiktok/ con su propio esquema de firma)
 ### Q.2 Procesamiento (worker)
 
 ```text
-process_webhook_event(id):
+process_webhook_ingress(id):
   SELECT … FOR UPDATE SKIP LOCKED ; si status ∈ {PROCESSED, IGNORED} → return
   status = PROCESSING, attempts += 1
-  resolver channel_account por external_account_id → organization (fija el contexto de tenant)
+  resolver channel_account por external_account_id → organization mediante la función SECURITY DEFINER
+  resolve_channel_account() (ADR-002 §3.3) y abrir tenant_scope(organization)
      no existe → IGNORED (+ métrica: número desconectado)
   despachar al handler del adapter:
      message  → upsert contacto/identidad/conversación/mensaje (claves únicas) → outbox
@@ -423,7 +424,7 @@ tras N intentos (p. ej., 8) → DEAD + notificación "webhook fallido" (§87) + 
 | Eventos antiguos reenviados | `external_timestamp` se conserva; no reabren conversaciones cerradas hace mucho |
 | Mensaje editado o borrado por el cliente (si el canal lo soporta) | Evento propio; se guarda la versión y no se borra el original (auditoría) |
 | Reprocesar | Botón "Reintentar" en admin → reencola (requiere `integrations.manage`, auditado) |
-| Retención | `webhook_events` 90 días (particiones por mes que se eliminan); los datos de negocio ya están en sus tablas |
+| Retención | `webhook_ingress` 90 días (particiones por mes que se eliminan); los datos de negocio ya están en sus tablas |
 | Privacidad | `headers` sanitizados; el payload contiene PII → la tabla tiene RLS y acceso restringido |
 | Observabilidad | Métricas: recibidos/s, firma inválida, lag de procesamiento (p50/p95), FAILED y DEAD, por proveedor y cuenta |
 

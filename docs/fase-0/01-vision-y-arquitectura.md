@@ -76,7 +76,7 @@ Un cliente escribe por WhatsApp, la IA identifica la variante exacta, responde c
 3. **Eventos de dominio con *transactional outbox*.** Los cambios importantes escriben un evento en `outbox_events` **dentro de la misma transacción**. Un worker los publica a WebSockets, automatizaciones, timeline y notificaciones. Evita el clásico "se guardó pero no se notificó" o "se notificó pero hizo rollback".
 4. **Dinero:** `NUMERIC(14,2)` + `currency CHAR(3)` + `Decimal` en Python. Nunca `float`. Redondeo `ROUND_HALF_UP` centralizado en un tipo `Money`.
 5. **Tiempo:** `timestamptz` en UTC en la base; zona horaria por organización (`America/Lima`) para mostrar y para horarios.
-6. **IDs:** UUIDv7 como PK (ordenables e inadivinables) + **números humanos por organización** (`CONV-00191`, `COT-2026-000123`) generados con `org_sequences` bajo bloqueo de fila.
+6. **IDs:** UUIDv7 como PK (ordenables e inadivinables) + **números humanos por organización** (`CONV-00191`, `COT-000123`) generados con `org_sequences` bajo bloqueo de fila.
 7. **Monorepo:** `backend/` (Django), `frontend/` (Next.js), `infra/` (docker, compose, IaC) y `docs/`. Un solo PR puede cambiar el contrato de API y la UI a la vez.
 
 ### Estructura de repositorio propuesta
@@ -116,8 +116,8 @@ Ajusto la lista del §5. Cambios principales: **`roles` se integra en `access`**
 | `files` | Subida/descarga segura, URLs firmadas, antivirus (futuro) | `files` | core |
 | `contacts` | Perfil único del cliente, identidades, direcciones, etiquetas, notas, duplicados/fusión, timeline (proyección) | `contacts`, `contact_identities`, `contact_addresses`, `tags`, `contact_tags`, `notes`, `contact_merge_candidates`, `contact_merges`, `timeline_events`, `data_provenance` | core, organizations, access, files |
 | `channels` | Cuentas de canal, **adaptadores** (WhatsApp/IG/FB/TikTok/Sandbox), plantillas, envío saliente, parseo de webhooks específicos | `channel_accounts`, `message_templates` | core, integrations, files |
-| `integrations` | Credenciales cifradas (secret store), ingesta genérica de webhooks, idempotencia, reintentos y jobs de sincronización | `credentials`, `webhook_events`, `webhook_failures`, `sync_jobs` | core |
-| `inbox` | Conversaciones, mensajes, adjuntos, estados de entrega, asignación, transferencias, participantes/no leídos, notas internas, respuestas rápidas | `conversations`, `conversation_participants`, `conversation_transfers`, `conversation_status_history`, `conversation_tags`, `messages`, `message_attachments`, `message_status_events`, `quick_replies`, `quick_reply_categories` | contacts, channels, organizations, access |
+| `integrations` | Credenciales cifradas (secret store), ingesta genérica de webhooks, idempotencia, reintentos y jobs de sincronización | `credentials`, `webhook_ingress`, `webhook_failures`, `sync_jobs` | core |
+| `inbox` | Conversaciones, mensajes, adjuntos, estados de entrega, asignación, transferencias, participantes/no leídos, notas internas, respuestas rápidas | `conversations`, `conversation_participants`, `conversation_assignments`, `conversation_status_history`, `conversation_tags`, `messages`, `message_attachments`, `message_status_events`, `quick_replies`, `quick_reply_categories` | contacts, channels, organizations, access |
 | `catalog` | Marcas, categorías, productos, opciones, variantes, alias de búsqueda, media, servicios | `brands`, `categories`, `products`, `product_options`, `product_option_values`, `product_variants`, `variant_option_values`, `product_search_aliases`, `product_media` | core, files |
 | `pricing` | Listas de precios, precios con vigencia, costos, promociones, **motor de precios**, edición masiva e historial | `price_lists`, `product_prices`, `variant_costs`, `promotions`, `promotion_items`, `promotion_price_lists`, `price_change_batches`, `price_change_batch_items` | catalog, access |
 | `inventory` | Almacenes, niveles de stock, movimientos (ledger) y reservas | `warehouses`, `inventory_levels`, `inventory_movements`, `inventory_reservations` | catalog, organizations |
@@ -165,7 +165,7 @@ Ajusto la lista del §5. Cambios principales: **`roles` se integra en `access`**
   │      │      └───────────►│  web (ASGI/uvicorn): DRF API v1                    │
   │      │                   │   ├─ Middleware: auth sesión → tenant → RLS ctx   │
   │      │   /ws/*           │   ├─ /webhooks/<provider>/ (verifica firma,       │
-  │      └──────────────────►│   │   persiste webhook_event, ACK rápido)         │
+  │      └──────────────────►│   │   persiste webhook_ingress, ACK rápido)       │
   │                          │  ws (ASGI/Channels): consumers autenticados       │
   │  /*                      │                                                   │
   ▼                          │  ┌───────────── Capa de dominio ────────────────┐ │
@@ -210,7 +210,7 @@ Ajusto la lista del §5. Cambios principales: **`roles` se integra en `access`**
               ┌───────────────────────────────────▼───────────────────────────────┐
               │ Object storage (S3/R2/MinIO): media, PDFs, Excel · URLs firmadas   │
               │ Observabilidad: Sentry · logs JSON (request_id/correlation_id) ·   │
-              │ Prometheus/Grafana · tablas ai_llm_calls / webhook_events          │
+              │ Prometheus/Grafana · tablas ai_llm_calls / webhook_ingress         │
               └────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -219,10 +219,11 @@ Ajusto la lista del §5. Cambios principales: **`roles` se integra en `access`**
 ```text
 Meta → POST /webhooks/meta/
   1. Verifica X-Hub-Signature-256 sobre el body crudo (HMAC-SHA256 con app secret)
-  2. INSERT webhook_events ON CONFLICT (provider, event_key) DO NOTHING
-  3. Encola process_webhook_event(event_id) → responde 200 en < 1 s
+  2. INSERT webhook_ingress ON CONFLICT (provider, event_key) DO NOTHING
+  3. Encola process_webhook_ingress(ingress_id) → responde 200 en < 1 s
 Worker [webhooks]:
-  4. Resuelve channel_account por phone_number_id → organization (nunca desde el payload)
+  4. Resuelve channel_account por phone_number_id → organization con una función SECURITY DEFINER
+     mínima (nunca desde el payload) y abre tenant_scope(organization)
   5. Resuelve/crea contact_identity → contact
   6. Busca conversación abierta o crea una (según política de reapertura)
   7. Upsert del mensaje (unique channel_account + external_message_id)

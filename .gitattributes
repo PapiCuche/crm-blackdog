@@ -1,0 +1,9 @@
+* text=auto eol=lf
+*.sh text eol=lf
+*.png binary
+*.jpg binary
+*.pdf binary
+*.xlsx binary
+# Código generado (se revisa con menos detalle en los diffs)
+frontend/src/lib/api/** linguist-generated=true
+**/migrations/*.py linguist-generated=false

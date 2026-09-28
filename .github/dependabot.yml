@@ -1,0 +1,11 @@
+# Actualizaciones de dependencias. Los ecosistemas uv/pip y npm se añaden
+# en la Fase 1, cuando existan backend/pyproject.toml y frontend/package.json.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "ci"
+    open-pull-requests-limit: 5
