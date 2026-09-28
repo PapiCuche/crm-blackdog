@@ -1,29 +1,41 @@
-## Objetivo
+## Issue / Fase
 
-<!-- Qué resuelve este PR y a qué fase / épica / historia pertenece. Un PR = un objetivo verificable. -->
+Closes #
+
+<!-- Usar Closes/Fixes/Resolves para el ÚNICO work item de este PR (1 issue = 1 rama = 1 PR).
+     Refs #N solo para referencias adicionales (p. ej., el issue maestro). Indicar ID (F1-02) y fase. -->
+
+## Objetivo
 
 ## Cambios
 
 <!-- Archivos o módulos principales. Migraciones incluidas (si aplica). -->
 
+## No incluye
+
+<!-- Qué queda fuera explícitamente (trabajo de otros issues o fases). -->
+
 ## Cómo se verificó
 
-<!-- Comandos ejecutados y su resultado (tests, lint, typecheck, migraciones). -->
+<!-- Comandos ejecutados y su resultado. Declarar lo que NO se pudo ejecutar. -->
 
-## Checklist (ver docs/architecture/security-boundaries.md §6)
+## Definition of Done
 
-- [ ] Respeta `organization_id` / tenant context (RLS en tablas nuevas, UNIQUE con `organization_id`)
-- [ ] Permisos y scopes declarados en endpoints nuevos
+<!-- Marcar o poner "N/A — motivo". -->
+
+- [ ] Tenant context respetado (`organization_id` desde el contexto; nada del payload)
+- [ ] RLS en tablas tenant-owned nuevas (una política PERMISSIVE por comando)
+- [ ] Permisos y scopes en endpoints nuevos
 - [ ] Auditoría en cambios importantes
-- [ ] Sin secretos ni PII en logs o respuestas
-- [ ] Tests nuevos o actualizados (incluida la suite de aislamiento si hay endpoints nuevos)
+- [ ] Tests nuevos o actualizados (incluida la suite de aislamiento si hay endpoints o tablas nuevas)
+- [ ] Sin secretos ni PII en código, logs o respuestas
 - [ ] Documentación / ADR actualizados si cambia una decisión
-- [ ] Tamaño razonable (≤ 400 líneas netas salvo código generado)
+- [ ] Dentro del scope del issue (sin adelantar otros work items)
 
 ## Riesgos y deuda técnica
 
-<!-- Deuda consciente → issue con etiqueta tech-debt y fase objetivo. -->
+<!-- Deuda consciente → issue con label tech-debt y fase objetivo. -->
 
 ## Autoría
 
-- [ ] Generado o asistido por IA (indicar el agente). La aprobación final es humana.
+- [ ] Generado o asistido por IA (indicar el agente). La aprobación final es humana; el autor no hace merge.

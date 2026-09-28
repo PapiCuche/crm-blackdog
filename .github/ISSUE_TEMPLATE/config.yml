@@ -1,0 +1,8 @@
+# Los work items del roadmap deben usar el formulario "Work item".
+# Los issues en blanco se deshabilitan en la UI; el mantenedor puede crear
+# issues de otro tipo (p. ej., el maestro de fase) con `gh issue create`.
+blank_issues_enabled: false
+contact_links:
+  - name: Guía para agentes y contribuidores
+    url: https://github.com/PapiCuche/crm-blackdog/blob/main/AGENTS.md
+    about: Reglas del flujo issue → rama → PR (sin merge propio).
