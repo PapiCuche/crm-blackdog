@@ -36,10 +36,19 @@ Previos transversales: [#3](https://github.com/PapiCuche/crm-blackdog/issues/3) 
 ### OBS-A-01-1 — Trusted governance bootstrap
 Con el trigger `pull_request`, aunque el script de governance se tome de `base.sha`, la **definición del workflow** pertenece al ref del evento: un PR puede modificar el propio `pr-governance.yml`.
 - No se cambia a `pull_request_target` dentro de A-01 porque el workflow trusted aún no existe en `main` (problema de arranque).
-- Se resuelve en **A-02 (#15)**: governance y `work-item-state` con trigger trusted, sin checkout del head, sin ejecutar código del PR, con permisos mínimos y siempre desde código ya presente en `main`.
+- Se resuelve en **A-02 (#15)**: governance y `work-item-state` con trigger trusted, sin checkout del head, sin ejecutar código del PR, con permisos mínimos y siempre desde código ya presente en `main`. **Estado:** implementado en el PR de A-02; queda efectivo cuando se mergee y el ruleset requiera `PR governance (trusted)`.
 - Los workflows que ejecutan código (backend, frontend, tests) siguen con `pull_request`.
 
 *Registrado en el issue #15; bloquea F1-02 (#4).*
+
+### OBS-A-02-1 — Retirar el legacy `PR governance`
+Tras A-02, el workflow legacy `pr-governance.yml` (con `pull_request`, modificable por el PR) queda **solo informativo**: el ruleset deja de requerirlo.
+- Se recomienda retirarlo en un `chore` pequeño después de que `PR governance (trusted)` haya protegido al menos un ciclo completo (p. ej., el PR de F1-02).
+- Su existencia no bloquea F1-02 una vez que el ruleset exija exclusivamente el trusted.
+
+### OBS-A-02-2 — Revisión estática de workflows modificados por un PR
+`test_workflow_security.py` verifica los workflows **de `main`** (los que se ejecutan). Un PR que añada un workflow `pull_request_target` inseguro no se ejecuta hasta el merge, pero solo lo detecta la revisión humana o del Reviewer.
+- Mejora futura (opcional): que la governance trusted descargue por API, **como dato**, los `.github/workflows/*.yml` modificados por el PR y les aplique las mismas reglas estáticas.
 
 ### OBS-F1-01-1 — Revalidación conjunta de dependencias del frontend
 Antes de crear el frontend en **F1-09** hay que volver a verificar **juntos** Next.js, React, React DOM, @types/react, @types/react-dom y TypeScript. No basta con actualizar Next.js.
