@@ -75,15 +75,26 @@ BACKLOG (roadmap: docs/fase-0/05, docs/phases/)
 | Título | Conventional Commits: `feat|fix|docs|test|refactor|perf|chore|ci|build|security` + `(scope)` opcional + `: descripción` |
 | Rama | `feature/f<N>-<slug>`, `fix/<slug>`, `hotfix/<slug>`, `docs/<slug>`, `chore/<slug>` |
 | Issue | `Closes|Fixes|Resolves|Refs #N` en el cuerpo |
+| Work item real | Se consulta el issue por API (se validan los de `Closes/Fixes/Resolves`; si no hay, los de `Refs`). Debe existir, tener `work-item`, **no** tener `status:blocked` ni `status:done` (aunque también tenga otro estado) y tener `status:ready` o `status:in-progress`. Se aceptan ambos porque `work-item-state` puede cambiar el label mientras corre la governance. Además, la rama de su sección `### Rama` debe coincidir **exactamente** con la rama del PR |
 | Secciones | Issue / Fase, Objetivo, Cambios, No incluye, Cómo se verificó, Definition of Done, Riesgos y deuda técnica, Autoría |
 | Tamaño | Líneas relevantes (adiciones + borrados): **≤ 400** pasa; **401–800** pasa con aviso; **> 800** falla, salvo con el label `large-pr-approved` (que convierte el fallo en aviso) |
 
 - **Excluidos del tamaño:** `docs/**`, `*.lock`, `uv.lock`, `pnpm-lock.yaml`, `package-lock.json`, `**/migrations/**`, `generated/**` y `frontend/src/lib/api/**`. Nunca se excluyen archivos de aplicación para pasar el límite.
 - **Integridad:** el script se ejecuta **desde la rama base** para que un PR no pueda relajar su propia governance. Solo el PR que lo introduce usa su propia versión (arranque).
+- **Limitación conocida (OBS-A-01-1):** con `pull_request`, la **definición del workflow** (YAML) sigue perteneciendo al ref del PR, así que un PR podría modificarla. Se resuelve en **A-02 (#15)** con un trigger trusted. Hasta entonces, cualquier cambio en `.github/workflows/**` o `.github/scripts/**` exige revisión humana específica.
 - **Excepción:** los PRs de `dependabot[bot]` no siguen el template. Para ellos las reglas se informan como avisos y el check pasa, y la revisión humana sigue siendo obligatoria.
 - `large-pr-approved` solo lo aplica el mantenedor, de forma consciente.
 
-## 5. Contrato de handoff
+## 5. Política de triggers de GitHub Actions
+
+| Tipo de workflow | Trigger | Reglas |
+|---|---|---|
+| Ejecuta código del PR (backend, frontend, tests, builds) | `pull_request` | Token de solo lectura en forks; nunca con secretos de producción |
+| Trusted de metadata/governance (valida título, rama, body, labels, issues; sincroniza labels) | Puede usar `pull_request_target` | **No** hace checkout del head ni ejecuta código, scripts o acciones del PR; solo lee metadata por API; permisos mínimos; datos del evento solo por variables de entorno; revisión de seguridad específica en cada cambio |
+
+`pull_request_target` no se aplica de forma indiscriminada. La migración de `PR governance` y `work-item-state` se evalúa en A-02 (#15).
+
+## 6. Contrato de handoff
 
 **Builder → Reviewer / PO:**
 
@@ -113,7 +124,7 @@ Tests reviewed:
 Merge recommendation:
 ```
 
-## 6. Uso diario
+## 7. Uso diario
 
 - **PO → Builder:** "Ejecuta el siguiente issue READY de la Fase 1 siguiendo AGENTS.md. Abre el PR y no hagas merge."
 - **PO → Reviewer:** "Revisa el PR #N según docs/architecture/delivery-automation.md §3 y devuelve el contrato de handoff del Reviewer."

@@ -11,7 +11,7 @@ Cada work item es un issue con el alcance completo (Incluye / No incluye / crite
 | ID | Issue | Rama | Depende de | Estado inicial |
 |---|---|---|---|---|
 | F1-01 | PR #2 | `feature/f1-engineering-versions` | — | ✅ Mergeado (ADR-012) |
-| F1-02 | [#4](https://github.com/PapiCuche/crm-blackdog/issues/4) Backend skeleton | `feature/f1-backend-skeleton` | F1-01 | `status:ready` |
+| F1-02 | [#4](https://github.com/PapiCuche/crm-blackdog/issues/4) Backend skeleton | `feature/f1-backend-skeleton` | F1-01, A-02 (#15) | `status:blocked` |
 | F1-03 | [#5](https://github.com/PapiCuche/crm-blackdog/issues/5) DB roles + RLS core | `feature/f1-db-roles-rls-core` | #4 | `status:blocked` |
 | F1-04 | [#6](https://github.com/PapiCuche/crm-blackdog/issues/6) Tenancy entrypoints | `feature/f1-tenancy-entrypoints` | #5 | `status:blocked` |
 | F1-05 | [#7](https://github.com/PapiCuche/crm-blackdog/issues/7) UUIDv7 + organization sequences | `feature/f1-ids-sequences` | #6 | `status:blocked` |
@@ -21,7 +21,7 @@ Cada work item es un issue con el alcance completo (Incluye / No incluye / crite
 | F1-09 | [#11](https://github.com/PapiCuche/crm-blackdog/issues/11) Frontend skeleton | `feature/f1-frontend-skeleton` | #4 | `status:blocked` |
 | F1-10 | [#12](https://github.com/PapiCuche/crm-blackdog/issues/12) Local stack | `feature/f1-local-stack` | #4 … #11 | `status:blocked` |
 
-Previo transversal: [#3](https://github.com/PapiCuche/crm-blackdog/issues/3) A-01 Project delivery automation.
+Previos transversales: [#3](https://github.com/PapiCuche/crm-blackdog/issues/3) A-01 Project delivery automation → [#15](https://github.com/PapiCuche/crm-blackdog/issues/15) A-02 Harden trusted PR governance. **F1-02 no empieza hasta que A-02 esté mergeado.**
 
 ## Definition of Done de la fase
 
@@ -32,6 +32,14 @@ Previo transversal: [#3](https://github.com/PapiCuche/crm-blackdog/issues/3) A-0
 - **Gate heredado de la Fase 0.5:** PostgreSQL y el script de roles/RLS ejecutados contra una instancia real (CI en F1-03, Docker local en F1-10).
 
 ## Observaciones vivas (de revisiones)
+
+### OBS-A-01-1 — Trusted governance bootstrap
+Con el trigger `pull_request`, aunque el script de governance se tome de `base.sha`, la **definición del workflow** pertenece al ref del evento: un PR puede modificar el propio `pr-governance.yml`.
+- No se cambia a `pull_request_target` dentro de A-01 porque el workflow trusted aún no existe en `main` (problema de arranque).
+- Se resuelve en **A-02 (#15)**: governance y `work-item-state` con trigger trusted, sin checkout del head, sin ejecutar código del PR, con permisos mínimos y siempre desde código ya presente en `main`.
+- Los workflows que ejecutan código (backend, frontend, tests) siguen con `pull_request`.
+
+*Registrado en el issue #15; bloquea F1-02 (#4).*
 
 ### OBS-F1-01-1 — Revalidación conjunta de dependencias del frontend
 Antes de crear el frontend en **F1-09** hay que volver a verificar **juntos** Next.js, React, React DOM, @types/react, @types/react-dom y TypeScript. No basta con actualizar Next.js.

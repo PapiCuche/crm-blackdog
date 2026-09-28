@@ -79,7 +79,7 @@ El issue define **Incluye**, **No incluye**, **Criterios de aceptación** y **Va
 Usa `.github/pull_request_template.md`. El check **PR governance** exige:
 - título Conventional Commit;
 - rama válida;
-- referencia a un issue (`Closes #N`);
+- referencia a un issue (`Closes #N`) que exista, sea `work-item`, esté en `status:ready` o `status:in-progress` (nunca `blocked` ni `done`) y declare en `### Rama` exactamente la rama del PR;
 - las 8 secciones del template: Issue / Fase, Objetivo, Cambios, No incluye, Cómo se verificó, Definition of Done, Riesgos y deuda técnica, Autoría.
 
 Declara también:

@@ -56,6 +56,8 @@ Se usan `paths` filtros para no ejecutar el pipeline del backend cuando solo cam
 | Acciones de terceros | Fijadas por **SHA de commit** | Evita ataques a la cadena de suministro vía tags movidos |
 | Permisos del token | `permissions: contents: read` por defecto | Mínimo privilegio |
 
+**Política de triggers:** los workflows que ejecutan código del PR usan `pull_request`. Los workflows trusted de metadata/governance, que no hacen checkout ni ejecutan código del PR, pueden usar `pull_request_target` con revisión específica y permisos mínimos ([delivery-automation.md](delivery-automation.md) §5; endurecimiento en A-02, #15).
+
 **No se añaden (redundantes o no aplicables ahora):** CodeQL (requiere GitHub Advanced Security en repositorios privados), escaneo de contenedores (cuando haya imágenes publicadas), SAST adicional (ruff `S` cubre lo básico en Python).
 
 ## 5. Local

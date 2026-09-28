@@ -1,8 +1,9 @@
 """PR governance checks (ADR-009, docs/architecture/delivery-automation.md).
 
-Validates structure only: title, branch, linked issue, required sections and size.
-Reads the pull_request event from GITHUB_EVENT_PATH and the changed files from the
-GitHub REST API. Standard library only, so it runs on any runner without installs.
+Validates structure (title, branch, linked issue, required sections, size) and that the
+linked issue is a real work item in a workable state whose declared branch matches the PR.
+Reads the pull_request event from GITHUB_EVENT_PATH; changed files and issues come from
+the GitHub REST API. Standard library only, so it runs on any runner without installs.
 """
 
 from __future__ import annotations
@@ -11,6 +12,7 @@ import json
 import os
 import re
 import sys
+import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
 
@@ -19,7 +21,10 @@ TITLE_RE = re.compile(
 )
 SLUG = r"[a-z0-9]+(?:-[a-z0-9]+)*"
 BRANCH_RE = re.compile(rf"^(?:feature/f\d+-{SLUG}|(?:fix|hotfix|docs|chore)/{SLUG})$")
-ISSUE_RE = re.compile(r"\b(?:closes|fixes|resolves|refs)\s+#\d+\b", re.IGNORECASE)
+ISSUE_RE = re.compile(r"\b(closes|fixes|resolves|refs)\s+#(\d+)\b", re.IGNORECASE)
+BRANCH_SECTION_RE = re.compile(r"^###\s+Rama\s*$\s*^(.+?)\s*$", re.MULTILINE)
+WORKABLE_STATUSES = {"status:ready", "status:in-progress"}
+FORBIDDEN_STATUSES = {"status:blocked", "status:done"}
 REQUIRED_SECTIONS = (
     "Issue / Fase",
     "Objetivo",
@@ -78,12 +83,44 @@ class Result:
     excluded_lines: int = 0
 
 
+def linked_issues(body: str) -> list[int]:
+    """Issues del work item: los de palabras de cierre; si no hay, los de "Refs"."""
+    refs = [(kw.lower(), int(n)) for kw, n in ISSUE_RE.findall(body)]
+    closing = [n for kw, n in refs if kw != "refs"]
+    return sorted(set(closing or [n for _, n in refs]))
+
+
+def declared_branch(issue_body: str) -> str | None:
+    m = BRANCH_SECTION_RE.search(issue_body or "")
+    return m.group(1).strip().strip("`").strip() if m else None
+
+
+def work_item_errors(number: int, issue: dict | None, branch: str) -> list[str]:
+    if issue is None:
+        return [f"El issue #{number} no existe"]
+    if "pull_request" in issue:
+        return [f"#{number} es un PR, no un issue"]
+    labels = {lbl.get("name") for lbl in issue.get("labels") or []}
+    errors = []
+    if "work-item" not in labels:
+        errors.append(f"El issue #{number} no tiene el label 'work-item'")
+    forbidden = sorted(labels & FORBIDDEN_STATUSES)
+    if forbidden:
+        errors.append(f"El issue #{number} está en {', '.join(forbidden)}")
+    elif not labels & WORKABLE_STATUSES:
+        errors.append(f"El issue #{number} no está en status:ready ni status:in-progress")
+    declared = declared_branch(issue.get("body") or "")
+    if declared != branch:
+        errors.append(f"La rama del PR {branch!r} no coincide con la declarada en #{number} ({declared!r})")
+    return errors
+
+
 def missing_sections(body: str) -> list[str]:
     headings = {m.group(1).strip() for m in re.finditer(r"^##\s+(.+?)\s*$", body, re.MULTILINE)}
     return [s for s in REQUIRED_SECTIONS if s not in headings]
 
 
-def evaluate(pr: dict, files: list[dict]) -> Result:
+def evaluate(pr: dict, files: list[dict], issues: dict[int, dict | None]) -> Result:
     res = Result()
     title = pr.get("title") or ""
     branch = (pr.get("head") or {}).get("ref") or ""
@@ -96,8 +133,11 @@ def evaluate(pr: dict, files: list[dict]) -> Result:
         res.errors.append(
             f"Rama inválida {branch!r}: usar feature/f<N>-<slug>, fix/, hotfix/, docs/ o chore/<slug>"
         )
-    if not ISSUE_RE.search(body):
+    numbers = linked_issues(body)
+    if not numbers:
         res.errors.append("El cuerpo no referencia un issue (Closes #N / Fixes #N / Resolves #N / Refs #N)")
+    for n in numbers:
+        res.errors.extend(work_item_errors(n, issues.get(n), branch))
     for section in missing_sections(body):
         res.errors.append(f"Falta la sección obligatoria '## {section}'")
 
@@ -120,19 +160,32 @@ def evaluate(pr: dict, files: list[dict]) -> Result:
     return res
 
 
+def _get(url: str, token: str):
+    req = urllib.request.Request(
+        url,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return json.load(resp)
+
+
+def fetch_issue(repo: str, number: int, token: str) -> dict | None:
+    try:
+        return _get(f"https://api.github.com/repos/{repo}/issues/{number}", token)
+    except urllib.error.HTTPError as exc:
+        if exc.code in (404, 410):
+            return None
+        raise
+
+
 def fetch_files(repo: str, number: int, token: str) -> list[dict]:
     files: list[dict] = []
     for page in range(1, 31):  # la API devuelve como máximo 3000 archivos
-        req = urllib.request.Request(
-            f"https://api.github.com/repos/{repo}/pulls/{number}/files?per_page=100&page={page}",
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Accept": "application/vnd.github+json",
-                "X-GitHub-Api-Version": "2022-11-28",
-            },
-        )
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            batch = json.load(resp)
+        batch = _get(f"https://api.github.com/repos/{repo}/pulls/{number}/files?per_page=100&page={page}", token)
         files.extend(batch)
         if len(batch) < 100:
             break
@@ -158,8 +211,10 @@ def write_summary(res: Result, exempt: bool) -> None:
 def main() -> int:
     with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as fh:
         pr = json.load(fh)["pull_request"]
-    files = fetch_files(os.environ["GITHUB_REPOSITORY"], pr["number"], os.environ["GITHUB_TOKEN"])
-    res = evaluate(pr, files)
+    repo, token = os.environ["GITHUB_REPOSITORY"], os.environ["GITHUB_TOKEN"]
+    files = fetch_files(repo, pr["number"], token)
+    issues = {n: fetch_issue(repo, n, token) for n in linked_issues(pr.get("body") or "")}
+    res = evaluate(pr, files, issues)
     exempt = (pr.get("user") or {}).get("login") in EXEMPT_AUTHORS
     write_summary(res, exempt)
     for w in res.warnings:
