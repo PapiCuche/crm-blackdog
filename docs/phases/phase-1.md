@@ -55,6 +55,19 @@ Tras A-02, el workflow legacy `pr-governance.yml` (con `pull_request`, modificab
 ### Resultado F1-02 — compatibilidad django-stubs (ADR-012 §2)
 `django-stubs 5.2.9` + `django-stubs-ext 5.2.9` + `mypy 1.19.1` en modo `strict`, con el plugin de Django, funcionan sobre **Python 3.14.7** con Django 5.2.17: el análisis corre y detecta errores reales. **No hace falta el fallback a `django-stubs 6.0.x`.**
 
+### OBS-F1-02-1 — Dependabot para Python
+`.github/dependabot.yml` todavía solo cubre `github-actions`. Hay que añadir el ecosistema de Python (uv/pip) sobre `backend/`, para recibir alertas y PRs de actualización de las dependencias fijadas en `uv.lock`.
+- No bloqueante. Se hará en un `chore` pequeño y separado.
+
+### OBS-F1-02-2 — Opciones de conexión en `DATABASE_URL`
+`config.env.database()` ignora hoy los parámetros de query (p. ej., `?sslmode=require`), que se perderían **en silencio**.
+- Antes de producción: soportar explícitamente las opciones necesarias (TLS/`sslmode`, `connect_timeout`…) o **rechazar** cualquier parámetro no soportado.
+- Nunca ignorar en silencio una opción de seguridad.
+
+### OBS-F1-02-3 — Gate estable para el CI del backend
+Los checks `backend checks`, `backend tests` y `backend docker build` **no** se hacen requeridos todavía: `backend.yml` usa filtros `paths`, y un PR que solo toque documentación o frontend no los ejecutaría y quedaría bloqueado esperando un check que nunca llega.
+- Solución futura (antes de hacerlos requeridos): un check con **nombre estable** presente en todos los PRs, que ejecute el CI del backend cuando haya cambios relevantes y haga un no-op exitoso cuando no.
+
 ### OBS-F1-01-1 — Revalidación conjunta de dependencias del frontend
 Antes de crear el frontend en **F1-09** hay que volver a verificar **juntos** Next.js, React, React DOM, @types/react, @types/react-dom y TypeScript. No basta con actualizar Next.js.
 - La baseline de ADR-012 está validada para Next.js 16.3.6, y existe una security release 16.3.7 programada para el 30/09/2026.
