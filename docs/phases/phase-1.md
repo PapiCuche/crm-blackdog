@@ -33,7 +33,9 @@ Previos transversales: [#3](https://github.com/PapiCuche/crm-blackdog/issues/3) 
 
 ## Observaciones vivas (de revisiones)
 
-### OBS-A-01-1 — Trusted governance bootstrap
+### OBS-A-01-1 — Trusted governance bootstrap — ✅ RESOLVED (2026-09-28)
+**Resuelto:** el workflow trusted está en `main` (PR #16, squash `f33a6d1`) y `main-protection` exige `PR governance (trusted)` desde el 2026-09-28. El legacy `PR governance` es solo informativo (OBS-A-02-1). Registrado en F1-02 (#4).
+
 Con el trigger `pull_request`, aunque el script de governance se tome de `base.sha`, la **definición del workflow** pertenece al ref del evento: un PR puede modificar el propio `pr-governance.yml`.
 - No se cambia a `pull_request_target` dentro de A-01 porque el workflow trusted aún no existe en `main` (problema de arranque).
 - Se resuelve en **A-02 (#15)**: governance y `work-item-state` con trigger trusted, sin checkout del head, sin ejecutar código del PR, con permisos mínimos y siempre desde código ya presente en `main`. **Estado:** implementado en el PR de A-02; queda efectivo cuando se mergee y el ruleset requiera `PR governance (trusted)`.
@@ -49,6 +51,9 @@ Tras A-02, el workflow legacy `pr-governance.yml` (con `pull_request`, modificab
 ### OBS-A-02-2 — Revisión estática de workflows modificados por un PR
 `test_workflow_security.py` verifica los workflows **de `main`** (los que se ejecutan). Un PR que añada un workflow `pull_request_target` inseguro no se ejecuta hasta el merge, pero solo lo detecta la revisión humana o del Reviewer.
 - Mejora futura (opcional): que la governance trusted descargue por API, **como dato**, los `.github/workflows/*.yml` modificados por el PR y les aplique las mismas reglas estáticas.
+
+### Resultado F1-02 — compatibilidad django-stubs (ADR-012 §2)
+`django-stubs 5.2.9` + `django-stubs-ext 5.2.9` + `mypy 1.19.1` en modo `strict`, con el plugin de Django, funcionan sobre **Python 3.14.7** con Django 5.2.17: el análisis corre y detecta errores reales. **No hace falta el fallback a `django-stubs 6.0.x`.**
 
 ### OBS-F1-01-1 — Revalidación conjunta de dependencias del frontend
 Antes de crear el frontend en **F1-09** hay que volver a verificar **juntos** Next.js, React, React DOM, @types/react, @types/react-dom y TypeScript. No basta con actualizar Next.js.
