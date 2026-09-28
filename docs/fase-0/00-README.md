@@ -1,6 +1,6 @@
 # Fase 0 — Análisis de arquitectura del CRM omnicanal + AI Workforce
 
-Fecha: 2026-09-28 · Estado: **BORRADOR PARA REVISIÓN** (no hay código todavía)
+Fecha: 2026-09-28 · Estado: **APROBADO con cambios** (Fase 0.5). Las decisiones formales están en [docs/adr/](../adr/README.md) y los documentos vivos de arquitectura en [docs/architecture/](../architecture/). Si hay contradicción, prevalecen los ADR.
 
 Este directorio contiene la respuesta a los apartados A–U del prompt maestro.
 Se divide en archivos para poder versionarlos y revisarlos por separado.

@@ -1,11 +1,33 @@
+# SO / editores
 .DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Entorno y secretos (nunca versionar)
 .env
 .env.*
 !.env.example
+*.pem
+*.key
+
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
 .venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node / Next.js
 node_modules/
 .next/
-.idea/
-.vscode/
+out/
+*.tsbuildinfo
+coverage/
+
+# Local
+/infra/docker/data/
+*.log

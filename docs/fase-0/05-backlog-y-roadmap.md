@@ -7,24 +7,24 @@
 
 ## R. Backlog
 
-### E00 · Fundaciones técnicas (Fase 0.5)
+### E00 · Fundaciones técnicas / infraestructura base (Fase 1)
 
 | ID | Feature / Historia | Prio | Fase |
 |---|---|---|---|
-| E00-01 | Monorepo (`backend/`, `frontend/`, `infra/`, `docs/`) con docker-compose (Postgres + pgvector, Redis ×3 lógicas, MinIO, Mailpit) | P0 | 0.5 |
-| E00-02 | Settings por entorno (12-factor), validación de settings críticos en el arranque (`DEBUG`, claves, hosts) | P0 | 0.5 |
-| E00-03 | CI: ruff, mypy (django-stubs), pytest con cobertura, import-linter, eslint, tsc, `pip-audit`/`pnpm audit`, build de Next.js, verificación del contrato OpenAPI | P0 | 0.5 |
-| E00-04 | `core`: `TenantModel`, `SoftDeleteModel`, `ExecutionContext`, `Money`, errores de dominio, `org_sequences` | P0 | 0.5 |
-| E00-05 | Tenancy: middleware, contextvar, `SET LOCAL`, políticas RLS vía migración genérica, roles de BD, `@tenant_task` | P0 | 0.5 |
-| E00-06 | Outbox + publisher + registro de handlers de eventos | P0 | 0.5 |
-| E00-07 | `audit` con `audit.record(ctx, action, entity, changes)` y redactor | P0 | 0.5 |
-| E00-08 | Observabilidad base: logs JSON con `request_id`/`correlation_id`, Sentry (backend/frontend/Celery) con scrubbing, `/health` y `/ready` | P0 | 0.5 |
-| E00-09 | API: DRF + drf-spectacular + cliente TS generado (orval) + convención de errores (`{code, message, fields}`) + paginación por cursor | P0 | 0.5 |
-| E00-10 | Frontend shell: layout, navegación del §8, tema (design tokens), tabla/formularios base, manejo de errores y toasts, i18n preparado (es-PE) | P0 | 0.5 |
-| E00-11 | Test harness: factories (factory_boy), fixtures de dos organizaciones, **suite automática de aislamiento cruzado** | P0 | 0.5 |
-| E00-12 | ADRs iniciales (una por cada decisión de U cerrada) | P0 | 0.5 |
+| E00-01 | Monorepo (`backend/`, `frontend/`, `infra/`, `docs/`) con docker-compose (Postgres + pgvector, Redis ×3 lógicas, MinIO, Mailpit) | P0 | 1 |
+| E00-02 | Settings por entorno (12-factor), validación de settings críticos en el arranque (`DEBUG`, claves, hosts) | P0 | 1 |
+| E00-03 | CI: ruff, mypy (django-stubs), pytest con cobertura, import-linter, eslint, tsc, `pip-audit`/`pnpm audit`, build de Next.js, verificación del contrato OpenAPI | P0 | 1 |
+| E00-04 | `core`: `TenantModel`, `SoftDeleteModel`, `ExecutionContext`, `Money`, errores de dominio, `org_sequences` | P0 | 1 |
+| E00-05 | Tenancy: middleware, contextvar, `SET LOCAL`, políticas RLS vía migración genérica, roles de BD, `@tenant_task` | P0 | 1 |
+| E00-06 | Outbox + publisher + registro de handlers de eventos | P0 | 1 |
+| E00-07 | `audit` con `audit.record(ctx, action, entity, changes)` y redactor | P0 | 1 |
+| E00-08 | Observabilidad base: logs JSON con `request_id`/`correlation_id`, Sentry (backend/frontend/Celery) con scrubbing, `/health` y `/ready` | P0 | 1 |
+| E00-09 | API: DRF + drf-spectacular + cliente TS generado (orval) + convención de errores (`{code, message, fields}`) + paginación por cursor | P0 | 1 |
+| E00-10 | Frontend shell: layout, navegación del §8, tema (design tokens), tabla/formularios base, manejo de errores y toasts, i18n preparado (es-PE) | P0 | 1 |
+| E00-11 | Test harness: factories (factory_boy), fixtures de dos organizaciones, **suite automática de aislamiento cruzado** | P0 | 1 |
+| E00-12 | ADRs iniciales (una por cada decisión de U cerrada) | P0 | 1 |
 
-### E01 · Identidad, organizaciones y acceso (Fase 1)
+### E01 · Identidad, organizaciones y acceso (Fase 2)
 
 | ID | Historia | Prio |
 |---|---|---|
@@ -42,7 +42,7 @@
 | E01-12 | Como staff, quiero impersonar una organización con motivo, tiempo límite y auditoría | P2 |
 | E01-13 | Como Admin, quiero ver el log de auditoría filtrable por actor, acción y entidad | P0 |
 
-### E02 · Catálogo (Fase 2)
+### E02 · Catálogo (Fase 3)
 
 | ID | Historia | Prio |
 |---|---|---|
@@ -54,7 +54,7 @@
 | E02-06 | Como gestor, quiero registrar servicios técnicos (producto SERVICE con variantes por equipo y calidad) sin stock | P2 |
 | E02-07 | Como Admin, quiero una papelera para restaurar productos eliminados | P1 |
 
-### E03 · Precios (Fase 2)
+### E03 · Precios (Fase 3)
 
 | ID | Historia | Prio |
 |---|---|---|
@@ -69,7 +69,7 @@
 | E03-09 | Como gestor, quiero importar catálogo y precios desde Excel con validación, preview y errores por fila | P1 |
 | E03-10 | Como desarrollador, quiero una suite de tests del motor de precios (vigencias, solapes, promociones, permisos, redondeo) | P0 |
 
-### E04 · Inventario (Fase 2)
+### E04 · Inventario (Fase 3)
 
 | ID | Historia | Prio |
 |---|---|---|
@@ -82,7 +82,7 @@
 | E04-07 | Como gestor, quiero importar stock inicial desde Excel | P1 |
 | E04-08 | Tests de concurrencia: dos reservas simultáneas sobre la última unidad → solo una tiene éxito | P0 |
 
-### E05 · Contactos (Fase 3)
+### E05 · Contactos (Fase 4)
 
 | ID | Historia | Prio |
 |---|---|---|
@@ -97,7 +97,7 @@
 | E05-09 | Como Admin, quiero anonimizar un contacto (derecho de supresión) | P2 |
 | E05-10 | Como usuario, quiero buscar contactos por nombre, teléfono, email o @usuario | P0 |
 
-### E06 · Inbox (Fase 4)
+### E06 · Inbox (Fase 6)
 
 | ID | Historia | Prio |
 |---|---|---|
@@ -121,7 +121,7 @@
 | E06-18 | Como supervisor, quiero un panel con carga por agente, tiempos de espera y la posibilidad de reasignar, tomar o elevar prioridad | P1 |
 | E06-19 | Como agente, quiero asignación por especialidad y reglas | P2 |
 
-### E07 · WhatsApp (Fase 5)
+### E07 · WhatsApp (Fase 7)
 
 | ID | Historia | Prio |
 |---|---|---|
@@ -137,7 +137,7 @@
 | E07-10 | Como Admin, quiero ver la salud del número (calidad, límite de mensajería, errores) | P1 |
 | E07-11 | Como Admin, quiero reintentar webhooks fallidos desde el panel | P1 |
 
-### E08 · Gateway de IA (Fase 6)
+### E08 · Gateway de IA (Fase 8)
 
 | ID | Historia | Prio |
 |---|---|---|
@@ -151,7 +151,7 @@
 | E08-08 | Como Admin, quiero ver el consumo (tokens y coste) por cuenta, modelo, agente y día | P0 |
 | E08-09 | Como Owner, quiero un botón global para desactivar la IA | P0 |
 
-### E09 · Leads, pipeline y oportunidades (Fase 7, adelantada)
+### E09 · Leads, pipeline y oportunidades (Fase 5 — sales core)
 
 | ID | Historia | Prio |
 |---|---|---|
@@ -166,9 +166,9 @@
 | E09-09 | Como vendedor, quiero marcar como perdida con motivo obligatorio | P0 |
 | E09-10 | Como supervisor, quiero ver las oportunidades estancadas | P1 |
 | E09-11 | Como Admin, quiero configurar los motivos de pérdida | P0 |
-| E09-12 | Como vendedor, quiero ver en el Inbox el lead y la oportunidad vinculados y crearlos con un clic | P0 |
+| E09-12 | Como vendedor, quiero ver en el Inbox el lead y la oportunidad vinculados y crearlos con un clic | P0 · **Fase 6** (requiere Inbox) |
 
-### E10 · Tareas (Fase 7)
+### E10 · Tareas (Fase 5)
 
 | ID | Historia | Prio |
 |---|---|---|
@@ -177,7 +177,9 @@
 | E10-03 | Como responsable, quiero recibir un recordatorio y una notificación al vencer | P0 |
 | E10-04 | Como supervisor, quiero reasignar tareas | P1 |
 
-### E11 · Agentes IA (Fase 8)
+### E11 · Agentes IA (Fases 8, 9 y 10 — ver la columna de cada historia)
+
+*Historias sin fase indicada = Fase 8. La memoria larga llega en la Fase 9; E11-19 (Supervisor IA) en la Fase 14.*
 
 | ID | Historia | Prio |
 |---|---|---|
@@ -187,21 +189,21 @@
 | E11-04 | Como Admin, quiero publicar versiones del agente y revertir a una anterior | P0 |
 | E11-05 | Como sistema, quiero un orquestador con debounce, lock por conversación, tool loop y guardrails | P0 |
 | E11-06 | Como cliente, quiero preguntar por un producto y recibir el precio y stock exactos (con aclaración de variante si hace falta) | P0 |
-| E11-07 | Como sistema, quiero bloquear respuestas con cifras que no vengan de tools | P0 |
+| E11-07 | Como sistema, quiero un Output Guard (claims → evidencia de tools → validación) que bloquee afirmaciones dinámicas sin evidencia (ADR-005 §D) | P0 · Fase 8 |
 | E11-08 | Como sistema, quiero detectar intención, sentimiento y la petición de humano | P0 |
-| E11-09 | Como sistema, quiero que la IA cree y actualice leads con datos extraídos marcados AI_EXTRACTION | P0 |
-| E11-10 | Como Admin, quiero una base de conocimiento (documentos publicados, embeddings, asignación a agentes) | P0 |
+| E11-09 | Como sistema, quiero que la IA cree y actualice leads con datos extraídos marcados AI_EXTRACTION | P0 · **Fase 10** |
+| E11-10 | Como Admin, quiero una base de conocimiento (documentos publicados, embeddings con pgvector, asignación a agentes) | P0 · **Fase 9** |
 | E11-11 | Como sistema, quiero memoria corta y larga (resúmenes) | P0 |
-| E11-12 | Como agente humano, quiero el copiloto: sugerir y mejorar respuesta, resumir, identificar qué quiere el cliente, consultar precio y stock, crear seguimiento, lead y oportunidad | P0 (sugerir/resumir/consultar), P1 (resto) |
+| E11-12 | Como agente humano, quiero el copiloto: sugerir y mejorar respuesta, resumir, identificar qué quiere el cliente, consultar precio y stock (**Fase 8**); crear seguimiento, lead y oportunidad (**Fase 10**) | P0 |
 | E11-13 | Como agente humano en modo AI_ASSISTED, quiero aprobar, editar o rechazar la sugerencia | P0 |
 | E11-14 | Como supervisor, quiero ver las conversaciones de IA con sus tool calls, decisiones y costes | P0 |
 | E11-15 | Como agente humano, quiero dar feedback (👍/👎 + categoría) a una respuesta de IA | P1 |
 | E11-16 | Como Admin, quiero métricas de IA (resueltas, transferencias, tiempos, leads, cotizaciones, tokens, coste por conversación) | P1 |
-| E11-17 | Como sistema, quiero que la IA cree oportunidades y borradores de cotización (nivel 4) | P1 |
-| E11-18 | Como Admin, quiero ejecutar un conjunto de evaluación antes de publicar una versión | P2 |
+| E11-17 | Como sistema, quiero que la IA cree oportunidades y borradores de cotización (nivel 4) | P1 · **Fase 10** |
+| E11-18 | Como Admin, quiero ejecutar un conjunto de evaluación antes de publicar una versión | P2 · Fase 14 |
 | E11-19 | Supervisor IA (reglas deterministas): lead caliente sin seguimiento, cotización sin seguimiento, vendedor saturado | P2 |
 
-### E12 · Handoff IA ↔ humano (Fase 8, junto con la IA)
+### E12 · Handoff IA ↔ humano (Fase 9)
 
 | ID | Historia | Prio |
 |---|---|---|
@@ -213,23 +215,23 @@
 | E12-06 | Como sistema, quiero hacer handoff por baja confianza, fallo de tool, presupuesto agotado, reclamo o kill switch | P0 |
 | E12-07 | Como cliente fuera de horario, quiero que me avisen de cuándo me atenderán | P1 |
 
-### E13 · Cotizaciones y ventas (Fase 9)
+### E13 · Cotizaciones y ventas (Fase 5; envío por canal en la Fase 7)
 
 | ID | Historia | Prio |
 |---|---|---|
-| E13-01 | Como vendedor, quiero crear una cotización desde el Inbox, contacto, lead u oportunidad con precios del motor | P0 |
+| E13-01 | Como vendedor, quiero crear una cotización desde contacto, lead u oportunidad con precios del motor (desde el Inbox: **Fase 6**) | P0 |
 | E13-02 | Como vendedor, quiero aplicar descuentos dentro de mi límite; por encima, pedir aprobación | P0 |
 | E13-03 | Como supervisor, quiero aprobar o rechazar cotizaciones pendientes con comentario | P0 |
-| E13-04 | Como vendedor, quiero generar el PDF y enviarlo por WhatsApp (documento o plantilla) | P0 |
+| E13-04 | Como vendedor, quiero generar el PDF (Fase 5) y enviarlo por WhatsApp como documento o plantilla vía `MessagingPolicyService` (**Fase 7**) | P0 |
 | E13-05 | Como sistema, quiero congelar el snapshot al emitir y crear revisiones ante cambios | P0 |
 | E13-06 | Como sistema, quiero expirar cotizaciones vencidas | P0 |
-| E13-07 | Como sistema, quiero crear un seguimiento a +24 h cancelable si el cliente responde | P0 |
+| E13-07 | Como sistema, quiero crear un seguimiento a +24 h (tarea: Fase 5) cancelable si el cliente responde (**Fase 7**: requiere mensajes entrantes) | P0 |
 | E13-08 | Como vendedor, quiero marcar la cotización como aceptada o rechazada y mover la oportunidad | P0 |
 | E13-09 | Como sistema, quiero un enlace público de la cotización que registre VIEWED | P1 |
 | E13-10 | Como vendedor, quiero registrar una venta directa (sin cotización) | P1 |
 | E13-11 | Como Admin, quiero configurar métodos de pago, validez por defecto, términos y garantía de la plantilla | P0 |
 
-### E14 · Notificaciones (Fases 4–9, incremental)
+### E14 · Notificaciones (desde la Fase 6, incremental)
 
 | ID | Historia | Prio |
 |---|---|---|
@@ -238,7 +240,7 @@
 | E14-03 | Preferencias por usuario (in-app, sonido, email) | P1 |
 | E14-04 | Web push | P2 |
 
-### E15 · Dashboards y reportes (MVP básico en Fase 10; avanzados en Fase 14)
+### E15 · Dashboards y reportes (básicos al cierre del MVP, Fase 10; avanzados en la Fase 14)
 
 | ID | Historia | Prio |
 |---|---|---|
@@ -256,9 +258,9 @@
 | E16-03 | Historial de ejecuciones y errores por regla | P2 |
 | E16-04 | Protección anti-bucles (profundidad, cooldown, máximo por entidad) | P2 |
 
-*Nota: las automatizaciones "fijas" del MVP (seguimiento +24 h, estancadas, SLA) se implementan como jobs configurables en las fases 7–9, no con el motor genérico.*
+*Nota: las automatizaciones "fijas" del MVP (seguimiento +24 h, estancadas, SLA) se implementan como jobs configurables en las fases 5–7, no con el motor genérico.*
 
-### E17 · Búsqueda global (Fase 10)
+### E17 · Búsqueda global (Fase 10, cierre del MVP)
 
 | ID | Historia | Prio |
 |---|---|---|
@@ -288,53 +290,70 @@
 
 ## S. Roadmap
 
-### Cambios respecto al orden del §103 (y por qué)
+> **Actualizado el 2026-09-28 (Fase 0.5).** Sustituye al roadmap anterior. Regla verificada: **ninguna fase usa entidades de una fase posterior, y ninguna tool de IA crea una entidad que no exista todavía.** Cada migración corresponde a funcionalidad real de su fase (el ERD de ~95 tablas es el mapa, no el plan de migraciones).
 
-| Cambio | Motivo |
+### S.1 Fases
+
+| Fase | Nombre | Alcance | Tablas que crea (aprox.) | Criterio de salida (además del DoD §124) |
+|---|---|---|---|---|
+| **0** | Análisis | Documento A–U | — | ✅ Cerrada |
+| **0.5** | Decisiones y scaffolding | ADRs, arquitectura, estructura del monorepo, compose base, CI de seguridad | — | ✅ Este PR |
+| **1** | Infraestructura base | Backend y frontend esqueleto; `core` (tenancy, RLS, ids, sequences, outbox, storage, observabilidad, errores, http seguro); `audit`; `files`; health checks; CI backend/frontend; tenant de prueba mínimo (`organizations` platform-owned + tabla tenant de ejemplo solo en tests) | `organizations` (mínima), `org_sequences`, `outbox_events`, `audit_logs`, `files` | Suite de aislamiento T1–T13 en verde con el rol `crm_app`; CI completo; `docker compose up` funcional |
+| **2** | Organizaciones, usuarios y RBAC | Auth por sesión, MFA (flag), usuarios, membresías, invitaciones, roles, permisos con scope, equipos, sucursales, horarios, auditoría de acceso; shell de UI con `/o/[slug]` | `users`, `user_mfa_devices`, `user_invitations`, `organization_memberships`, `branches`, `teams`, `team_members`, `work_schedules`, `permissions`, `roles`, `role_permissions`, `membership_roles` | Login + MFA + roles con scope; tests anti-escalada; auditoría de login y de roles |
+| **3** | Catálogo, precios e inventario | Marcas, categorías, productos, opciones, variantes, alias; listas, precios con vigencia, costos, promociones, `PricingService`, edición masiva, historial; almacenes, stock, movimientos; importación Excel (P1) | catalog*, `price_lists`, `product_prices`, `variant_costs`, `promotions*`, `price_change_batches*`, `warehouses`, `inventory_levels`, `inventory_movements`, `discount_policies` | Motor de precios con cobertura alta en los bordes de vigencia; tests de concurrencia de stock; costos invisibles sin permiso |
+| **4** | Contactos | Contactos, identidades, direcciones, etiquetas, notas, búsqueda, duplicados (P1), timeline base | contacts*, `tags`, `notes`, `contact_merge_candidates`, `timeline_events`, `data_provenance` | Contacto 360° base (resumen, notas, etiquetas); búsqueda por nombre, teléfono y email |
+| **5** | Sales core básico | Leads (score explicable), pipelines y etapas, oportunidades (kanban y tabla), motivos de pérdida, tareas, cotizaciones (borrador, descuentos, aprobación, PDF, snapshot, revisiones, expiración), ventas (orders) y métodos de pago, reservas de stock (según D-INV-2) | `leads`, `lead_score_events`, `pipelines`, `pipeline_stages`, `opportunities*`, `lost_reasons`, `tasks`, `scheduled_actions`, `quotes`, `quote_items`, `quote_approvals`, `orders`, `order_items`, `payment_methods`, `inventory_reservations` | Flujo lead → oportunidad → cotización aprobada → ganada → venta, **sin canales** (el envío es manual o se descarga el PDF) |
+| **6** | Inbox y mensajería | Canal Sandbox, conversaciones, mensajes, adjuntos, estados de entrega, asignación (`AssignmentService`, sin IA), historial `conversation_assignments`, notas internas, respuestas rápidas, tiempo real (WS), `MessagingPolicyService` (con capacidades del Sandbox), notificaciones; **vínculos** conversación ↔ lead/oportunidad/cotización (FKs añadidas en esta fase) | `channel_accounts`, `conversations`, `conversation_participants`, `conversation_assignments`, `conversation_status_history`, `conversation_tags`, `messages`, `message_attachments`, `message_status_events`, `quick_replies*`, `notifications*` | Inbox operativo en tiempo real con el Sandbox; notas blindadas; crear lead, oportunidad o cotización desde el Inbox |
+| **7** | WhatsApp | Adapter WhatsApp Cloud API, credenciales cifradas, webhooks (ingesta, firma, idempotencia, reintentos), media al storage, plantillas y ventana de 24 h reales, envío de cotizaciones y seguimientos vía `MessagingPolicyService`, cancelación de seguimientos al responder el cliente | `credentials`, `webhook_ingress`, `webhook_failures`, `message_templates`, `sync_jobs` | Número real conectado; tests de firma, replay y duplicados; cotización enviada por plantilla fuera de la ventana |
+| **8** | Infraestructura IA + tools de lectura seguras | Gateway (proveedores, cuentas, modelos, routing, fallback, presupuestos, uso), kill switch, agentes y versiones, prompts, **solo tools de lectura** (`search_product`, `get_product_variants`, `get_product_price`, `get_product_stock`, `get_active_promotions`, `get_current_customer`, `get_current_customer_history`), Output Guard, copiloto (sugerir, mejorar, resumir, consultar), modo **AI_ASSISTED y sombra únicamente** (sin envío autónomo) | `ai_provider_accounts`, `ai_account_models`, `ai_models`, `ai_model_prices`, `ai_agents`, `ai_agent_versions`, `ai_agent_model_configs`, `ai_agent_tools`, `ai_agent_channels`, `ai_agent_rules`, `ai_prompts`, `ai_intents`, `ai_sessions`, `ai_runs`, `ai_llm_calls`, `ai_actions`, `ai_suggestions`, `ai_feedback`, `ai_usage_daily`; columna `conversations.assigned_ai_agent_id` | Respuestas sugeridas con precio y stock evidenciados; Output Guard con 0 cifras sin evidencia en el conjunto de pruebas; fallback probado |
+| **9** | Handoff + autonomía controlada | `handoff_to_human` (siempre habilitada), resúmenes de transferencia, cola humana, devolución a IA, detector de "quiero un humano", **habilitación de AI_AUTONOMOUS niveles 2–3 de solo lectura** (responder precio, stock y FAQ), base de conocimiento (pgvector) y memoria larga | `ai_handoffs`, `ai_summaries`, `kb_documents`, `kb_document_agents`, `kb_chunks` (+ extensión pgvector) | IA autónoma en lectura con handoff probado, kill switch y guardrails; piloto real |
+| **10** | Acciones IA sobre entidades comerciales | Tools de escritura sobre entidades **ya existentes** (Fases 4–6): `create_lead`, `update_lead`, `create_task`, `add_customer_note`, `create_opportunity`, `create_quote_draft` (siempre con aprobación humana), extracción con `data_provenance`; dashboards básicos y búsqueda global; estabilización | (sin tablas nuevas de dominio; `search_documents`) | **MVP en producción** (flujo §125 completo) |
+| **11** | Automatizaciones | Motor cuando/si/entonces, plantillas de reglas, anti-bucles | `automation_rules`, `automation_runs` | Reglas plantilla operativas |
+| **12** | Instagram + Facebook | Adapters, OAuth de Meta, capacidades en `MessagingPolicyService`, sugerencia de fusión de identidades | — (usa las tablas de canales) | |
+| **13** | TikTok | Condicionado a la investigación de viabilidad de la API | — | |
+| **14** | Analytics y optimización | Reportes avanzados, vistas materializadas, evaluación de agentes, Supervisor IA, SaaS comercial (planes), servicio técnico, IMEI | `analytics`, … | |
+
+`*` = incluye sus tablas hijas (p. ej., `promotions*` → `promotions`, `promotion_items`, `promotion_price_lists`).
+
+### S.2 Matriz de dependencias de las tools de IA
+
+| Tool | Entidad que lee o crea | Fase de la entidad | Fase de la tool | ¿OK? |
+|---|---|---|---|---|
+| `search_product`, `get_product_variants` | Catálogo | 3 | 8 | ✅ |
+| `get_product_price`, `get_active_promotions` | Precios, promociones (`PricingService`) | 3 | 8 | ✅ |
+| `get_product_stock` | Inventario | 3 | 8 | ✅ |
+| `get_current_customer`, `get_current_customer_history` | Contactos, conversaciones | 4, 6 | 8 | ✅ |
+| `search_knowledge_base` | Base de conocimiento | 9 | 9 | ✅ |
+| `handoff_to_human` | Handoffs, asignación | 9, 6 | 9 | ✅ |
+| `create_lead`, `update_lead` | Leads | 5 | 10 | ✅ |
+| `create_task` | Tareas | 5 | 10 | ✅ |
+| `add_customer_note` | Notas | 4 | 10 | ✅ |
+| `create_opportunity` | Oportunidades | 5 | 10 | ✅ |
+| `create_quote_draft` | Cotizaciones | 5 | 10 | ✅ |
+| `get_order_status` (futuro) | Ventas (orders) | 5 | 10+ | ✅ |
+| `get_repair_status` (futuro) | Servicio técnico | 14 | 14 | ✅ |
+
+### S.3 Otras dependencias verificadas
+
+| Dependencia | Resolución |
 |---|---|
-| **Nueva Fase 0.5 "Fundaciones"** | Tenancy + RLS, outbox, auditoría, CI, contrato de API y shell de UI son transversales. Si se hacen "de paso" en la Fase 1, se hacen mal |
-| **Leads/pipeline/oportunidades/tareas pasan de la Fase 9 a la 7** (antes de agentes IA) | Las tools `create_lead`, `create_opportunity` y `create_task` (§58) los necesitan. En el orden original, la IA de la Fase 7 no tendría dónde escribir |
-| **El handoff (Fase 8) se fusiona con agentes IA** | No debe existir ni un día en producción una IA autónoma sin handoff ni kill switch |
-| **Canal Sandbox en la Fase 4** | Permite construir y probar el Inbox y la IA sin depender de Meta (la verificación de negocio y la configuración pueden tardar semanas) |
-| **Dashboards básicos dentro del MVP** | El §9–10 los pide; con los datos ya existentes son baratos |
-| **Trámites de Meta en paralelo desde ya** | Verificación de Business Manager, número, nombre visible y, más adelante, App Review para IG/Messenger. Es tiempo de calendario, no de desarrollo |
+| Leads, oportunidades y cotizaciones (Fase 5) necesitan referenciar la conversación de origen (Fase 6) | Las columnas `conversation_id` se añaden **en la Fase 6** (nullable) |
+| El seguimiento +24 h cancelable por respuesta del cliente necesita mensajes entrantes | La tarea programada existe en la Fase 5; la cancelación por evento `message.received` se conecta en la Fase 7 |
+| La asignación a agentes IA necesita `ai_agents` | `assigned_ai_agent_id` y su CHECK se añaden en la Fase 8 (ADR-007) |
+| El envío de cotizaciones necesita un canal y la política de mensajería | Fase 5: PDF y descarga; Fase 7: envío por WhatsApp |
+| La IA autónoma necesita handoff y kill switch | Fase 8: solo asistida o sombra (kill switch incluido); Fase 9: autonomía de lectura con handoff |
+| La base de conocimiento necesita pgvector | Se habilita la extensión en la Fase 9 (no antes) |
+| Los webhooks de la Fase 7 necesitan un endpoint público | Hosting (D10-H) decidido antes del final de la Fase 6; mientras tanto, un túnel para pruebas |
+| El RBAC de la Fase 2 necesita tenancy | Fase 1 (infraestructura base) |
 
-### Fases
+### S.4 Estrategia de despliegue de la IA
 
-| Fase | Objetivo | Entregables clave | Criterio de salida (además del DoD §124) |
-|---|---|---|---|
-| **0** | Arquitectura cerrada | Este documento + decisiones U cerradas + ADRs + wireframes de Inbox, Pipeline y Admin IA | Decisiones bloqueantes resueltas |
-| **0.5** | Fundaciones técnicas | E00 completa | CI verde; la suite de aislamiento corre (aunque haya pocas rutas); RLS verificada |
-| **1** | Identidad y acceso | E01 (P0) | Login + MFA + roles con alcance; tests de escalada de privilegios |
-| **2** | Catálogo, precios y stock | E02, E03, E04 (P0) | Motor de precios con ≥ 95 % de cobertura; tests de concurrencia de stock |
-| **3** | Contactos | E05 (P0) | Contacto 360° base; búsqueda |
-| **4** | Inbox + tiempo real + Sandbox | E06 (P0), E14-01/02 | Chat funcional en tiempo real con el canal Sandbox; notas blindadas (tests) |
-| **5** | WhatsApp | E07 (P0) | Número real conectado; tests de idempotencia y firma; plantillas |
-| **6** | Gateway IA | E08 | Dos proveedores, fallback probado con fallos simulados, presupuestos, kill switch |
-| **7** | Leads, pipeline, oportunidades, tareas | E09, E10 (P0) | Kanban operativo; ganado crea venta; tests de conversión |
-| **8** | Agentes IA + handoff | E11 (P0), E12 (P0) | **Piloto interno**: IA en modo AI_ASSISTED con un número de prueba; guardrail de cifras con 0 fugas en el conjunto de pruebas |
-| **9** | Cotizaciones, aprobaciones, seguimientos, ventas | E13 (P0) | Flujo §125 completo de punta a punta |
-| **10** | Estabilización del MVP | E15 (P0), E17, P1 críticos, endurecimiento de seguridad, runbooks, backups probados | **MVP en producción** con la primera organización real; IA autónoma nivel 2–3 habilitada gradualmente |
-| **11** | Automatizaciones | E16 | Reglas plantilla operativas |
-| **12** | Instagram + Messenger | E18 | |
-| **13** | TikTok | E19 (condicionado a la viabilidad) | |
-| **14** | Reportes avanzados, optimización, SaaS comercial, servicio técnico | E15-04, E20 | |
-
-### Estrategia de despliegue de la IA (dentro de las fases 8 y 10)
-
-1. **Sombra:** la IA genera respuestas que nadie ve; se comparan con las de los humanos (solo métricas).
-2. **Asistida (nivel 1):** el humano aprueba cada envío. Se miden la tasa de aceptación sin edición y el feedback.
-3. **FAQ autónoma (nivel 2)** solo para intents en lista blanca.
-4. **Autónoma limitada (nivel 3)** en horario valle o para un porcentaje de conversaciones.
+1. **Sombra** (Fase 8): la IA genera respuestas que nadie ve; solo métricas.
+2. **Asistida** (Fase 8): el humano aprueba cada envío.
+3. **Autónoma de lectura, nivel 2–3** (Fase 9): precio, stock y FAQ con Output Guard y handoff.
+4. **Acciones** (Fase 10): creación de lead, tarea, oportunidad y borrador de cotización.
 5. Ampliación por métricas, nunca por fecha.
 
-### Estrategia de Git [RECOMENDACIÓN, D9]
+### S.5 Git
 
-Para un equipo pequeño recomiendo **trunk-based con ramas cortas (GitHub Flow)** en lugar de GitFlow:
-
-- `main` siempre desplegable y protegida (PR + CI verde + revisión).
-- Ramas `feat/<modulo>-<desc>`, `fix/...`, `chore/...`, `docs/...` de vida corta (≤ 3 días).
-- Despliegue a *staging* automático desde `main`; a producción mediante **tag** `vX.Y.Z` (release). Un hotfix es una rama desde `main` + tag de parche.
-- Las funcionalidades incompletas se ocultan con **feature flags por organización** (tabla simple o `django-waffle`), no con ramas largas.
-- Motivo: `develop` en GitFlow duplica la integración, genera merges dolorosos y no aporta nada si hay CI y flags. **Si prefieres GitFlow (`main`/`develop`) funciona igual**, pero es más ceremonia.
-- Commits: Conventional Commits (`feat(pricing): add price resolution engine`), tal como propones ✅. Squash-merge de PRs.
+Ver **ADR-009** (GitHub Flow aprobado: `main` protegida, `feature/*`, `fix/*`, PR obligatorio, squash merge, tags SemVer).

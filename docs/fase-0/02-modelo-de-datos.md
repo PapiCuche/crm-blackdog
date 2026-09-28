@@ -4,6 +4,14 @@
 
 ## E. Modelo de datos
 
+> **Actualizaciones de la Fase 0.5 (2026-09-28)** — prevalecen sobre el texto de abajo:
+> 1. **FKs a personas:** se nombran `*_user_id` (p. ej., `assigned_user_id`, `created_by_user_id`) con **FK compuesta** `(organization_id, *_user_id) → organization_memberships(organization_id, user_id)`, en lugar de `*_membership_id` (ADR-001).
+> 2. **`conversation_transfers` → `conversation_assignments`**, con columnas previous/new de team/user/ai, `reason_code`, `assigned_by_user_id` / `assigned_by_ai_agent_id` / `assigned_by_system` (ADR-007). En `conversations`: `assigned_team_id`, `assigned_user_id`, `assigned_ai_agent_id` (este último, desde la Fase 8).
+> 3. **Webhooks:** la ingesta cruda es `webhook_ingress` (platform-owned, sin tenant); el tenant se resuelve con una función SECURITY DEFINER a partir de la cuenta de canal (tenancy-context §5).
+> 4. **Mensajes salientes:** se añaden `send_mode`, `template_id`, `template_language`, `template_variables`, `policy_decision` y `provider_error_*` (ADR-010).
+> 5. **Precios:** `price_lists` incorpora `customer_segment` (tipo de cliente) (ADR-006).
+> 6. **Migraciones graduales:** esta lista es el mapa objetivo; cada tabla se crea en la fase que la usa (05 §S.1).
+
 ### E.0 Convenciones comunes (aplican a todas las tablas salvo que se indique lo contrario)
 
 | Convención | Definición |
