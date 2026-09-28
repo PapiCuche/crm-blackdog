@@ -143,14 +143,14 @@ docs/
 └── CODEOWNERS                cuando haya más de un revisor
 ```
 
-## 7. Versiones objetivo (se fijan en la Fase 1, D-ENG-1)
+## 7. Versiones (baseline fijada en ADR-012)
 
-| Componente | Objetivo |
+Las versiones exactas y su política de actualización están en **[ADR-012](../adr/ADR-012-engineering-runtime-baseline.md)**. Es la única fuente: esta sección solo resume.
+
+| Componente | Versión |
 |---|---|
-| PostgreSQL | 18 |
-| Python | 3.13 o 3.14 (según el soporte de la versión de Django elegida y de las dependencias) |
-| Django | Última LTS o estable soportada en el momento de iniciar la Fase 1 |
-| Node.js | LTS activa |
-| Next.js | Última estable (App Router) |
-| Redis | 8.x (o Valkey compatible); en producción, instancias separadas para broker y caché (políticas de expulsión distintas) |
-| Gestor de paquetes | `uv` (Python), `pnpm` (Node) |
+| Python / Django | 3.14.7 / 5.2.17 LTS |
+| PostgreSQL / Redis | 18.6 / 8.8.3 |
+| Node.js / Next.js / React / TypeScript | 24.21.0 LTS / 16.3.x Active LTS (16.3.6 a 2026-09-28; F1-09 usa la última patch publicada) / 19.2.8 / 6.0.3 |
+| Gestores de paquetes | `uv` 0.12.19 (Python), `pnpm` 12.6.0 (Node) |
+| Local | Mailpit v1.31.3, Garage v2.4.1 (emulador S3, se añade en F1-08) |

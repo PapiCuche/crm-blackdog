@@ -17,7 +17,7 @@
 
 - Todas las PK son `uuid`, **generadas en la aplicación** (UUIDv7, RFC 9562), para que el ID exista antes del INSERT (útil en outbox, idempotencia y logs correlacionados).
 - `DEFAULT uuidv7()` de PostgreSQL 18 como respaldo para inserts SQL directos (migraciones de datos, scripts).
-- Generación en Python: el stdlib `uuid.uuid7()` si la versión de Python elegida lo incluye (3.14+), o una librería pequeña y mantenida si se fija 3.13. **Se decide en la Fase 1** junto con el pin de versiones (ver decisión D-ENG-1). La función se encapsula en `core.ids.new_id()` para no depender de la librería en el resto del código.
+- Generación en Python: **stdlib `uuid.uuid7()`** de Python 3.14, sin dependencia externa (resuelto en **ADR-012**, D-ENG-1). La función se encapsula en `core.ids.new_id()` para no depender de la librería en el resto del código.
 - Las URLs y las APIs exponen UUIDs, nunca IDs secuenciales internos.
 
 ### 2. Identificador comercial: `org_sequences`
