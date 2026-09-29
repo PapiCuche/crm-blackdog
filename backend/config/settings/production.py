@@ -18,6 +18,7 @@ if _leaked:
     )
 
 DEBUG = False
+ENFORCE_RUNTIME_DB_ROLE = True  # ADR-002 §1.1: ni superusuario, ni BYPASSRLS, ni propietario
 if env.boolean("DJANGO_DEBUG", False):
     raise ImproperlyConfigured("DEBUG no puede activarse en production")
 if not ALLOWED_HOSTS:

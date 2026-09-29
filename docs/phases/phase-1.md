@@ -31,7 +31,7 @@ Previos transversales: [#3](https://github.com/PapiCuche/crm-blackdog/issues/3) 
 - CI verde en backend, frontend, security y PR governance; import-linter activo con los módulos existentes.
 - Tests de aislamiento ejecutados con el rol `crm_app`; el pipeline falla si el rol de test es superusuario o tiene BYPASSRLS.
 - Ninguna tabla de negocio: solo `organizations` (mínima), `org_sequences`, `outbox_events`, `audit_logs` y `files`.
-- **Gate heredado de la Fase 0.5:** PostgreSQL y el script de roles/RLS ejecutados contra una instancia real (CI en F1-03, Docker local en F1-10).
+- **Gate heredado de la Fase 0.5:** PostgreSQL y el script de roles/RLS ejecutados contra una instancia real (CI en F1-03, Docker local en F1-10). *F1-03: el job `backend tests` ejecuta `01-roles.sh` contra `postgres:18.6` y los tests corren como `crm_app`.*
 
 ## Observaciones vivas (de revisiones)
 

@@ -26,8 +26,14 @@ uv run ruff format --check . && uv run ruff check .
 uv run mypy .
 uv run lint-imports
 uv run python manage.py makemigrations --check --dry-run
-DATABASE_URL=postgres://user:pass@localhost:5432/crm uv run pytest
+DATABASE_URL=postgres://crm_app:…@localhost:5432/crm \
+DATABASE_MIGRATOR_URL=postgres://crm_migrator:…@localhost:5432/crm uv run pytest
 ```
+
+**Tests de BD (F1-03, ADR-002):** necesitan los roles de `infra/docker/postgres/init/01-roles.sh`.
+- `tests/conftest.py` aplica las migraciones como `crm_migrator` y ejecuta los tests como `crm_app`.
+- Si el rol de test es superusuario o tiene BYPASSRLS, la sesión se aborta.
+- La app `tests.tenancy_app` (solo en `config.settings.test`) aporta modelos con RLS para probar el aislamiento.
 
 ## Settings
 
@@ -39,6 +45,19 @@ DATABASE_URL=postgres://user:pass@localhost:5432/crm uv run pytest
 | `config.settings.production` | Producción | `DEBUG=False` forzado; falla si `DJANGO_ALLOWED_HOSTS` está vacío, si la clave es insegura (< 50 caracteres o `django-insecure…`) o si el entorno contiene `DATABASE_MIGRATOR_URL`/`CRM_MIGRATOR_PASSWORD` (ADR-002 §1.1; el error nombra la variable, nunca su valor). Tras validar los hosts añade `127.0.0.1`, `localhost` y `[::1]` para las sondas locales. HSTS, cookies seguras, redirección SSL (excepto `/health/`) |
 
 Variables de producción: `DJANGO_SECRET_KEY`, `DJANGO_ALLOWED_HOSTS`, `DATABASE_URL`, `DJANGO_CSRF_TRUSTED_ORIGINS` (opcional), `DJANGO_LOG_LEVEL` (opcional). En F1-03 `DATABASE_URL` pasa a ser exclusivamente el rol `crm_app` (ADR-002 §1.1).
+
+## Roles de BD y tenancy (F1-03, ADR-002)
+
+| Proceso | Settings | Rol |
+|---|---|---|
+| web / worker / ws / beat | `config.settings.production` | `DATABASE_URL` → `crm_app`. Rechaza las variables del migrador y, en cada conexión nueva (y al arrancar ASGI), un rol superusuario, con BYPASSRLS o propietario de tablas |
+| Job de migraciones | `config.settings.migrate` | `DATABASE_MIGRATOR_URL` → `crm_migrator`. Rechaza `DATABASE_URL`; la `SECRET_KEY` es efímera |
+
+**Kernel de tenancy:**
+- `core.tenancy`: `TenantContext`, `tenant_scope()` / `user_scope()` (solo `set_config(…, true)`) y `assert_clean_connection()`.
+- `core.db.models`: `TenantModel` / `TenantManager`, que fallan sin contexto.
+- `core.db.operations`: `EnableRLS`, `CompositeTenantFK` y `SecurityDefinerFunction`.
+- Funciones SQL `app_current_tenant()` y `app_current_user()`.
 
 ## Health checks (ADR-011 §4)
 
