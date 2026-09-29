@@ -85,7 +85,7 @@ Usa `.github/pull_request_template.md`. El check requerido **PR governance (trus
   - declarar en `### Rama` exactamente la rama del PR.
 
   `Refs #N` solo sirve para referencias adicionales (p. ej., el issue maestro);
-- las 8 secciones del template: Issue / Fase, Objetivo, Cambios, No incluye, Cómo se verificó, Definition of Done, Riesgos y deuda técnica, Autoría.
+- las 9 secciones del template: Issue / Fase, Objetivo, Cambios, No incluye, Cómo se verificó, Definition of Done, Riesgos y deuda técnica, Autoría y **Handoff para Reviewer**.
 
 Declara también:
 - lo que **no** pudiste ejecutar (p. ej., Docker no disponible);
@@ -105,17 +105,18 @@ El PR se abre **sin merge**. Lo revisa otro agente o persona, y el merge (squash
 
 ## 9. Entrega final (contrato de handoff del Builder)
 
-```text
-Issue:
-PR:
-Branch:
-Commit:
-Objective:
-Files changed:
-Tests:
-CI:
-Known limitations:
-Risks:
-Not implemented:
-Merge performed: NO
-```
+El handoff vive **dentro del PR**, en la sección `## Handoff para Reviewer`. El Reviewer lo lee directamente en GitHub, junto con el diff y los checks. El usuario no tiene que copiar resúmenes entre agentes.
+
+Antes de dar un PR por terminado, el Builder:
+1. actualiza `## Handoff para Reviewer` (`gh pr edit <N> --body-file …`);
+2. comprueba que refleja el **HEAD actual** (SHA exacto), sin información de commits anteriores;
+3. no inventa resultados: incluye los checks **reales** de GitHub con su estado (`gh pr view <N> --json statusCheckRollup`) y declara lo que no pudo ejecutar;
+4. deja `Merge performed: NO`.
+
+La respuesta final al usuario es corta, por ejemplo: `PR #N listo para revisión. El handoff está actualizado en el PR.` El resumen completo no se repite en el chat salvo que el usuario lo pida.
+
+## 10. Contrato del Reviewer
+
+- Lee el PR en GitHub: el handoff, el **diff** (`gh pr diff`), los archivos y los checks. No confía en el resumen del Builder.
+- Resultado: **APPROVE**, **APPROVE WITH OBSERVATIONS** o **REQUEST CHANGES**, con hallazgos bloqueantes y no bloqueantes.
+- El merge es siempre explícito y humano (squash con `--match-head-commit`). Tras el merge, el orquestador de dependencias pasa a `status:ready` los work items desbloqueados.

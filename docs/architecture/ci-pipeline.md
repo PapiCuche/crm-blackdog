@@ -13,6 +13,7 @@
 | `pr-governance-trusted.yml` (check `PR governance (trusted)`) | `pull_request_target` | **Activo desde A-02**: frontera de governance; código trusted de `main`, solo lectura ([delivery-automation.md](delivery-automation.md) §4–§5) |
 | `pr-governance.yml` (check `PR governance`, legacy) | `pull_request` | Solo informativo tras A-02; se retira según OBS-A-02-1 |
 | `work-item-state.yml` | `pull_request_target` (abierto, ready, cerrado) | Trusted desde A-02: checkout solo de `main` y `work_item_state.py`; muta los labels `status:*` solo si el work item corresponde exactamente al PR ([delivery-automation.md](delivery-automation.md) §2) |
+| `work-item-dependencies.yml` | `issues` (closed, edited, labeled) + `workflow_dispatch` | **Activo desde A-04 (trusted):** desbloquea `status:blocked` → `status:ready` con dependencias CLOSED y gates presentes en el ruleset; comenta en el issue y en el maestro |
 | `backend.yml` | **Todos** los PRs (sin `paths`) + push a `main` con cambios en `backend/**` o en el workflow | **Activo desde F1-02; gate estable desde A-03:**
   - `backend changes`: detector;
   - `backend checks`, `backend tests` y `backend docker build`: jobs de implementación, que solo corren si el PR toca el backend;
