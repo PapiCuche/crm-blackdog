@@ -63,8 +63,13 @@ Tras A-02, el workflow legacy `pr-governance.yml` (con `pull_request`, modificab
 - No bloqueante. Abierta.
 
 ### OBS-F1-04-1 — FK de `organization_id` hacia `organizations`
-`TenantModel.organization_id` sigue sin FK: `organizations` existe desde F1-04, pero todavía no hay tablas de negocio.
-- La FK (y su `CompositeTenantFK` si aplica) se añade con la primera tabla tenant-owned real.
+`TenantModel.organization_id` sigue sin FK genérica: `organizations` existe desde F1-04, pero todavía no hay tablas de negocio.
+- F1-05: `org_sequences` (kernel) ya tiene su FK `org_sequences_organization_fk`, definida en la migración (ADR-004 §2).
+- Pendiente: la FK de las tablas de negocio (y su `CompositeTenantFK` si aplica), con la primera tabla tenant-owned de negocio.
+
+### OBS-F1-05-1 — Prefijo de numeración por organización
+ADR-004 §2 prevé un prefijo configurable **por organización**. `allocate(ctx, key, prefix=…)` ya acepta el prefijo, pero todavía no hay dónde guardarlo (ajustes de la organización).
+- Se conecta cuando exista la configuración de la organización (Fase 2 o el módulo que numere primero). Cambiar el prefijo solo afecta a los números nuevos.
 
 ### OBS-F1-04-2 — Tareas por nombre (`send_task`)
 `@tenant_task` valida `organization_id` en `apply_async`/`delay`. Si una tarea se envía por nombre (`send_task`), la validación ocurre en el worker: el cuerpo exige el kwarg y falla sin ejecutarse.
