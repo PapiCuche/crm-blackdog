@@ -64,7 +64,11 @@ Tras A-02, el workflow legacy `pr-governance.yml` (con `pull_request`, modificab
 - Antes de producción: soportar explícitamente las opciones necesarias (TLS/`sslmode`, `connect_timeout`…) o **rechazar** cualquier parámetro no soportado.
 - Nunca ignorar en silencio una opción de seguridad.
 
-### OBS-F1-02-3 — Gate estable para el CI del backend
+### OBS-F1-02-3 — Gate estable para el CI del backend — ✅ RESOLVED (A-03, #18)
+**Resuelto:** `backend.yml` corre en todos los PRs. El detector `backend changes` decide si hay cambios de backend, y el check estable **`backend gate`** pasa en no-op o solo si `backend checks`, `backend tests` y `backend docker build` terminan en `success`.
+- Validado en el PR de A-03.
+- Pendiente tras el merge: añadir `backend gate` al ruleset (ver `docs/architecture/ci-pipeline.md` §6).
+
 Los checks `backend checks`, `backend tests` y `backend docker build` **no** se hacen requeridos todavía: `backend.yml` usa filtros `paths`, y un PR que solo toque documentación o frontend no los ejecutaría y quedaría bloqueado esperando un check que nunca llega.
 - Solución futura (antes de hacerlos requeridos): un check con **nombre estable** presente en todos los PRs, que ejecute el CI del backend cuando haya cambios relevantes y haga un no-op exitoso cuando no.
 

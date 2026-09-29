@@ -13,7 +13,10 @@
 | `pr-governance-trusted.yml` (check `PR governance (trusted)`) | `pull_request_target` | **Activo desde A-02**: frontera de governance; código trusted de `main`, solo lectura ([delivery-automation.md](delivery-automation.md) §4–§5) |
 | `pr-governance.yml` (check `PR governance`, legacy) | `pull_request` | Solo informativo tras A-02; se retira según OBS-A-02-1 |
 | `work-item-state.yml` | `pull_request_target` (abierto, ready, cerrado) | Trusted desde A-02: checkout solo de `main` y `work_item_state.py`; muta los labels `status:*` solo si el work item corresponde exactamente al PR ([delivery-automation.md](delivery-automation.md) §2) |
-| `backend.yml` | PR/push con cambios en `backend/**` o en el propio workflow | **Activo desde F1-02**: jobs `backend checks`, `backend tests` y `backend docker build` |
+| `backend.yml` | **Todos** los PRs (sin `paths`) + push a `main` con cambios en `backend/**` o en el workflow | **Activo desde F1-02; gate estable desde A-03:**
+  - `backend changes`: detector;
+  - `backend checks`, `backend tests` y `backend docker build`: jobs de implementación, que solo corren si el PR toca el backend;
+  - `backend gate`: siempre presente; es el candidato a check requerido. |
 | `frontend.yml` | PR/push con cambios en `frontend/**` | Se crea en la Fase 1 (cuando exista `package.json`) |
 
 Se usan `paths` filtros para no ejecutar el pipeline del backend cuando solo cambia el frontend, y viceversa. Los checks requeridos de `main` se añaden a medida que existen.
@@ -75,6 +78,20 @@ Se usan `paths` filtros para no ejecutar el pipeline del backend cuando solo cam
 
 Configurados en el ruleset `main-protection` (ver ADR-009):
 
-- **Activos:** `secret scanning (gitleaks)` y `PR governance` (legacy, hasta el merge de A-02).
-- **Tras el merge de A-02:** `secret scanning (gitleaks)` y `PR governance (trusted)`. El legacy deja de ser requerido y solo informa.
-- **Se añadirán en la Fase 1:** `backend / checks`, `backend / tests`, `frontend / checks`, `frontend / build`.
+- **Requeridos hoy:** `secret scanning (gitleaks)` y `PR governance (trusted)`. El legacy `PR governance` ya no es requerido y solo informa (A-02).
+- **Candidato a requerido:** **`backend gate`** (A-03). Se añade al ruleset solo después del merge de A-03, tras comprobar un check real con ese nombre y leer su integration ID.
+- **No se requieren individualmente:** `backend checks`, `backend tests` y `backend docker build` son jobs de implementación. Con filtros de rutas no siempre existen, y el gate ya los agrega.
+- **Futuro:** un gate equivalente para el frontend (F1-09).
+
+**Lógica de `backend gate`** (`.github/scripts/backend_gate.py`, con tests):
+- **Detector (`backend changes`):**
+  - en PRs, lista los archivos por API (`pull-requests: read`), considerando también el nombre anterior de los renombrados;
+  - las rutas relevantes son `backend/**` y `.github/workflows/backend.yml`;
+  - si la lista puede venir truncada (3000 archivos o más), asume que hay cambios (fail-safe);
+  - en push a `main`, asume que hay cambios, porque el trigger ya filtra por rutas.
+- **Evaluación con estados exactos:**
+  - el detector debe estar en `success`; si no → FAIL;
+  - con `backend_changed=true`, los tres jobs deben estar en `success`; `failure`, `cancelled` o `skipped` → FAIL;
+  - con `backend_changed=false`, los tres deben estar en `skipped` → PASS (no-op);
+  - cualquier otro valor → FAIL.
+- **Límite conocido:** con `pull_request`, un PR puede modificar `backend.yml` o `backend_gate.py`. Esos cambios requieren revisión humana específica (misma naturaleza que OBS-A-02-2).
