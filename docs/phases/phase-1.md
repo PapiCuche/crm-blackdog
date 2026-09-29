@@ -57,6 +57,19 @@ Tras A-02, el workflow legacy `pr-governance.yml` (con `pull_request`, modificab
 ### Resultado F1-02 — compatibilidad django-stubs (ADR-012 §2)
 `django-stubs 5.2.9` + `django-stubs-ext 5.2.9` + `mypy 1.19.1` en modo `strict`, con el plugin de Django, funcionan sobre **Python 3.14.7** con Django 5.2.17: el análisis corre y detecta errores reales. **No hace falta el fallback a `django-stubs 6.0.x`.**
 
+### OBS-F1-03-1 — Reversibilidad de `CompositeTenantFK`
+`CompositeTenantFK` crea el `UNIQUE (organization_id, id)` de la tabla referenciada si falta, pero su backwards solo elimina la FK.
+- Revisar el ownership y la reversión completa de ese constraint **antes del uso amplio** de la operación.
+- No bloqueante. Abierta.
+
+### OBS-F1-04-1 — FK de `organization_id` hacia `organizations`
+`TenantModel.organization_id` sigue sin FK: `organizations` existe desde F1-04, pero todavía no hay tablas de negocio.
+- La FK (y su `CompositeTenantFK` si aplica) se añade con la primera tabla tenant-owned real.
+
+### OBS-F1-04-2 — Tareas por nombre (`send_task`)
+`@tenant_task` valida `organization_id` en `apply_async`/`delay`. Si una tarea se envía por nombre (`send_task`), la validación ocurre en el worker: el cuerpo exige el kwarg y falla sin ejecutarse.
+- Aceptado para el MVP; revisar si se introduce `send_task`.
+
 ### OBS-F1-02-1 — Dependabot para Python
 `.github/dependabot.yml` todavía solo cubre `github-actions`. Hay que añadir el ecosistema de Python (uv/pip) sobre `backend/`, para recibir alertas y PRs de actualización de las dependencias fijadas en `uv.lock`.
 - No bloqueante. Se hará en un `chore` pequeño y separado.

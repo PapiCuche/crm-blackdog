@@ -15,7 +15,7 @@ class TenantManager(models.Manager[Any]):
 
 
 class TenantModel(models.Model):
-    # FK a `organizations` en F1-04, cuando exista la tabla (se añade con CompositeTenantFK).
+    # FK a `organizations` pendiente (OBS-F1-04-1): se añade con la primera tabla de negocio.
     organization_id = models.UUIDField(db_index=True, editable=False)
 
     objects = TenantManager()

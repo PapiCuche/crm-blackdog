@@ -5,6 +5,8 @@ description = "CRM BLACKDOG backend (Django, ASGI)"
 readme = "README.md"
 requires-python = "==3.14.*"
 dependencies = [
+    "celery==5.6.3",
+    "channels==4.3.2",
     "django==5.2.17",
     "psycopg[binary]==3.3.6",
     "uvicorn==0.54.0",
@@ -43,6 +45,15 @@ strict = true
 plugins = ["mypy_django_plugin.main"]
 exclude = ["^\\.venv/"]
 
+[[tool.mypy.overrides]]  # sin py.typed (F1-04); types-channels exige django-stubs 6
+module = ["celery.*", "kombu.*", "channels.*"]
+follow_imports = "skip"  # tipos Any: sin stubs compatibles
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]  # asgiref.testing sin anotaciones
+module = ["tests.test_entrypoints"]
+disallow_untyped_calls = false
+
 [tool.django-stubs]
 django_settings_module = "config.settings.test"
 
@@ -54,10 +65,10 @@ testpaths = ["tests"]
 filterwarnings = ["error::DeprecationWarning", "error::PendingDeprecationWarning"]
 
 [tool.importlinter]
-root_packages = ["config", "core"]
+root_packages = ["config", "core", "apps"]
 
 [[tool.importlinter.contracts]]
-name = "core (kernel) no depende de config"
+name = "core (kernel) no depende de config ni de apps"
 type = "forbidden"
 source_modules = ["core"]
-forbidden_modules = ["config"]
+forbidden_modules = ["config", "apps"]
