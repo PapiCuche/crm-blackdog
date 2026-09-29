@@ -1,10 +1,10 @@
 name: backend
 
+# A-03: se ejecuta en TODOS los PRs para que `backend gate` exista siempre (check estable,
+# candidato a requerido). Los jobs del backend solo corren si el PR toca el backend.
+# Sigue con `pull_request` (nunca `pull_request_target`): ejecuta código del PR.
 on:
   pull_request:
-    paths:
-      - "backend/**"
-      - ".github/workflows/backend.yml"
   push:
     branches: [main]
     paths:
@@ -22,13 +22,37 @@ env:
   UV_VERSION: "0.12.19"
   UV_SHA256: "23bf5552d220e0842b65c862097b2ebaeba0064b74eda5e565e77fd25969d8c8"
 
-defaults:
-  run:
-    working-directory: backend
-
 jobs:
+  changes:
+    name: backend changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read # listar los archivos del PR
+    outputs:
+      backend_changed: ${{ steps.detect.outputs.backend_changed }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Tests de la lógica del gate
+        working-directory: .github/scripts
+        run: python3 -m unittest -q test_backend_gate
+      - name: Detectar cambios de backend (backend/**, .github/workflows/backend.yml)
+        id: detect
+        working-directory: .github/scripts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 backend_gate.py detect
+
   checks:
     name: backend checks
+    needs: changes
+    if: needs.changes.outputs.backend_changed == 'true'
+    defaults:
+      run:
+        working-directory: backend
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -76,6 +100,11 @@ jobs:
 
   tests:
     name: backend tests
+    needs: changes
+    if: needs.changes.outputs.backend_changed == 'true'
+    defaults:
+      run:
+        working-directory: backend
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:
@@ -105,6 +134,11 @@ jobs:
 
   docker:
     name: backend docker build
+    needs: changes
+    if: needs.changes.outputs.backend_changed == 'true'
+    defaults:
+      run:
+        working-directory: backend
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -129,3 +163,23 @@ jobs:
           done
           docker logs backend
           exit 1
+
+  gate:
+    name: backend gate
+    needs: [changes, checks, tests, docker]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Evaluar estados exactos (skipped/cancelled indebidos = FAIL)
+        working-directory: .github/scripts
+        env:
+          BACKEND_CHANGED: ${{ needs.changes.outputs.backend_changed }}
+          DETECTOR_RESULT: ${{ needs.changes.result }}
+          CHECKS_RESULT: ${{ needs.checks.result }}
+          TESTS_RESULT: ${{ needs.tests.result }}
+          DOCKER_RESULT: ${{ needs.docker.result }}
+        run: python3 backend_gate.py gate
