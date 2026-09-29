@@ -1,8 +1,8 @@
 """Organizaciones (platform-owned, sin RLS de tenant; ADR-001 §2). Mínima para F1-04."""
 
-import uuid
-
 from django.db import models
+
+from core.db.models import uuid7_primary_key
 
 
 class Organization(models.Model):
@@ -11,7 +11,7 @@ class Organization(models.Model):
         TRIAL = "TRIAL"
         SUSPENDED = "SUSPENDED"
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)  # UUIDv7: F1-05
+    id = uuid7_primary_key()
     slug = models.SlugField(max_length=63, unique=True)
     name = models.CharField(max_length=200)
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.ACTIVE)

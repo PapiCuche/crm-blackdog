@@ -1,10 +1,22 @@
 """Modelos tenant-owned (ADR-001 §5, tenancy-context §1.2)."""
 
 from typing import Any
+from uuid import UUID
 
 from django.db import models
 
+from core.ids import new_id
 from core.tenancy.context import TenantContextError, require
+
+
+def uuid7_primary_key() -> models.UUIDField[UUID, UUID]:
+    """PK UUIDv7 (ADR-004 §1): `new_id()` en la app y `DEFAULT uuidv7()` de respaldo en BD."""
+    return models.UUIDField(
+        primary_key=True,
+        default=new_id,
+        db_default=models.Func(function="uuidv7", output_field=models.UUIDField()),
+        editable=False,
+    )
 
 
 class TenantManager(models.Manager[Any]):

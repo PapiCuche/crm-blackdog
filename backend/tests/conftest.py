@@ -20,7 +20,7 @@ from pytest_django import DjangoDbBlocker
 
 from config.env import database
 
-TENANT_TABLES = ("tenancy_app_widgetpart", "tenancy_app_widget")
+TENANT_TABLES = ("tenancy_app_widgetpart", "tenancy_app_widget", "org_sequences")
 
 
 def migrator_settings() -> dict[str, Any]:
