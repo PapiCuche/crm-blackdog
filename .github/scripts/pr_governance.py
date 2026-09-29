@@ -35,6 +35,7 @@ REQUIRED_SECTIONS = (
     "Definition of Done",
     "Riesgos y deuda técnica",
     "Autoría",
+    "Handoff para Reviewer",
 )
 EXCLUDED_PATTERNS = (
     "docs/**",

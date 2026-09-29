@@ -34,9 +34,17 @@ body:
     id: dependencies
     attributes:
       label: Dependencias
-      description: Work items (#N) que deben estar mergeados antes. "Ninguna" si aplica.
+      description: "Una por línea con el formato `- #N` (el orquestador solo lee estas líneas; se satisfacen cuando el issue está CLOSED). Escribir 'Ninguna' si no hay."
     validations:
       required: true
+  - type: textarea
+    id: gates
+    attributes:
+      label: Gates
+      description: "Opcional. Una por línea: `required-check:<nombre exacto>` (debe existir en el ruleset de main para desbloquear)."
+      placeholder: "- `required-check:backend gate`"
+    validations:
+      required: false
   - type: textarea
     id: includes
     attributes:

@@ -12,7 +12,7 @@ Cada work item es un issue con el alcance completo (Incluye / No incluye / crite
 |---|---|---|---|---|
 | F1-01 | PR #2 | `feature/f1-engineering-versions` | — | ✅ Mergeado (ADR-012) |
 | F1-02 | [#4](https://github.com/PapiCuche/crm-blackdog/issues/4) Backend skeleton | `feature/f1-backend-skeleton` | F1-01, A-02 (#15) | `status:blocked` |
-| F1-03 | [#5](https://github.com/PapiCuche/crm-blackdog/issues/5) DB roles + RLS core | `feature/f1-db-roles-rls-core` | #4 | `status:blocked` |
+| F1-03 | [#5](https://github.com/PapiCuche/crm-blackdog/issues/5) DB roles + RLS core | `feature/f1-db-roles-rls-core` | #4, #18, #20 + gate `backend gate` | `status:blocked` |
 | F1-04 | [#6](https://github.com/PapiCuche/crm-blackdog/issues/6) Tenancy entrypoints | `feature/f1-tenancy-entrypoints` | #5 | `status:blocked` |
 | F1-05 | [#7](https://github.com/PapiCuche/crm-blackdog/issues/7) UUIDv7 + organization sequences | `feature/f1-ids-sequences` | #6 | `status:blocked` |
 | F1-06 | [#8](https://github.com/PapiCuche/crm-blackdog/issues/8) Outbox + audit | `feature/f1-outbox-audit` | #7 | `status:blocked` |
@@ -22,6 +22,8 @@ Cada work item es un issue con el alcance completo (Incluye / No incluye / crite
 | F1-10 | [#12](https://github.com/PapiCuche/crm-blackdog/issues/12) Local stack | `feature/f1-local-stack` | #4 … #11 | `status:blocked` |
 
 Previos transversales: [#3](https://github.com/PapiCuche/crm-blackdog/issues/3) A-01 Project delivery automation → [#15](https://github.com/PapiCuche/crm-blackdog/issues/15) A-02 Harden trusted PR governance. **F1-02 no empieza hasta que A-02 esté mergeado.**
+
+**Automatización (A-04, #20):** las dependencias de #5–#12 están normalizadas a `- #N`, y #5 tiene además el gate `required-check:backend gate`. El orquestador `work-item-dependencies` pasa a `status:ready` cada issue cuando se cumplen sus dependencias y gates. El Builder arranca con `continuar`.
 
 ## Definition of Done de la fase
 

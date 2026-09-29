@@ -1,0 +1,41 @@
+name: work-item-dependencies
+
+# Orquestador trusted (A-04): los eventos `issues` y `workflow_dispatch` siempre ejecutan la
+# versión de la rama por defecto, y el script sale de un checkout de esa rama. No hay código
+# de PRs. Solo pasa `status:blocked` → `status:ready` con dependencias cerradas y gates presentes.
+# Las mutaciones hechas con GITHUB_TOKEN no disparan nuevas ejecuciones (sin bucles).
+on:
+  issues:
+    types: [closed, edited, labeled]
+  workflow_dispatch: # p. ej., tras añadir un required check al ruleset
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: work-item-dependencies
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Sync work item dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout trusted (rama por defecto)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Unit tests del orquestador (trusted)
+        working-directory: .github/scripts
+        run: python3 -m unittest -q test_work_item_dependencies
+
+      - name: Reevaluar dependencias y gates
+        working-directory: .github/scripts
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: python3 work_item_dependencies.py sync

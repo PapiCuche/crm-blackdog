@@ -10,13 +10,20 @@ import re
 import unittest
 
 WORKFLOWS = pathlib.Path(__file__).resolve().parents[1] / "workflows"
-ALLOWED_WRITES = {"work-item-state.yml": {"issues"}}
+ALLOWED_WRITES = {"work-item-state.yml": {"issues"}, "work-item-dependencies.yml": {"issues"}}
 TRUSTED_REFS = ("github.event.repository.default_branch", "github.event.pull_request.base.sha")
 FORBIDDEN_IN_RUN = re.compile(r"\b(pip3? install|npm (ci|install)|pnpm install|uv sync|eval)\b")
 
 
+def triggers(text):
+    """Claves del bloque `on:` (solo ese bloque; no confundir con `permissions: issues:`)."""
+    m = re.search(r"^on:\n((?:[ \t]+.*\n|\s*\n)+)", text, re.M)
+    return set(re.findall(r"^  ([\w-]+):", m.group(1), re.M)) if m else set()
+
+
 def trusted_workflows():
-    return [p for p in sorted(WORKFLOWS.glob("*.yml")) if re.search(r"^\s*pull_request_target\s*:", p.read_text(), re.M)]
+    # Trusted = se ejecuta con el código de la rama por defecto y el token del repo base.
+    return [p for p in sorted(WORKFLOWS.glob("*.yml")) if triggers(p.read_text()) & {"pull_request_target", "issues"}]
 
 
 def run_blocks(text):
@@ -47,7 +54,7 @@ def permissions(text):
 class TrustBoundaryTest(unittest.TestCase):
     def test_trusted_workflows_exist(self):
         names = {p.name for p in trusted_workflows()}
-        self.assertTrue({"pr-governance-trusted.yml", "work-item-state.yml"} <= names, names)
+        self.assertTrue({"pr-governance-trusted.yml", "work-item-state.yml", "work-item-dependencies.yml"} <= names, names)
 
     def test_trusted_governance_job_name(self):
         text = (WORKFLOWS / "pr-governance-trusted.yml").read_text()

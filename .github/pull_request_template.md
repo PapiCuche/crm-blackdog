@@ -39,3 +39,24 @@ Closes #
 ## Autoría
 
 - [ ] Generado o asistido por IA (indicar el agente). La aprobación final es humana; el autor no hace merge.
+
+## Handoff para Reviewer
+
+<!-- El Builder lo mantiene actualizado al HEAD actual. Solo resultados reales; nada de commits anteriores.
+     El Reviewer lee ESTA sección y el diff directamente en GitHub (no depende de resúmenes pegados en el chat). -->
+
+- **Work item:** #
+- **Branch:**
+- **HEAD SHA:**
+- **Objetivo implementado:**
+- **Archivos principales:**
+- **Decisiones nuevas:**
+- **Tests:**
+- **CI (checks reales y estado):**
+- **Seguridad:**
+- **Limitaciones:**
+- **Observaciones / deuda:**
+- **Lo que NO se implementó:**
+- **Estado del siguiente work item:**
+- **Merge performed:** NO
+- **Siguiente acción:**

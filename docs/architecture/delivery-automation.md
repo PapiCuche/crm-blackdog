@@ -7,6 +7,24 @@
 
 ## 1. Flujo
 
+**Flujo operativo (A-04):**
+
+```text
+usuario: "continuar"
+  → Builder: consulta GitHub y toma el ÚNICO work item status:ready (0 → informa qué bloquea; N → pregunta)
+  → implementa, valida y abre el PR con "## Handoff para Reviewer" actualizado al HEAD
+  → usuario: "revisa"
+  → Reviewer: lee el PR en GitHub (handoff + diff + checks) → APPROVE / REQUEST CHANGES
+  → merge explícito y humano (squash, --match-head-commit)
+  → work-item-state (trusted): issue → status:done
+  → work-item-dependencies (trusted): siguiente status:blocked → status:ready si sus dependencias están CLOSED y sus gates existen
+  → usuario: "continuar"
+```
+
+Nadie copia resúmenes entre agentes: el handoff vive en el PR, y los estados y dependencias en los issues.
+
+**Detalle:**
+
 ```text
 BACKLOG (roadmap: docs/fase-0/05, docs/phases/)
   → READY ISSUE (work item con status:ready, dependencias mergeadas)
@@ -41,6 +59,22 @@ BACKLOG (roadmap: docs/fase-0/05, docs/phases/)
   - PRs del mismo repositorio.
 
   Si algo no se cumple: **ninguna mutación** (el paso termina bien y deja el motivo en el log).
+- **Orquestador de dependencias (A-04):** `work-item-dependencies.yml` es trusted:
+  - se dispara con los eventos `issues` (closed, edited, labeled) y con `workflow_dispatch`;
+  - hace checkout solo de la rama por defecto y ejecuta `work_item_dependencies.py`;
+  - permisos: `contents: read` e `issues: write`.
+
+  Lee **solo** dos secciones del issue:
+  - `### Dependencias`: una por línea, `- #N`;
+  - `### Gates`: `required-check:<nombre exacto>`.
+
+  Pasa **únicamente** `status:blocked` → `status:ready` si se cumple todo esto:
+  - el issue está abierto y es `work-item`;
+  - no está en `in-progress` ni `done`;
+  - todas las dependencias existen, no son PRs y están **CLOSED**;
+  - todos los `required-check` existen en el ruleset de `main`.
+
+  Sin sección de dependencias, o sin `- #N` ni "Ninguna", no infiere nada. En cada transición real comenta en el issue y deja un comentario compacto en su maestro (`Issue maestro: #N`). Cambiar el ruleset no genera un evento de issue: después de añadir un required check, lanzar el workflow a mano (`gh workflow run work-item-dependencies.yml`).
 - **Transiciones permitidas:**
 
 | Evento | Estado de origen | Resultado |
@@ -118,7 +152,7 @@ BACKLOG (roadmap: docs/fase-0/05, docs/phases/)
 
 `pull_request_target` no se aplica de forma indiscriminada. Hoy lo usan solo `pr-governance-trusted.yml` (permisos de solo lectura) y `work-item-state.yml` (`issues: write`, con checkout solo de la rama por defecto). Cualquier workflow nuevo con este trigger debe pasar `test_workflow_security.py` y una revisión de seguridad específica.
 
-## 6. Contrato de handoff
+## 6. Contrato de handoff (histórico; desde A-04 vive en el PR: AGENTS.md §9–§10)
 
 **Builder → Reviewer / PO:**
 
