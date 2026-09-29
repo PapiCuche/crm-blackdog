@@ -1,19 +1,26 @@
 """Aislamiento de tenant contra PostgreSQL real con el rol crm_app (tenancy-context §8)."""
 
 import re
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
 import psycopg
 import pytest
+from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
-from django.db import DatabaseError, IntegrityError, connection
+from django.db import DatabaseError, IntegrityError, connection, transaction
 from django.db.backends.postgresql.base import DatabaseWrapper
 
 from core.db.guards import enforce_runtime_role, runtime_role_problems
-from core.tenancy.context import TenantContext, TenantContextError, TenantContextMissing
-from core.tenancy.scope import assert_clean_connection, tenant_scope, user_scope
+from core.tenancy.context import (
+    ActorType,
+    TenantContext,
+    TenantContextError,
+    TenantContextMissing,
+)
+from core.tenancy.scope import assert_clean_connection, read_context, tenant_scope, user_scope
 from tests.conftest import TENANT_TABLES, migrator_settings
 from tests.tenancy_app.models import Widget, WidgetPart
 
@@ -98,9 +105,7 @@ def test_t6_pooled_connection_never_keeps_the_tenant(orgs: dict[str, UUID]) -> N
     with tenant_scope(ctx(orgs["A"])):
         assert raw_count("tenancy_app_widget") == 1
     assert_clean_connection()  # misma conexión (persistente), contexto ya vacío
-    with connection.cursor() as cursor:
-        cursor.execute("SELECT current_setting('app.tenant_id', true)")
-        assert not cursor.fetchone()[0]
+    assert read_context() == ("", "", "")
     with tenant_scope(ctx(orgs["B"])):
         assert list(Widget.objects.values_list("id", flat=True)) == [orgs["widget_B"]]
 
@@ -114,19 +119,43 @@ def test_t6_session_level_leak_is_detected_and_connection_closed(orgs: dict[str,
     assert connection.connection is None
 
 
-def test_scope_rules(orgs: dict[str, UUID]) -> None:
-    with tenant_scope(ctx(orgs["A"])), tenant_scope(ctx(orgs["A"])):
-        pass  # mismo tenant anidado: permitido
-    with (
-        pytest.raises(TenantContextError),
-        tenant_scope(ctx(orgs["A"])),
-        tenant_scope(ctx(orgs["B"])),
-    ):
-        pass
-    with pytest.raises(TenantContextError), tenant_scope(ctx(orgs["A"])), user_scope(uuid4()):
-        pass
+def test_root_scope_sets_gucs_and_clears_them_on_exit(orgs: dict[str, UUID]) -> None:
+    user = uuid4()
+    root = TenantContext(orgs["A"], "test", user_id=user, actor_type=ActorType.USER)
+    with tenant_scope(root):
+        expected = (str(orgs["A"]), str(user), "USER")
+        assert read_context() == expected
+        with tenant_scope(replace(root)):  # copia idéntica (no el mismo objeto)
+            assert read_context() == expected  # idéntico anidado: no-op
+    assert read_context() == ("", "", "")
+
+
+@pytest.mark.parametrize("inner", [{"user_id": uuid4()}, {"actor_type": ActorType.AI_AGENT}])
+def test_nested_scope_with_different_context_fails(orgs: dict[str, UUID], inner: Any) -> None:
+    base = ctx(orgs["A"])
+    for other in (replace(base, **inner), ctx(orgs["B"])):
+        with pytest.raises(TenantContextError), tenant_scope(base), tenant_scope(other):
+            pass
+    assert read_context() == ("", "", "")
+
+
+def test_scopes_must_own_their_transaction(orgs: dict[str, UUID]) -> None:
+    for scope in (lambda: tenant_scope(ctx(orgs["A"])), lambda: user_scope(uuid4())):
+        with pytest.raises(TenantContextError), transaction.atomic(), scope():
+            pass
+    assert read_context() == ("", "", "")
+
+
+def test_user_scope_rules(orgs: dict[str, UUID]) -> None:
     with user_scope(uuid4()):
         assert raw_count("tenancy_app_widget") == 0  # sin tenant no se ve nada
+        with pytest.raises(TenantContextError), user_scope(uuid4()):
+            pass
+        with pytest.raises(TenantContextError), tenant_scope(ctx(orgs["A"])):
+            pass
+    with pytest.raises(TenantContextError), tenant_scope(ctx(orgs["A"])), user_scope(uuid4()):
+        pass
+    assert read_context() == ("", "", "")
 
 
 def test_t13_no_session_level_context_in_code() -> None:
@@ -141,7 +170,8 @@ def test_t13_no_session_level_context_in_code() -> None:
 
 
 def test_t16_security_definer_functions_are_hardened(orgs: dict[str, UUID]) -> None:
-    migrator_role = migrator_settings()["USER"]
+    migrator_role = settings.DB_MIGRATOR_ROLE
+    assert migrator_role == migrator_settings()["USER"]  # el rol que migra es el propietario
     with connection.cursor() as cursor:
         cursor.execute(
             "SELECT p.oid, p.proname, coalesce(p.proconfig, '{}'), pg_get_userbyid(p.proowner), "

@@ -3,36 +3,34 @@
 from typing import Any
 
 from django.conf import settings
-from django.db.backends.base.schema import BaseDatabaseSchemaEditor
+from django.db.backends.base.schema import BaseDatabaseSchemaEditor as Editor
 from django.db.migrations.operations.base import Operation
-from django.db.migrations.state import ProjectState
+from django.db.migrations.state import ProjectState as State
 
 POLICY = "tenant_isolation"
 
 
-def _table(state: ProjectState, app_label: str, model_name: str) -> str:
+class _SqlOperation(Operation):
+    reversible = True
+
+    def state_forwards(self, app_label: str, state: State) -> None:
+        pass
+
+
+def _table(state: State, app_label: str, model_name: str) -> str:
     return str(state.apps.get_model(app_label, model_name)._meta.db_table)
 
 
-class EnableRLS(Operation):
+class EnableRLS(_SqlOperation):
     """ENABLE + FORCE RLS y una única política PERMISSIVE `tenant_isolation`."""
-
-    reversible = True
 
     def __init__(self, model_name: str) -> None:
         self.model_name = model_name
 
-    def state_forwards(self, app_label: str, state: ProjectState) -> None:
-        pass
-
     def database_forwards(
-        self,
-        app_label: str,
-        schema_editor: BaseDatabaseSchemaEditor,
-        from_state: ProjectState,
-        to_state: ProjectState,
+        self, app_label: str, schema_editor: Editor, old: State, new: State
     ) -> None:
-        t = schema_editor.quote_name(_table(to_state, app_label, self.model_name))
+        t = schema_editor.quote_name(_table(new, app_label, self.model_name))
         condition = "organization_id = app_current_tenant()"
         schema_editor.execute(f"ALTER TABLE {t} ENABLE ROW LEVEL SECURITY")
         schema_editor.execute(f"ALTER TABLE {t} FORCE ROW LEVEL SECURITY")
@@ -41,13 +39,9 @@ class EnableRLS(Operation):
         )
 
     def database_backwards(
-        self,
-        app_label: str,
-        schema_editor: BaseDatabaseSchemaEditor,
-        from_state: ProjectState,
-        to_state: ProjectState,
+        self, app_label: str, schema_editor: Editor, old: State, new: State
     ) -> None:
-        t = schema_editor.quote_name(_table(from_state, app_label, self.model_name))
+        t = schema_editor.quote_name(_table(old, app_label, self.model_name))
         schema_editor.execute(f"DROP POLICY IF EXISTS {POLICY} ON {t}")
         schema_editor.execute(f"ALTER TABLE {t} NO FORCE ROW LEVEL SECURITY")
         schema_editor.execute(f"ALTER TABLE {t} DISABLE ROW LEVEL SECURITY")
@@ -56,28 +50,19 @@ class EnableRLS(Operation):
         return f"Enable RLS on {self.model_name}"
 
 
-class CompositeTenantFK(Operation):
+class CompositeTenantFK(_SqlOperation):
     """FK (organization_id, <fk>) → referenciada(organization_id, id): misma organización en BD."""
-
-    reversible = True
 
     def __init__(self, model_name: str, field: str, to_model: str, name: str) -> None:
         self.model_name, self.field, self.to_model, self.name = model_name, field, to_model, name
 
-    def state_forwards(self, app_label: str, state: ProjectState) -> None:
-        pass
-
     def database_forwards(
-        self,
-        app_label: str,
-        schema_editor: BaseDatabaseSchemaEditor,
-        from_state: ProjectState,
-        to_state: ProjectState,
+        self, app_label: str, schema_editor: Editor, old: State, new: State
     ) -> None:
         q = schema_editor.quote_name
-        model = to_state.apps.get_model(app_label, self.model_name)
+        model = new.apps.get_model(app_label, self.model_name)
         column = model._meta.get_field(self.field).column
-        ref = _table(to_state, app_label, self.to_model)
+        ref = _table(new, app_label, self.to_model)
         unique = f"{ref}_org_id_uq"
         with schema_editor.connection.cursor() as cursor:
             cursor.execute("SELECT 1 FROM pg_constraint WHERE conname = %s", [unique])
@@ -92,13 +77,9 @@ class CompositeTenantFK(Operation):
         )
 
     def database_backwards(
-        self,
-        app_label: str,
-        schema_editor: BaseDatabaseSchemaEditor,
-        from_state: ProjectState,
-        to_state: ProjectState,
+        self, app_label: str, schema_editor: Editor, old: State, new: State
     ) -> None:
-        table = _table(from_state, app_label, self.model_name)
+        table = _table(old, app_label, self.model_name)
         q = schema_editor.quote_name
         schema_editor.execute(f"ALTER TABLE {q(table)} DROP CONSTRAINT IF EXISTS {q(self.name)}")
 
@@ -106,21 +87,14 @@ class CompositeTenantFK(Operation):
         return f"Composite tenant FK {self.name}"
 
 
-class SecurityDefinerFunction(Operation):
+class SecurityDefinerFunction(_SqlOperation):
     """Función SECURITY DEFINER con los requisitos de ADR-002 §3.3 (siempre REVOKE/GRANT)."""
-
-    reversible = True
 
     def __init__(self, name: str, arguments: str, argtypes: str, returns: str, body: str) -> None:
         self.name, self.arguments, self.argtypes = name, arguments, argtypes
         self.returns, self.body = returns, body
 
-    def state_forwards(self, app_label: str, state: ProjectState) -> None:
-        pass
-
-    def database_forwards(
-        self, app_label: str, schema_editor: BaseDatabaseSchemaEditor, *a: Any
-    ) -> None:
+    def database_forwards(self, app_label: str, schema_editor: Editor, *a: Any) -> None:
         signature = f"public.{self.name}({self.argtypes})"
         app_role = schema_editor.quote_name(settings.DB_APP_ROLE)
         schema_editor.execute(
@@ -128,13 +102,12 @@ class SecurityDefinerFunction(Operation):
             f"LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, public "
             f"AS $fn$ {self.body} $fn$"
         )
-        schema_editor.execute(f"ALTER FUNCTION {signature} OWNER TO CURRENT_USER")
+        owner = schema_editor.quote_name(settings.DB_MIGRATOR_ROLE)  # ADR-002 §3.3: explícito
+        schema_editor.execute(f"ALTER FUNCTION {signature} OWNER TO {owner}")
         schema_editor.execute(f"REVOKE ALL ON FUNCTION {signature} FROM PUBLIC")
         schema_editor.execute(f"GRANT EXECUTE ON FUNCTION {signature} TO {app_role}")
 
-    def database_backwards(
-        self, app_label: str, schema_editor: BaseDatabaseSchemaEditor, *a: Any
-    ) -> None:
+    def database_backwards(self, app_label: str, schema_editor: Editor, *a: Any) -> None:
         schema_editor.execute(f"DROP FUNCTION IF EXISTS public.{self.name}({self.argtypes})")
 
     def describe(self) -> str:
