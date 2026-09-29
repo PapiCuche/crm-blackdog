@@ -10,7 +10,7 @@ from typing import Any
 
 from django.core.management.base import BaseCommand, CommandError
 
-from core.tenancy.context import TenantContext
+from core.tenancy.context import TenantContext, require_no_tenant
 from core.tenancy.resolution import organization_by_slug
 from core.tenancy.scope import assert_clean_connection, tenant_scope
 
@@ -24,6 +24,7 @@ class PlatformCommand(BaseCommand):
         parser.add_argument("--reason", required=True, help="Motivo (se registra)")
 
     def handle(self, *args: Any, **options: Any) -> None:
+        require_no_tenant(f"comando {self._name()}")  # también TenantCommand: abre su propio scope
         assert_clean_connection()
         logger.info("comando %s por %s: %s", self._name(), getpass.getuser(), options["reason"])
         self.handle_platform(**options)

@@ -12,7 +12,7 @@ from uuid import UUID
 
 from celery import Task, bootsteps, shared_task
 
-from core.tenancy.context import ActorType, TenantContext, TenantContextError
+from core.tenancy.context import ActorType, TenantContext, TenantContextError, require_no_tenant
 from core.tenancy.scope import assert_clean_connection, tenant_scope
 
 
@@ -60,6 +60,7 @@ def platform_task(**options: Any) -> Callable[[Callable[..., Any]], Any]:
     def decorate(fn: Callable[..., Any]) -> Any:
         @functools.wraps(fn)
         def run(*args: Any, **kwargs: Any) -> Any:
+            require_no_tenant(f"@platform_task {fn.__name__}")  # antes del cuerpo
             assert_clean_connection()
             return fn(*args, **kwargs)
 

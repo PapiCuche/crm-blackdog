@@ -38,6 +38,12 @@ def current() -> TenantContext | None:
     return _current.get()
 
 
+def require_no_tenant(entrypoint: str) -> None:
+    """Entradas de plataforma (tareas, comandos): nunca heredan un tenant activo."""
+    if current() is not None:
+        raise TenantContextError(f"{entrypoint} se ejecuta sin tenant: hay un tenant_scope activo")
+
+
 def require() -> TenantContext:
     ctx = _current.get()
     if ctx is None:

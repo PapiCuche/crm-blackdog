@@ -21,10 +21,11 @@ from config.celery import app as celery_app
 from core.tenancy.celery import TenancyCheck
 from core.tenancy.commands import PlatformCommand, TenantCommand
 from core.tenancy.context import TenantContext, TenantContextError, TenantContextMissing
+from core.tenancy.scope import tenant_scope
 from tests import fakes
 from tests.tenancy_app.consumers import WidgetConsumer
 from tests.tenancy_app.models import Widget
-from tests.tenancy_app.tasks import count_without_tenant, visible_widgets
+from tests.tenancy_app.tasks import PINGS, count_without_tenant, platform_ping, visible_widgets
 
 pytestmark = pytest.mark.usefixtures("tenant_db")
 NOT_FOUND = {"code": "NOT_FOUND"}
@@ -104,8 +105,20 @@ def test_t9_tenant_task_requires_organization_and_sees_only_its_tenant(
             visible_widgets.apply_async(kwargs=kwargs)  # falla al encolar, sin broker
     result = visible_widgets.apply(kwargs={"organization_id": str(orgs["A"])})
     assert result.get() == [str(orgs["widget_A"])]
+    assert platform_ping.apply().get() == "ok"  # fuera de tenant, la tarea de plataforma corre
     with pytest.raises(TenantContextMissing):
         count_without_tenant.apply().get()
+
+
+def test_platform_task_refuses_active_tenant(orgs: dict[str, UUID]) -> None:
+    PINGS.clear()
+    with tenant_scope(TenantContext(orgs["A"], "test")):
+        for task in (platform_ping, count_without_tenant):  # con el tenant, count vería 1 fila
+            with pytest.raises(TenantContextError, match="tenant_scope activo"):
+                task.apply().get()
+            with pytest.raises(TenantContextError, match="tenant_scope activo"):
+                task()  # llamada directa: mismo guard
+    assert PINGS == []  # el guard corre antes del cuerpo
 
 
 def test_worker_refuses_to_start_with_undecorated_tasks() -> None:
@@ -148,20 +161,39 @@ def test_t10_ws_subscription_to_other_tenant_is_rejected(
     assert ws("org-b", member)[:2] == (False, 4404)  # sin membresía: no conecta
 
 
+class Probe(TenantCommand):
+    seen: list[str] | None = None
+
+    def handle_tenant(self, ctx: TenantContext, **options: Any) -> None:
+        self.seen = [str(i) for i in Widget.objects.values_list("id", flat=True)]
+
+
+class Platform(PlatformCommand):
+    ran = False
+
+    def handle_platform(self, **options: Any) -> None:
+        self.ran = True
+        Widget.objects.count()  # sin tenant: TenantContextMissing
+
+
 def test_commands_require_org_and_reason(orgs: dict[str, UUID]) -> None:
-    class Probe(TenantCommand):
-        def handle_tenant(self, ctx: TenantContext, **options: Any) -> None:
-            self.seen = [str(i) for i in Widget.objects.values_list("id", flat=True)]
-
-    class Platform(PlatformCommand):
-        def handle_platform(self, **options: Any) -> None:
-            Widget.objects.count()
-
     probe = Probe()
     call_command(probe, "--org", "org-a", "--reason", "test")
     assert probe.seen == [str(orgs["widget_A"])]
     for args in (["--org", "org-a"], ["--reason", "x"], ["--org", "no-existe", "--reason", "x"]):
         with pytest.raises(CommandError):
             call_command(Probe(), *args)
+    platform = Platform()
     with pytest.raises(TenantContextMissing):
-        call_command(Platform(), "--reason", "x")
+        call_command(platform, "--reason", "x")
+    assert platform.ran  # fuera de tenant se ejecuta; TenantManager falla dentro
+
+
+def test_commands_refuse_active_tenant(orgs: dict[str, UUID]) -> None:
+    platform, probe = Platform(), Probe()
+    with tenant_scope(TenantContext(orgs["A"], "test")):
+        with pytest.raises(TenantContextError, match="tenant_scope activo"):
+            call_command(platform, "--reason", "x")
+        with pytest.raises(TenantContextError, match="tenant_scope activo"):
+            call_command(probe, "--org", "org-a", "--reason", "x")
+    assert not platform.ran and probe.seen is None  # el cuerpo nunca se ejecutó
