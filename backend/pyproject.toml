@@ -1,0 +1,63 @@
+[project]
+name = "crm-backend"
+version = "0.1.0"
+description = "CRM BLACKDOG backend (Django, ASGI)"
+readme = "README.md"
+requires-python = "==3.14.*"
+dependencies = [
+    "django==5.2.17",
+    "psycopg[binary]==3.3.6",
+    "uvicorn==0.54.0",
+]
+
+[dependency-groups]
+dev = [
+    "django-stubs==5.2.9",
+    "django-stubs-ext==5.2.9",
+    "import-linter==2.15",
+    "mypy==1.19.1",
+    "pip-audit==2.10.1",
+    "pytest==9.1.1",
+    "pytest-django==4.14.0",
+    "ruff==0.16.9",
+]
+
+[tool.uv]
+required-version = "==0.12.19"
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+
+[tool.ruff.lint]
+# E/F/W pycodestyle+pyflakes, I isort, B bugbear, UP pyupgrade, S seguridad (bandit), DJ django
+select = ["E", "F", "W", "I", "B", "UP", "S", "DJ"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]  # assert en tests
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+plugins = ["mypy_django_plugin.main"]
+exclude = ["^\\.venv/"]
+
+[tool.django-stubs]
+django_settings_module = "config.settings.test"
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings.test"
+addopts = "-ra --strict-markers"
+testpaths = ["tests"]
+# ADR-012 §3: deprecaciones como error desde el inicio (facilita el salto a Django 6.2 LTS).
+filterwarnings = ["error::DeprecationWarning", "error::PendingDeprecationWarning"]
+
+[tool.importlinter]
+root_packages = ["config", "core"]
+
+[[tool.importlinter.contracts]]
+name = "core (kernel) no depende de config"
+type = "forbidden"
+source_modules = ["core"]
+forbidden_modules = ["config"]

@@ -1,0 +1,131 @@
+name: backend
+
+on:
+  pull_request:
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend.yml"
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_VERSION: "0.12.19"
+  UV_SHA256: "23bf5552d220e0842b65c862097b2ebaeba0064b74eda5e565e77fd25969d8c8"
+
+defaults:
+  run:
+    working-directory: backend
+
+jobs:
+  checks:
+    name: backend checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Instalar uv (versión fijada y verificada)
+        run: &install-uv |
+          set -euo pipefail
+          archive="uv-x86_64-unknown-linux-gnu.tar.gz"
+          curl -sSfL -o "$RUNNER_TEMP/$archive" "https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/${archive}"
+          echo "${UV_SHA256}  $RUNNER_TEMP/$archive" | sha256sum --check --strict
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/uv-x86_64-unknown-linux-gnu" >> "$GITHUB_PATH"
+      - name: Entorno (uv.lock, Python de .python-version)
+        run: uv sync --frozen
+      - name: Formato (ruff format)
+        run: uv run ruff format --check .
+      - name: Lint (ruff)
+        run: uv run ruff check .
+      - name: Tipos (mypy + django-stubs)
+        run: uv run mypy .
+      - name: Fronteras de módulos (import-linter)
+        run: uv run lint-imports
+      - name: Django check
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.test
+        run: uv run python manage.py check
+      - name: Django check --deploy (settings production)
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.production
+          DJANGO_ALLOWED_HOSTS: app.example.com
+          DATABASE_URL: postgres://ci:ci@localhost:5432/ci
+        run: |
+          DJANGO_SECRET_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(64))')" \
+            uv run python manage.py check --deploy --fail-level WARNING
+      - name: Migraciones sincronizadas
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.test
+        run: uv run python manage.py makemigrations --check --dry-run
+      - name: Dependencias (pip-audit)
+        run: |
+          uv export --frozen --all-groups --format requirements-txt -o "$RUNNER_TEMP/requirements.txt"
+          uv run pip-audit -r "$RUNNER_TEMP/requirements.txt" --require-hashes --disable-pip
+
+  tests:
+    name: backend tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18.6
+        env:
+          POSTGRES_USER: crm_test
+          POSTGRES_PASSWORD: crm_test
+          POSTGRES_DB: crm
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U crm_test -d crm"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Instalar uv (versión fijada y verificada)
+        run: *install-uv
+      - name: Entorno
+        run: uv sync --frozen
+      - name: pytest (PostgreSQL 18.6)
+        env:
+          DATABASE_URL: postgres://crm_test:crm_test@localhost:5432/crm
+        run: uv run pytest
+
+  docker:
+    name: backend docker build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: docker build (sin push)
+        run: docker build --pull -t crm-backend:ci .
+      # ALLOWED_HOSTS solo con un dominio externo: la sonda loopback debe funcionar igualmente.
+      - name: Smoke test (/health/live, usuario no root)
+        run: |
+          set -euo pipefail
+          test "$(docker run --rm --entrypoint id crm-backend:ci -u)" = "10001"
+          docker run -d --name backend -p 8000:8000 \
+            -e DJANGO_SECRET_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(64))')" \
+            -e DJANGO_ALLOWED_HOSTS=app.example.com \
+            -e DATABASE_URL=postgres://ci:ci@127.0.0.1:5432/ci \
+            crm-backend:ci
+          for _ in $(seq 1 30); do
+            curl -sf http://127.0.0.1:8000/health/live && exit 0
+            sleep 1
+          done
+          docker logs backend
+          exit 1

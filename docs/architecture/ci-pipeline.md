@@ -13,7 +13,7 @@
 | `pr-governance-trusted.yml` (check `PR governance (trusted)`) | `pull_request_target` | **Activo desde A-02**: frontera de governance; código trusted de `main`, solo lectura ([delivery-automation.md](delivery-automation.md) §4–§5) |
 | `pr-governance.yml` (check `PR governance`, legacy) | `pull_request` | Solo informativo tras A-02; se retira según OBS-A-02-1 |
 | `work-item-state.yml` | `pull_request_target` (abierto, ready, cerrado) | Trusted desde A-02: checkout solo de `main` y `work_item_state.py`; muta los labels `status:*` solo si el work item corresponde exactamente al PR ([delivery-automation.md](delivery-automation.md) §2) |
-| `backend.yml` | PR/push con cambios en `backend/**` | Se crea en la Fase 1 (cuando exista `pyproject.toml`) |
+| `backend.yml` | PR/push con cambios en `backend/**` o en el propio workflow | **Activo desde F1-02**: jobs `backend checks`, `backend tests` y `backend docker build` |
 | `frontend.yml` | PR/push con cambios en `frontend/**` | Se crea en la Fase 1 (cuando exista `package.json`) |
 
 Se usan `paths` filtros para no ejecutar el pipeline del backend cuando solo cambia el frontend, y viceversa. Los checks requeridos de `main` se añaden a medida que existen.
@@ -32,6 +32,11 @@ Se usan `paths` filtros para no ejecutar el pipeline del backend cuando solo cam
 | Tests | **pytest** + pytest-django | `pytest --cov` con Postgres 18 (service) y Redis; conexión de tests con el rol `crm_app` | Incluye la suite de aislamiento de tenant y los tests de RLS (gate) |
 | Dependencias | **pip-audit** | `pip-audit` sobre el lock exportado | Vulnerabilidades conocidas |
 | Contrato API | drf-spectacular | `manage.py spectacular --validate --fail-on-warn` + diff contra el schema commiteado | El cliente TS generado no queda desactualizado |
+
+**Estado en F1-02** (jobs `backend checks`, `backend tests` y `backend docker build`):
+- **Activos:** entorno, formato, lint, tipos, import-linter, `check` y `check --deploy`, migraciones sincronizadas, pip-audit (lock exportado con hashes, todos los grupos), pytest contra `postgres:18.6`, y docker build con smoke test de `/health/live` y usuario no root.
+- **Pendientes:** "migraciones aplicables con `crm_migrator`" y "tests con `crm_app`" llegan en F1-03 (hoy el servicio usa un rol de test); Redis y `--cov`, cuando haya código que lo justifique; contrato API, cuando exista DRF/drf-spectacular (pregunta abierta en #11).
+- **Instalación de uv:** binario oficial fijado por versión y verificado por SHA-256, sin acciones de terceros.
 
 ## 3. Frontend (`frontend.yml`, Fase 1)
 
