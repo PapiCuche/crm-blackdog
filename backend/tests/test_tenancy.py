@@ -126,7 +126,9 @@ def test_root_scope_sets_gucs_and_clears_them_on_exit(orgs: dict[str, UUID]) -> 
         expected = (str(orgs["A"]), str(user), "USER")
         assert read_context() == expected
         with tenant_scope(replace(root)):  # copia idéntica (no el mismo objeto)
-            assert read_context() == expected  # idéntico anidado: no-op
+            assert read_context() == expected  # idéntico anidado, mismo alias: no-op
+        with pytest.raises(TenantContextError), tenant_scope(root, using="otra"):
+            pass  # alias sin GUC: falla antes de tocar esa conexión (ni existe)
     assert read_context() == ("", "", "")
 
 

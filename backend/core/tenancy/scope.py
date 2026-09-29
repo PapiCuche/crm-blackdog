@@ -18,6 +18,7 @@ _GUCS = ("app.tenant_id", "app.user_id", "app.actor_type")
 _SET = "SELECT " + ", ".join(f"set_config('{g}', %s, true)" for g in _GUCS)
 _READ = "SELECT " + ", ".join(f"current_setting('{g}', true)" for g in _GUCS)
 _user_scope_active: ContextVar[bool] = ContextVar("user_scope_active", default=False)
+_active_using: ContextVar[str | None] = ContextVar("tenant_scope_using", default=None)
 
 
 @contextmanager
@@ -34,20 +35,21 @@ def _owned_transaction(using: str, values: list[str]) -> Iterator[None]:
 def tenant_scope(ctx: TenantContext, *, using: str = "default") -> Iterator[TenantContext]:
     active = _current.get()
     if active is not None:
-        if active != ctx:  # otro tenant, usuario o actor: nunca se mezcla
-            raise TenantContextError("tenant_scope anidado con un contexto distinto")
-        yield ctx  # mismo contexto completo: no-op, sin volver a fijar los GUC
+        if active != ctx or _active_using.get() != using:  # otra conexión no tiene los GUC
+            raise TenantContextError("tenant_scope anidado con otro contexto o alias de conexión")
+        yield ctx  # mismo contexto y alias: no-op, sin volver a fijar los GUC
         return
     if _user_scope_active.get():
         raise TenantContextError("tenant_scope no puede abrirse dentro de un user_scope")
     with _owned_transaction(
         using, [str(ctx.organization_id), str(ctx.user_id or ""), ctx.actor_type]
     ):
-        token = _current.set(ctx)
+        token, alias_token = _current.set(ctx), _active_using.set(using)
         try:
             yield ctx
         finally:
             _current.reset(token)
+            _active_using.reset(alias_token)
 
 
 @contextmanager
