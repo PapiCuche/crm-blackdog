@@ -25,6 +25,10 @@ ROOT_URLCONF = "config.urls"
 ASGI_APPLICATION = "config.asgi.application"
 
 DATABASES = {"default": env.database(env.required("DATABASE_URL"))}
+# ADR-002: rol de runtime (sin BYPASSRLS, no propietario). Recibe los GRANT de las migraciones.
+DB_APP_ROLE = env.optional("DB_APP_ROLE", "crm_app")
+# Verificación del rol conectado en cada conexión nueva (activa en production).
+ENFORCE_RUNTIME_DB_ROLE = False
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 LANGUAGE_CODE = "es-pe"

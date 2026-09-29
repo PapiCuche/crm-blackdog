@@ -1,6 +1,14 @@
 from django.apps import AppConfig
+from django.conf import settings
+from django.db.backends.signals import connection_created
 
 
 class CoreConfig(AppConfig):
     name = "core"
     verbose_name = "Core (kernel)"
+
+    def ready(self) -> None:
+        if settings.ENFORCE_RUNTIME_DB_ROLE:
+            from core.db.guards import enforce_runtime_role
+
+            connection_created.connect(enforce_runtime_role, dispatch_uid="enforce_runtime_role")
