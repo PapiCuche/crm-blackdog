@@ -1,0 +1,167 @@
+"""Puntos de entrada con contexto de tenant: HTTP (T7), Celery (T9), WS (T10) y comandos."""
+
+import json
+import re
+from collections.abc import Iterator
+from types import SimpleNamespace
+from typing import Any
+from uuid import UUID, uuid4
+
+import psycopg
+import pytest
+from asgiref.sync import async_to_sync
+from asgiref.testing import ApplicationCommunicator
+from celery import Celery
+from channels.routing import URLRouter
+from django.core.management import CommandError, call_command
+from django.test import Client
+from django.urls import URLResolver, get_resolver, path
+
+from config.celery import app as celery_app
+from core.tenancy.celery import TenancyCheck
+from core.tenancy.commands import PlatformCommand, TenantCommand
+from core.tenancy.context import TenantContext, TenantContextError, TenantContextMissing
+from tests import fakes
+from tests.tenancy_app.consumers import WidgetConsumer
+from tests.tenancy_app.models import Widget
+from tests.tenancy_app.tasks import count_without_tenant, visible_widgets
+
+pytestmark = pytest.mark.usefixtures("tenant_db")
+NOT_FOUND = {"code": "NOT_FOUND"}
+
+
+@pytest.fixture
+def member(orgs: dict[str, UUID]) -> Iterator[UUID]:
+    """Usuario miembro (simulado) SOLO de la organización A."""
+    user = uuid4()
+    fakes.MEMBERS.add((user, orgs["A"]))
+    yield user
+    fakes.MEMBERS.clear()
+
+
+def tenant_routes() -> list[str]:
+    def walk(patterns: list[Any], prefix: str) -> Iterator[str]:
+        for p in patterns:
+            route = prefix + str(p.pattern)
+            if isinstance(p, URLResolver):
+                yield from walk(p.url_patterns, route)
+            elif route.startswith("api/v1/o/"):
+                yield route
+
+    return list(walk(get_resolver().url_patterns, ""))
+
+
+def fill(route: str, slug: str, foreign_id: UUID) -> str:
+    """`<slug:org_slug>` → slug; cualquier otro parámetro → un ID del OTRO tenant."""
+    return "/" + re.sub(
+        r"<(?:\w+:)?(\w+)>", lambda m: slug if m[1] == "org_slug" else str(foreign_id), route
+    )
+
+
+def test_t7_every_tenant_route_hides_other_tenant(
+    orgs: dict[str, UUID], member: UUID, migrator: psycopg.Connection[Any]
+) -> None:
+    routes = tenant_routes()
+    assert routes, "el harness necesita al menos una ruta de tenant"
+    client = Client(headers={"X-Test-User": str(member)})
+    for route in routes:
+        url = fill(route, "org-a", orgs["widget_B"])
+        if "<" not in route.removeprefix("api/v1/o/<slug:org_slug>/"):
+            response = client.get(url)  # listado: 200 sin filas de B
+            assert response.status_code == 200 and str(orgs["widget_B"]) not in response.text
+            continue
+        for method in ("get", "patch", "delete"):
+            response = getattr(client, method)(url)
+            assert (response.status_code, response.json()) == (404, NOT_FOUND), (method, url)
+        for slug in ("org-b", "no-existe"):  # sin membresía o inexistente: mismo 404
+            response = client.get(fill(route, slug, orgs["widget_A"]))
+            assert (response.status_code, response.json()) == (404, NOT_FOUND), (slug, route)
+    unchanged = "SELECT count(*) FROM tenancy_app_widget WHERE id = %s AND name = 'widget B'"
+    assert migrator.execute(unchanged, [orgs["widget_B"]]).fetchone() == (1,)  # B intacto
+
+
+def test_tenant_route_runs_inside_tenant_scope(orgs: dict[str, UUID], member: UUID) -> None:
+    client = Client(headers={"X-Test-User": str(member)})
+    response = client.get(f"/api/v1/o/org-a/widgets/{orgs['widget_A']}/")
+    assert response.json() == {"id": str(orgs["widget_A"])}
+    assert Client().get("/api/v1/o/org-a/widgets/").status_code == 401
+
+
+def test_suspended_org_is_403_only_for_members(
+    orgs: dict[str, UUID], member: UUID, migrator: psycopg.Connection[Any]
+) -> None:
+    migrator.execute("UPDATE organizations SET status = 'SUSPENDED'")
+    client = Client(headers={"X-Test-User": str(member)})
+    assert client.get("/api/v1/o/org-a/widgets/").json() == {"code": "ORG_SUSPENDED"}
+    assert client.get("/api/v1/o/org-b/widgets/").json() == NOT_FOUND
+
+
+def test_t9_tenant_task_requires_organization_and_sees_only_its_tenant(
+    orgs: dict[str, UUID],
+) -> None:
+    for kwargs in ({}, {"organization_id": "no-es-uuid"}):
+        with pytest.raises(TenantContextError):
+            visible_widgets.apply_async(kwargs=kwargs)  # falla al encolar, sin broker
+    result = visible_widgets.apply(kwargs={"organization_id": str(orgs["A"])})
+    assert result.get() == [str(orgs["widget_A"])]
+    with pytest.raises(TenantContextMissing):
+        count_without_tenant.apply().get()
+
+
+def test_worker_refuses_to_start_with_undecorated_tasks() -> None:
+    assert TenancyCheck in celery_app.steps["worker"]
+    TenancyCheck(SimpleNamespace(app=celery_app))  # todas las tareas del proyecto decoradas
+    bad = Celery("bad", set_as_current=False)
+    bad.task(name="raw")(fakes.membership)  # cualquier función sin @tenant/@platform_task
+    bad.steps["worker"].add(TenancyCheck)
+    with pytest.raises(TenantContextError, match="raw"):
+        bad.WorkController(pool_cls="solo", hostname="t@test")
+
+
+def ws(slug: str, user: UUID, *messages: dict[str, str]) -> tuple[bool, Any, list[Any]]:
+    router = URLRouter([path("ws/o/<slug:org_slug>/", WidgetConsumer.as_asgi())])
+
+    async def run() -> tuple[bool, Any, list[Any]]:
+        scope = {"type": "websocket", "path": f"/ws/o/{slug}/", "user": user, "headers": []}
+        communicator = ApplicationCommunicator(router, scope)
+        await communicator.send_input({"type": "websocket.connect"})
+        opened = await communicator.receive_output()
+        replies = []
+        for message in messages if opened["type"] == "websocket.accept" else ():
+            await communicator.send_input(
+                {"type": "websocket.receive", "text": json.dumps(message)}
+            )
+            replies.append(json.loads((await communicator.receive_output())["text"]))
+        await communicator.send_input({"type": "websocket.disconnect", "code": 1000})
+        await communicator.wait()
+        return opened["type"] == "websocket.accept", opened.get("code"), replies
+
+    return async_to_sync(run)()
+
+
+def test_t10_ws_subscription_to_other_tenant_is_rejected(
+    orgs: dict[str, UUID], member: UUID
+) -> None:
+    own, other = str(orgs["widget_A"]), str(orgs["widget_B"])
+    connected, _, replies = ws("org-a", member, {"subscribe": own}, {"subscribe": other})
+    assert connected and replies == [{"subscribed": own}, {"error": "NOT_FOUND"}]
+    assert ws("org-b", member)[:2] == (False, 4404)  # sin membresía: no conecta
+
+
+def test_commands_require_org_and_reason(orgs: dict[str, UUID]) -> None:
+    class Probe(TenantCommand):
+        def handle_tenant(self, ctx: TenantContext, **options: Any) -> None:
+            self.seen = [str(i) for i in Widget.objects.values_list("id", flat=True)]
+
+    class Platform(PlatformCommand):
+        def handle_platform(self, **options: Any) -> None:
+            Widget.objects.count()
+
+    probe = Probe()
+    call_command(probe, "--org", "org-a", "--reason", "test")
+    assert probe.seen == [str(orgs["widget_A"])]
+    for args in (["--org", "org-a"], ["--reason", "x"], ["--org", "no-existe", "--reason", "x"]):
+        with pytest.raises(CommandError):
+            call_command(Probe(), *args)
+    with pytest.raises(TenantContextMissing):
+        call_command(Platform(), "--reason", "x")

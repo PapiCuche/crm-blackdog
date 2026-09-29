@@ -24,6 +24,7 @@ COPY --from=build /opt/venv /opt/venv
 COPY manage.py ./
 COPY config ./config
 COPY core ./core
+COPY apps ./apps
 USER 10001:10001
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \

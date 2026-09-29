@@ -12,6 +12,7 @@ ALLOWED_HOSTS: list[str] = env.csv_list("DJANGO_ALLOWED_HOSTS")
 
 INSTALLED_APPS = [
     "core",
+    "apps.organizations",
 ]
 
 MIDDLEWARE = [
@@ -19,6 +20,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "core.tenancy.middleware.TenantResolutionMiddleware",  # tras la autenticación (Fase 2)
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -31,6 +33,9 @@ DB_APP_ROLE = env.optional("DB_APP_ROLE", "crm_app")
 DB_MIGRATOR_ROLE = env.optional("DB_MIGRATOR_ROLE", "crm_migrator")
 # Verificación del rol conectado en cada conexión nueva (activa en production).
 ENFORCE_RUNTIME_DB_ROLE = False
+# Tenancy (F1-04): inyección para que core no importe módulos superiores.
+TENANCY_ORGANIZATION_SELECTOR = "apps.organizations.selectors.organization_by_slug"
+TENANCY_MEMBERSHIP_RESOLVER = "core.tenancy.resolution.no_memberships"  # Fase 2: memberships
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 LANGUAGE_CODE = "es-pe"

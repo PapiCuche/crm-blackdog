@@ -12,3 +12,7 @@ INSTALLED_APPS = [*INSTALLED_APPS, "tests.tenancy_app"]  # noqa: F405 — solo t
 # Migraciones de la BD de test: como crm_migrator (tests/conftest.py). Los tests corren como
 # el rol de DATABASE_URL, que debe ser crm_app (ni superusuario ni BYPASSRLS).
 MIGRATOR_DATABASE_URL = os.environ.get("DATABASE_MIGRATOR_URL", "")
+# F1-04: rutas de tenant de prueba, autenticación y membresías simuladas (tests/fakes.py).
+ROOT_URLCONF = "tests.urls"
+MIDDLEWARE = [*MIDDLEWARE[:-1], "tests.fakes.FakeAuthMiddleware", MIDDLEWARE[-1]]  # noqa: F405
+TENANCY_MEMBERSHIP_RESOLVER = "tests.fakes.membership"

@@ -84,15 +84,20 @@ def tenant_db(
             yield
         finally:
             connection.close()
-            for table in TENANT_TABLES:
+            for table in (*TENANT_TABLES, "organizations"):
                 migrator.execute(f"DELETE FROM {table}")  # noqa: S608 — nombres fijos
 
 
 @pytest.fixture
 def orgs(tenant_db: None, migrator: psycopg.Connection[Any]) -> dict[str, UUID]:
-    """Dos organizaciones con un widget cada una (sembradas por el migrador)."""
+    """Dos organizaciones (`org-a`, `org-b`) con un widget cada una (sembradas por el migrador)."""
     ids = {"A": uuid4(), "B": uuid4(), "widget_A": uuid4(), "widget_B": uuid4()}
     for org in ("A", "B"):
+        migrator.execute(
+            "INSERT INTO organizations (id, slug, name, status, created_at) "
+            "VALUES (%s, %s, %s, 'ACTIVE', now())",
+            [ids[org], f"org-{org.lower()}", f"Org {org}"],
+        )
         migrator.execute(
             "INSERT INTO tenancy_app_widget (id, organization_id, name) VALUES (%s, %s, %s)",
             [ids[f"widget_{org}"], ids[org], f"widget {org}"],
