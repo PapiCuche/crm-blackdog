@@ -92,15 +92,17 @@ def _call(method: str, url: str, token: str, payload: dict | None = None) -> Non
 
 
 def apply(repo: str, token: str, plan: Plan) -> None:
+    # Primero se añade y después se quita: el issue nunca queda sin estado. Si no, la
+    # governance trusted, concurrente, puede leerlo sin status (A-04, OBS-A-04-1).
     base = f"https://api.github.com/repos/{repo}/issues/{plan.issue}/labels"
+    if plan.add:
+        _call("POST", base, token, {"labels": [plan.add]})
     for label in plan.remove:
         try:
             _call("DELETE", f"{base}/{urllib.parse.quote(label, safe='')}", token)
         except urllib.error.HTTPError as exc:
             if exc.code != 404:
                 raise
-    if plan.add:
-        _call("POST", base, token, {"labels": [plan.add]})
 
 
 def main() -> int:

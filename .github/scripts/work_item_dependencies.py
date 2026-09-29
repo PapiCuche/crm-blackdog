@@ -182,8 +182,8 @@ def sync(api: Api, default_branch: str, completed: int | None) -> int:
             print(f"#{n} sigue bloqueado: {'; '.join(decision.reasons)}")
             continue
         branch = declared_branch(issue.get("body") or "")
+        api.write("POST", f"/issues/{n}/labels", {"labels": [READY]})  # añadir antes de quitar
         api.write("DELETE", f"/issues/{n}/labels/{urllib.parse.quote(BLOCKED, safe='')}")
-        api.write("POST", f"/issues/{n}/labels", {"labels": [READY]})
         api.write("POST", f"/issues/{n}/comments", {"body": (
             "✅ Dependencias satisfechas.\n\nEste work item está listo.\n\n"
             f"Rama: `{branch}`\n\nSiguiente comando para Builder:\n`continuar`")})

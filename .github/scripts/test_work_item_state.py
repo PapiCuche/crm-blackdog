@@ -1,6 +1,8 @@
 import unittest
+from unittest import mock
 
-from work_item_state import BLOCKED, DONE, IN_PROGRESS, READY, plan_transition
+import work_item_state
+from work_item_state import BLOCKED, DONE, IN_PROGRESS, READY, apply, plan_transition
 
 BRANCH = "feature/f1-backend-skeleton"
 
@@ -81,6 +83,14 @@ class WorkItemStateTest(unittest.TestCase):
 
     def test_refs_only_no_mutation(self):
         self.assertNoMutation(plan(issue(READY), body="Refs #4"))
+
+
+class ApplyOrderTest(unittest.TestCase):
+    def test_adds_before_removing_so_issue_never_lacks_status(self):
+        calls = []
+        with mock.patch.object(work_item_state, "_call", side_effect=lambda m, *a, **k: calls.append(m)):
+            apply("o/r", "t", plan(issue(READY)))
+        self.assertEqual(calls, ["POST", "DELETE"])
 
 
 if __name__ == "__main__":
