@@ -48,6 +48,7 @@ exclude = ["^\\.venv/"]
 [[tool.mypy.overrides]]  # sin py.typed (F1-04); types-channels exige django-stubs 6
 module = ["celery.*", "kombu.*", "channels.*"]
 follow_imports = "skip"  # tipos Any: sin stubs compatibles
+ignore_missing_imports = true
 
 [[tool.mypy.overrides]]  # asgiref.testing sin anotaciones
 module = ["tests.test_entrypoints"]
