@@ -75,6 +75,34 @@ ADR-004 §2 prevé un prefijo configurable **por organización**. `allocate(ctx,
 `@tenant_task` valida `organization_id` en `apply_async`/`delay`. Si una tarea se envía por nombre (`send_task`), la validación ocurre en el worker: el cuerpo exige el kwarg y falla sin ejecutarse.
 - Aceptado para el MVP; revisar si se introduce `send_task`.
 
+### OBS-F1-05-2 — Alias de conexión en la asignación de secuencias
+`allocate(ctx, key, using=...)` comprueba la transacción y el `TenantContext`, pero no que `using` sea el alias propietario del `tenant_scope` activo.
+- No afecta al sistema actual: solo se usa `default`.
+- Resolver antes de introducir varios aliases de runtime reales, o eliminar el parámetro `using` mientras no sea necesario.
+- F1-06 evita el problema en las APIs nuevas: `emit` y `record` no reciben `using`, lo obtienen con `require_scope(ctx)`.
+- No bloqueante. Abierta.
+
+### OBS-F1-06-1 — Auditoría de plataforma
+`audit_logs.organization_id` es NOT NULL (ADR-001 §2, T4), aunque docs/fase-0/04 §N.1 lo preveía nullable para eventos de plataforma.
+- La auditoría de plataforma (impersonación, comandos de plataforma, `TenantCommand`/`PlatformCommand`) necesita su propio diseño: política o rol, y una inversión de dependencia, porque `core` no importa `apps.audit`.
+- Los comandos siguen registrando el operador y el motivo en el log.
+
+### OBS-F1-06-2 — Horizonte de particiones de auditoría
+Se crean el mes actual + 12, desde la migración y el `post_migrate` (el runtime no tiene DDL; se desvía del beat diario de 04 §O.2).
+- No hay partición DEFAULT: fail-closed si nadie ejecuta el job de migraciones en 12 meses.
+- Añadir una alerta o un runbook en F1-10 u operación.
+
+### OBS-F1-06-3 — Outbox: reintentos, dead-letter y retención
+El publisher guarda `attempts` y la clase del último error, pero no hay backoff, dead-letter ni purga de eventos publicados.
+- Con el broker caído, cada tick sigue intentando todos los eventos del lote. Conviene cortar el tick ante `kombu.exceptions.OperationalError`.
+- Un publisher sin el suscriptor registrado (despliegue escalonado) marca el evento como publicado.
+- Se diseña con el primer consumidor real (automatizaciones o notificaciones).
+- La retención y purga de la auditoría también quedan pendientes.
+
+### OBS-F1-06-4 — Enmascarado de documentos de identidad
+docs/fase-0/04 §N.1 pide enmascarar documentos de identidad (DNI/RUC/pasaporte) en la auditoría. No está en el "Incluye" de #8 y no se implementa.
+- Añadirlo al redactor (`core.redaction`) cuando exista el primer módulo con datos de identidad (contactos, Fase 3).
+
 ### OBS-F1-02-1 — Dependabot para Python
 `.github/dependabot.yml` todavía solo cubre `github-actions`. Hay que añadir el ecosistema de Python (uv/pip) sobre `backend/`, para recibir alertas y PRs de actualización de las dependencias fijadas en `uv.lock`.
 - No bloqueante. Se hará en un `chore` pequeño y separado.

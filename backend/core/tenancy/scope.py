@@ -65,6 +65,18 @@ def user_scope(user_id: UUID, *, using: str = "default") -> Iterator[None]:
             _user_scope_active.reset(token)
 
 
+def require_scope(ctx: TenantContext) -> str:
+    """Alias del `tenant_scope` activo si es exactamente `ctx` y su transacción sigue abierta.
+
+    Las APIs que escriben en nombre del tenant (outbox, auditoría) lo usan en lugar de recibir
+    `using`: así nunca escriben en una conexión sin los GUC del scope (OBS-F1-05-2).
+    """
+    alias = _active_using.get()
+    if alias is None or _current.get() != ctx or not connections[alias].in_atomic_block:
+        raise TenantContextError("Se requiere el tenant_scope activo de este mismo contexto")
+    return alias
+
+
 def read_context(*, using: str = "default") -> tuple[str, ...]:
     with connections[using].cursor() as cursor:
         cursor.execute(_READ)

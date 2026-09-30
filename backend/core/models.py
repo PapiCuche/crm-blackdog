@@ -3,6 +3,7 @@
 from django.db import models
 
 from core.db.models import TenantModel
+from core.outbox.models import OutboxEvent
 
 
 class OrgSequence(TenantModel):
@@ -15,3 +16,6 @@ class OrgSequence(TenantModel):
 
     class Meta:
         db_table = "org_sequences"
+
+
+__all__ = ["OrgSequence", "OutboxEvent"]

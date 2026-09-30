@@ -13,6 +13,7 @@ ALLOWED_HOSTS: list[str] = env.csv_list("DJANGO_ALLOWED_HOSTS")
 INSTALLED_APPS = [
     "core",
     "apps.organizations",
+    "apps.audit",
 ]
 
 MIDDLEWARE = [
@@ -36,6 +37,8 @@ ENFORCE_RUNTIME_DB_ROLE = False
 # Tenancy (F1-04): inyección para que core no importe módulos superiores.
 TENANCY_ORGANIZATION_SELECTOR = "apps.organizations.selectors.organization_by_slug"
 TENANCY_MEMBERSHIP_RESOLVER = "core.tenancy.resolution.no_memberships"  # Fase 2: memberships
+# Outbox (F1-06): el publisher corre cada segundo en beat (beat y broker: F1-10).
+CELERY_BEAT_SCHEDULE = {"core.publish_outbox": {"task": "core.publish_outbox", "schedule": 1.0}}
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 LANGUAGE_CODE = "es-pe"

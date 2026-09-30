@@ -72,3 +72,8 @@ name = "core (kernel) no depende de config ni de apps"
 type = "forbidden"
 source_modules = ["core"]
 forbidden_modules = ["config", "apps"]
+
+[[tool.importlinter.contracts]]
+name = "Capas (module-dependencies §1): organizations (L2) > audit (L1) > core (L0)"
+type = "layers"
+layers = ["apps.organizations", "apps.audit", "core"]
