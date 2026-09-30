@@ -3,6 +3,7 @@
 from django.db import models
 
 from core.db.models import TenantModel
+from core.outbox.models import OutboxEvent  # noqa: F401 — registra el modelo en la app core
 
 
 class OrgSequence(TenantModel):
