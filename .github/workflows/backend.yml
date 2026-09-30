@@ -95,6 +95,12 @@ jobs:
           STORAGE_ACCESS_KEY_ID: ci-config-only
           STORAGE_SECRET_ACCESS_KEY: ci-config-only
         run: docker compose -f ../infra/docker/compose.yaml --env-file ../infra/env/.env.example config -q
+      - name: Contrato OpenAPI sin drift (backend/openapi/schema.yaml)
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.local
+        run: |
+          uv run python manage.py spectacular --validate --fail-on-warn --file "$RUNNER_TEMP/schema.yaml"
+          diff -u openapi/schema.yaml "$RUNNER_TEMP/schema.yaml"
       - name: Migraciones sincronizadas
         env:
           DJANGO_SETTINGS_MODULE: config.settings.test

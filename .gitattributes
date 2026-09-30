@@ -6,4 +6,5 @@
 *.xlsx binary
 # Código generado (se revisa con menos detalle en los diffs)
 frontend/src/lib/api/** linguist-generated=true
+backend/openapi/schema.yaml linguist-generated=true
 **/migrations/*.py linguist-generated=false

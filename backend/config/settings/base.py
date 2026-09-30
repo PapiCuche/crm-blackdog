@@ -11,6 +11,8 @@ DEBUG = False
 ALLOWED_HOSTS: list[str] = env.csv_list("DJANGO_ALLOWED_HOSTS")
 
 INSTALLED_APPS = [
+    "rest_framework",
+    "drf_spectacular",
     "core",
     "apps.organizations",
     "apps.audit",
@@ -69,6 +71,23 @@ LOGGING = {
         "uvicorn.access": {"handlers": [], "propagate": True},
         "celery.app.trace": {"level": "WARNING"},  # "succeeded: <repr(resultado)>"
     },
+}
+# API (F1-08A): DRF solo JSON; sin autenticación todavía (Fase 2). Contrato OpenAPI con
+# drf-spectacular, versionado en backend/openapi/schema.yaml (fuente de verdad para orval).
+REST_FRAMEWORK = {
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
+    "DEFAULT_PARSER_CLASSES": ["rest_framework.parsers.JSONParser"],
+    "DEFAULT_AUTHENTICATION_CLASSES": [],
+    "UNAUTHENTICATED_USER": None,  # sin django.contrib.auth hasta la Fase 2
+}
+SPECTACULAR_SETTINGS = {
+    "TITLE": "CRM BLACKDOG API",
+    "DESCRIPTION": "Contrato de la API del backend. Fuente para el cliente TypeScript (orval).",
+    "VERSION": "0.1.0",
+    "SERVE_INCLUDE_SCHEMA": False,  # el propio /api/schema/ no forma parte del contrato
+    "COMPONENT_SPLIT_REQUEST": True,  # tipos separados de petición/respuesta para orval
+    "SCHEMA_PATH_PREFIX": r"/api/v[0-9]+",
 }
 # Object storage S3-compatible (ADR-008): credenciales solo por entorno.
 STORAGE_BACKEND = env.optional("STORAGE_BACKEND", "s3")  # s3 | memory (tests)

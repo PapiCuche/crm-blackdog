@@ -41,6 +41,7 @@ backend/
 │   ├── wsgi.py               (no se usa en producción; útil para herramientas)
 │   └── celery.py             app Celery, colas, verificación @tenant_task/@platform_task
 ├── core/                     kernel compartido (L0): tenancy, ids, sequences, outbox, redaction
+├── openapi/schema.yaml       contrato OpenAPI generado y versionado (F1-08A; fuente de orval)
 │   ├── tenancy/              context, scope, middleware, celery, channels, commands, resolvers
 │   ├── db/                   TenantModel, SoftDeleteModel, operaciones de migración (EnableRLS, CompositeTenantFK)
 │   ├── ids.py                new_id() (UUIDv7)
