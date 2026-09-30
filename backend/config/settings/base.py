@@ -17,6 +17,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "core.observability.middleware.RequestContextMiddleware",  # request/correlation id (F1-07)
     "django.middleware.security.SecurityMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -48,9 +49,26 @@ USE_I18N = True
 TIME_ZONE = "UTC"  # se guarda en UTC; la zona de cada organización se aplica al mostrar
 USE_TZ = True
 
+# ADR-011: JSON en stdout, redactado (core.observability.logging). Celery no reemplaza el root.
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
-    "handlers": {"console": {"class": "logging.StreamHandler"}},
+    "formatters": {"json": {"()": "core.observability.logging.json_formatter"}},
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "json",
+            "stream": "ext://sys.stdout",
+        }
+    },
     "root": {"handlers": ["console"], "level": env.optional("DJANGO_LOG_LEVEL", "INFO")},
+    "loggers": {  # uvicorn configura handlers de texto antes que Django: se reemplazan
+        "uvicorn": {"handlers": ["console"], "propagate": False},
+        "uvicorn.error": {"handlers": [], "propagate": True},
+        "uvicorn.access": {"handlers": [], "propagate": True},
+        "celery.app.trace": {"level": "WARNING"},  # "succeeded: <repr(resultado)>"
+    },
 }
+# Reporte de errores (ADR-011 §3): sin SENTRY_DSN, NoopReporter (sin red).
+SENTRY_DSN = env.optional("SENTRY_DSN", "")
+SENTRY_ENVIRONMENT = env.optional("SENTRY_ENVIRONMENT", "")

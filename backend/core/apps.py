@@ -8,6 +8,10 @@ class CoreConfig(AppConfig):
     verbose_name = "Core (kernel)"
 
     def ready(self) -> None:
+        from core.observability import logging, reporting
+
+        logging.configure()
+        reporting.reporter()  # Noop sin SENTRY_DSN; si hay DSN, inicializa Sentry al arrancar
         if settings.ENFORCE_RUNTIME_DB_ROLE:
             from core.db.guards import enforce_runtime_role
 

@@ -103,6 +103,17 @@ El publisher guarda `attempts` y la clase del último error, pero no hay backoff
 docs/fase-0/04 §N.1 pide enmascarar documentos de identidad (DNI/RUC/pasaporte) en la auditoría. No está en el "Incluye" de #8 y no se implementa.
 - Añadirlo al redactor (`core.redaction`) cuando exista el primer módulo con datos de identidad (contactos, Fase 3).
 
+### OBS-F1-07-1 — `X-Request-ID` de confianza tras el proxy
+Fase 1 ignora `X-Request-ID`/`X-Correlation-ID` entrantes: aún no hay un proxy de confianza que distinga valores internos de valores de Internet. Cada petición recibe un UUIDv7 propio.
+- Añadir una política de trusted proxy (aceptar el ID solo si lo fija el proxy) cuando exista el reverse proxy real (F1-10 / despliegue).
+
+### OBS-F1-07-2 — Logs de uvicorn y del worker
+El log de acceso de uvicorn no pasa por el redactor, porque incluye el query string. La imagen arranca con `--no-access-log`; el log de peticiones es `http.request.completed`.
+- Los demás loggers de uvicorn se reencaminan al handler JSON en LOGGING.
+- Los mensajes que uvicorn emite **antes** de cargar Django (arranque) conservan su formato hasta que F1-10 defina el arranque (por ejemplo, `--log-config`).
+- Celery no instala su propio logging (receptor de `setup_logging`).
+- Pendiente: el patrón de reprs de dicts (`'password': '…'`) en `core.redaction` cubre claves de secretos, pero no el contenido de mensajes dentro de un texto libre.
+
 ### OBS-F1-02-1 — Dependabot para Python
 `.github/dependabot.yml` todavía solo cubre `github-actions`. Hay que añadir el ecosistema de Python (uv/pip) sobre `backend/`, para recibir alertas y PRs de actualización de las dependencias fijadas en `uv.lock`.
 - No bloqueante. Se hará en un `chore` pequeño y separado.
