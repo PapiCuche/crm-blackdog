@@ -82,4 +82,6 @@ def request(
 ) -> urllib3.BaseHTTPResponse:  # fmt: skip
     """Sin `**kwargs`: no se pueden quitar timeouts, reintentos ni el bloqueo de redirects."""
     check_url(url)
+    if any(name.lower() == "host" for name in headers or {}):
+        raise BlockedDestination("La cabecera Host no se puede sustituir")  # TLS/Host = URL
     return _manager.request(method, url, headers=headers, body=body, json=json, redirect=False)

@@ -1,11 +1,8 @@
-"""Object storage (ADR-008): unidad con InMemoryStorage, tabla `files` y contrato boto3/Garage.
-
-El contrato corre si hay `STORAGE_ENDPOINT_URL` (CI levanta Garage v2.4.1); en CI es
-obligatorio: si falta la configuración, la suite falla en lugar de saltarse.
-"""
+"""Storage (ADR-008): InMemory, tabla `files` y contrato boto3 contra Garage (obligatorio en CI)."""
 
 import io
 import os
+import urllib.error
 import urllib.request
 from collections.abc import Iterator
 from datetime import UTC, datetime
@@ -49,21 +46,16 @@ def test_tenant_keys_and_short_presigned_urls() -> None:
 
 
 def test_content_disposition_is_safe() -> None:
-    header = disposition_header('../"foto ñ".png', "inline", "image/png")
-    assert (
-        header == "inline; filename=\"..foto .png\"; filename*=UTF-8''..%2F%22foto%20%C3%B1%22.png"
-    )
+    h = disposition_header('../"foto ñ".png', "inline", "image/png")
+    assert h == "inline; filename=\"..foto .png\"; filename*=UTF-8''..%2F%22foto%20%C3%B1%22.png"
     for content_type in ("text/html", "image/svg+xml", "application/octet-stream"):  # activo
         assert disposition_header("x", "inline", content_type).startswith("attachment;")
 
 
 def test_storage_backend_comes_from_settings() -> None:
     assert isinstance(storage(), InMemoryStorage)
-    with (
-        override_settings(STORAGE_BACKEND="s3", STORAGE_BUCKET=""),
-        pytest.raises(ImproperlyConfigured),
-    ):
-        storage()
+    with override_settings(STORAGE_BACKEND="s3", STORAGE_BUCKET=""):
+        pytest.raises(ImproperlyConfigured, storage)
 
 
 @pytest.mark.usefixtures("tenant_db")
@@ -153,11 +145,18 @@ def test_contract_multipart_upload_and_abort(s3: S3CompatibleStorage) -> None:
 
 
 def test_contract_presigned_get_and_put(s3: S3CompatibleStorage) -> None:
-    k = key()
-    upload = s3.presign_put(k, expires_in=60, content_type="image/png", max_bytes=1024)
+    k, png = key(), {"content_type": "image/png", "max_bytes": 1024}
+    for declared in (0, 2048):  # vacío o por encima de la política: no se emite URL
+        with pytest.raises(ValueError):
+            s3.presign_put(k, expires_in=60, content_length=declared, **png)  # type: ignore[arg-type]
+    upload = s3.presign_put(k, expires_in=60, content_length=4, **png)  # type: ignore[arg-type]
+    assert upload.headers == {"Content-Type": "image/png", "Content-Length": "4"}
+    with pytest.raises(urllib.error.HTTPError, match="403"):  # tamaño firmado ≠ enviado
+        fetch(upload.url, "PUT", b"x" * 5000, **{**upload.headers, "Content-Length": "5000"})
+    assert s3.head(k) is None
     with fetch(upload.url, "PUT", b"\x89PNG", **upload.headers) as response:
         assert response.status == 200
-    info = s3.head(k)  # "finalize": tamaño y tipo reales antes de registrar el archivo
+    info = s3.head(k)  # "finalize": segunda barrera sobre el tamaño y el tipo reales
     assert info is not None and (info.size, info.content_type) == (4, "image/png")
     url = s3.presign_get(k, expires_in=60, filename="foto.png", content_type="image/png")
     with fetch(url) as response:

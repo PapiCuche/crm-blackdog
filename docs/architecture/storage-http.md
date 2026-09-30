@@ -16,7 +16,10 @@
   - `presign_get` exige el `content_type` real (el `files.mime_type` por magic bytes) y lo fuerza con `ResponseContentType`. Nunca se usa el tipo que declaró el cliente.
   - `Content-Disposition` lleva el `filename` en ASCII saneado más `filename*` en UTF-8 (RFC 6266).
   - `inline` solo se permite para imágenes y PDF; HTML, SVG y cualquier otro tipo se sirven siempre como `attachment`.
-  - `presign_put` firma el `Content-Type`; el tamaño máximo se verifica con `head` al finalizar (ADR-008 §4), porque un PUT firmado no puede limitar el tamaño.
+  - `presign_put(key, content_type, content_length, max_bytes)` exige `0 < content_length <= max_bytes` **antes** de emitir la URL.
+    - Firma `ContentType` y `ContentLength`: `content-length` queda en `X-Amz-SignedHeaders`, y cualquier otro tamaño invalida la firma. En Garage v2.4.1 real, un PUT de 5000 bytes sobre una URL firmada para 4 recibe `403 AccessDenied: Invalid signature` y no crea el objeto.
+    - El cliente envía los `headers` devueltos tal cual.
+    - El `finalize` (con el primer endpoint de subida) repite la verificación con `head`, como segunda barrera.
 - **Checksums:** `request_checksum_calculation` y `response_checksum_validation` en `when_required`. Garage v2.4.1 también acepta los valores por defecto (verificado); se mantiene `when_required` por portabilidad a R2.
 - `boto3`/`botocore` solo se importan en `core.storage` (contrato `protected` de import-linter).
 - **Garage v2.4.1** es solo para local y CI (OBS-F1-01-2, AGPL-3.0):
@@ -35,6 +38,8 @@
   - Conecta a esa misma IP, así que no hay ventana de DNS rebinding.
   - Después restaura el nombre: SNI, verificación del certificado y cabecera `Host` usan el host original (test dedicado).
 - `request()` no acepta `**kwargs`: el llamador no puede quitar timeouts ni reintentos, ni reactivar redirecciones.
+- La cabecera `Host` no se puede sustituir (en cualquier combinación de mayúsculas): la petición se rechaza antes de tocar la red.
+- **Producción:** `config.settings.production` rechaza al arrancar un `STORAGE_ENDPOINT_URL` explícito que no sea `https` o que lleve credenciales. Vacío = AWS por defecto. Local y CI siguen con `http://` contra Garage.
 - **Redirecciones:** no se siguen. Para seguir una redirección hay que llamar de nuevo a `request()` con la nueva URL, que pasa otra vez por toda la política.
 - Tampoco usa proxies del entorno, y tiene timeouts (connect 5 s, read 15 s).
 - `urllib3` solo se importa en `core.http` (contrato `protected`). Un test estático impide importar `requests`, `httpx`, `urllib.request` o `http.client` en `core`, `apps` o `config`; import-linter solo ve lo que ya se importa.

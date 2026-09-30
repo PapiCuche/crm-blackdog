@@ -114,14 +114,9 @@ El log de acceso de uvicorn no pasa por el redactor, porque incluye el query str
 - Celery no instala su propio logging (receptor de `setup_logging`).
 - Pendiente: el patrón de reprs de dicts (`'password': '…'`) en `core.redaction` cubre claves de secretos, pero no el contenido de mensajes dentro de un texto libre.
 
-### OBS-F1-08-1 — Límite de tamaño en subidas firmadas
-`presign_put` firma el `Content-Type`, pero un PUT firmado no puede limitar el tamaño. Por eso el `finalize` debe verificar el tamaño con `head` antes de crear la fila en `files` (ADR-008 §4).
-- Implementarlo con el primer endpoint de subida real, junto con la regla de ciclo de vida de 24 h para subidas sin finalizar.
-- Alternativa: POST firmado con `content-length-range`, si el proveedor elegido lo soporta.
-
-### OBS-F1-08-2 — Endpoint de storage en producción
-`STORAGE_ENDPOINT_URL` acepta `http://`, lo necesario para Garage en local y CI. En producción debería exigirse `https` (o vacío, para AWS) con un check de despliegue.
-- También queda pendiente reutilizar el cliente boto3 (hoy `storage()` crea uno por llamada), cuando existan consumidores reales.
+### OBS-F1-08-2 — Cliente boto3 por llamada
+`storage()` crea un cliente boto3 por llamada. Reutilizarlo cuando existan consumidores reales.
+- Resuelto en F1-08: production exige `https` y sin credenciales en `STORAGE_ENDPOINT_URL`; el tamaño de las subidas firmadas va en la firma.
 
 ### OBS-F1-02-1 — Dependabot para Python
 `.github/dependabot.yml` todavía solo cubre `github-actions`. Hay que añadir el ecosistema de Python (uv/pip) sobre `backend/`, para recibir alertas y PRs de actualización de las dependencias fijadas en `uv.lock`.

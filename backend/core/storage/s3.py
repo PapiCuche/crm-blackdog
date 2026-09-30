@@ -8,7 +8,7 @@ from botocore.exceptions import ClientError
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 
-from core.storage import ObjectInfo, PresignedUpload, check_expiry, check_key, disposition_header
+from core import storage as base
 
 
 class S3CompatibleStorage:
@@ -18,28 +18,28 @@ class S3CompatibleStorage:
     def put(
         self, key: str, stream: IO[bytes], *, content_type: str, content_length: int,
         metadata: dict[str, str] | None = None,
-    ) -> ObjectInfo:  # fmt: skip
+    ) -> base.ObjectInfo:  # fmt: skip
         self.client.put_object(
-            Bucket=self.bucket, Key=check_key(key), Body=stream, ContentType=content_type,
+            Bucket=self.bucket, Key=base.check_key(key), Body=stream, ContentType=content_type,
             ContentLength=content_length, Metadata=dict(metadata or {}),
         )  # fmt: skip
-        return ObjectInfo(key, content_length, content_type, dict(metadata or {}))
+        return base.ObjectInfo(key, content_length, content_type, dict(metadata or {}))
 
     def open(self, key: str) -> IO[bytes]:
-        return self.client.get_object(Bucket=self.bucket, Key=check_key(key))["Body"]  # type: ignore[no-any-return]
+        return self.client.get_object(Bucket=self.bucket, Key=base.check_key(key))["Body"]  # type: ignore[no-any-return]
 
-    def head(self, key: str) -> ObjectInfo | None:
+    def head(self, key: str) -> base.ObjectInfo | None:
         try:
-            meta = self.client.head_object(Bucket=self.bucket, Key=check_key(key))
+            meta = self.client.head_object(Bucket=self.bucket, Key=base.check_key(key))
         except ClientError as exc:
             if exc.response.get("Error", {}).get("Code") in ("404", "NoSuchKey", "NotFound"):
                 return None
             raise
         size, content_type = meta["ContentLength"], meta["ContentType"]
-        return ObjectInfo(key, size, content_type, meta.get("Metadata", {}))
+        return base.ObjectInfo(key, size, content_type, meta.get("Metadata", {}))
 
     def delete(self, key: str) -> None:
-        self.client.delete_object(Bucket=self.bucket, Key=check_key(key))
+        self.client.delete_object(Bucket=self.bucket, Key=base.check_key(key))
 
     def presign_get(
         self, key: str, *, expires_in: int, filename: str, content_type: str,
@@ -48,23 +48,28 @@ class S3CompatibleStorage:
         """`content_type` sale de `files.mime_type` (magic bytes), no del objeto subido."""
         params = {
             "Bucket": self.bucket,
-            "Key": check_key(key),
+            "Key": base.check_key(key),
             "ResponseContentType": content_type,
-            "ResponseContentDisposition": disposition_header(filename, disposition, content_type),
+            "ResponseContentDisposition": base.disposition_header(
+                filename, disposition, content_type
+            ),
         }
         return self.client.generate_presigned_url(  # type: ignore[no-any-return]
-            "get_object", Params=params, ExpiresIn=check_expiry(expires_in)
+            "get_object", Params=params, ExpiresIn=base.check_expiry(expires_in)
         )
 
     def presign_put(
-        self, key: str, *, expires_in: int, content_type: str, max_bytes: int
-    ) -> PresignedUpload:
+        self, key: str, *, expires_in: int, content_type: str, content_length: int,
+        max_bytes: int,
+    ) -> base.PresignedUpload:  # fmt: skip
+        """`ContentLength` firmado (verificado en Garage real: otro tamaño → 403)."""
+        headers = base.upload_headers(content_type, content_length, max_bytes)
+        params = {"Bucket": self.bucket, "Key": base.check_key(key), "ContentType": content_type,
+                  "ContentLength": content_length}  # fmt: skip
         url = self.client.generate_presigned_url(
-            "put_object",
-            Params={"Bucket": self.bucket, "Key": check_key(key), "ContentType": content_type},
-            ExpiresIn=check_expiry(expires_in),
+            "put_object", Params=params, ExpiresIn=base.check_expiry(expires_in)
         )
-        return PresignedUpload(url, {"Content-Type": content_type}, max_bytes)
+        return base.PresignedUpload(url, headers, content_length)
 
 
 def from_settings() -> S3CompatibleStorage:

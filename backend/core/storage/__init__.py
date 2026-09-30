@@ -15,10 +15,7 @@ from django.utils.module_loading import import_string
 MAX_PRESIGN_SECONDS = 300
 PURPOSES = frozenset({"message-media", "quote-pdf", "import", "avatar", "kb", "attachment"})
 _UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
-KEY = re.compile(
-    rf"org/{_UUID}/(?:{'|'.join(sorted(PURPOSES))})/[0-9]{{4}}/(?:0[1-9]|1[0-2])/{_UUID}"
-)
-# Solo estos tipos pueden servirse `inline`; el resto, siempre como descarga (ADR-008).
+KEY = re.compile(rf"org/{_UUID}/(?:{'|'.join(PURPOSES)})/[0-9]{{4}}/(?:0[1-9]|1[0-2])/{_UUID}")
 INLINE_TYPES = frozenset({"image/png", "image/jpeg", "image/gif", "image/webp", "application/pdf"})
 
 
@@ -31,12 +28,10 @@ class ObjectInfo:
 
 
 @dataclass(frozen=True, slots=True)
-class PresignedUpload:
-    """PUT firmado con `Content-Type`; el tamaño real se verifica con `head` al finalizar."""
-
+class PresignedUpload:  # `headers` (tipo y tamaño) van firmados: el cliente los envía tal cual
     url: str
     headers: dict[str, str]
-    max_bytes: int
+    content_length: int
 
 
 class ObjectStorageService(Protocol):
@@ -52,8 +47,9 @@ class ObjectStorageService(Protocol):
         disposition: str = "attachment",
     ) -> str: ...  # fmt: skip
     def presign_put(
-        self, key: str, *, expires_in: int, content_type: str, max_bytes: int
-    ) -> PresignedUpload: ...
+        self, key: str, *, expires_in: int, content_type: str, content_length: int,
+        max_bytes: int,
+    ) -> PresignedUpload: ...  # fmt: skip
 
 
 def tenant_key(
@@ -70,6 +66,13 @@ def check_key(key: str) -> str:
     if not KEY.fullmatch(key):
         raise ValueError("Clave de storage inválida")
     return key
+
+
+def upload_headers(content_type: str, content_length: int, max_bytes: int) -> dict[str, str]:
+    """Tamaño declarado validado contra la política ANTES de emitir la URL."""
+    if not 0 < content_length <= max_bytes:
+        raise ValueError(f"content_length debe estar entre 1 y max_bytes ({max_bytes})")
+    return {"Content-Type": content_type, "Content-Length": str(content_length)}
 
 
 def check_expiry(expires_in: int) -> int:

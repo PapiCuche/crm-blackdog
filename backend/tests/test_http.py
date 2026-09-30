@@ -21,47 +21,25 @@ def resolving_to(*ips: str) -> Any:
 
 
 @ALLOWED
-@pytest.mark.parametrize(
+@pytest.mark.parametrize(  # sin TLS, credenciales, fuera de allowlist, sufijo, IP, file, puerto
     "url",
-    [
-        "http://api.example.com/x",  # sin TLS
-        "https://user:pw@api.example.com/x",  # credenciales en la URL
-        "https://evil.example.com/x",  # fuera de la allowlist
-        "https://api.example.com.evil.test/x",  # sufijo engañoso
-        "https://169.254.169.254/latest/meta-data",  # IP literal no permitida
-        "file:///etc/passwd",
-        "https://api.example.com:22/x",  # otro puerto en un host permitido
-    ],
+    "http://api.example.com/x https://user:pw@api.example.com/x https://evil.example.com/x "
+    "https://api.example.com.evil.test/x https://169.254.169.254/latest/meta-data "
+    "file:///etc/passwd https://api.example.com:22/x".split(),
 )
 def test_urls_outside_the_policy_are_rejected(url: str) -> None:
     with pytest.raises(http.BlockedDestination):
         http.request("GET", url)
 
 
-@pytest.mark.parametrize(
-    "ip",
-    [
-        "127.0.0.1",
-        "10.0.0.8",
-        "172.16.0.1",
-        "192.168.1.1",
-        "169.254.169.254",
-        "100.64.0.1",
-        "0.0.0.0",  # noqa: S104
-        "::1",
-        "fc00::1",
-        "fe80::1",
-        "::ffff:127.0.0.1",
-        "224.0.0.1",
-        "64:ff9b::a9fe:a9fe",  # NAT64 → 169.254.169.254
-        "::7f00:1",  # IPv4 compatible
-        "::ffff:0:7f00:1",  # SIIT
-        "fec0::1",  # site-local
-        "192.88.99.1",
-        "2002:a9fe:a9fe::1",  # 6to4 → metadata
-        "2001:0:4136:e378:8000:63bf:3fff:fdd2",  # Teredo
-    ],  # fmt: skip
-)
+BLOCKED_IPS = (  # privadas, loopback, link-local, CGNAT, NAT64, compatibles, SIIT, 6to4, Teredo
+    "127.0.0.1 10.0.0.8 172.16.0.1 192.168.1.1 169.254.169.254 100.64.0.1 0.0.0.0 ::1 fc00::1 "
+    "fe80::1 ::ffff:127.0.0.1 224.0.0.1 64:ff9b::a9fe:a9fe ::7f00:1 ::ffff:0:7f00:1 fec0::1 "
+    "192.88.99.1 2002:a9fe:a9fe::1 2001:0:4136:e378:8000:63bf:3fff:fdd2"
+).split()
+
+
+@pytest.mark.parametrize("ip", BLOCKED_IPS)
 def test_private_and_special_addresses_are_blocked(
     ip: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -91,6 +69,14 @@ def test_public_resolution_pins_the_ip_and_no_redirects_are_followed(
         http.request("GET", "https://API.example.com/x")  # el host se compara sin mayúsculas
     assert calls[0]["redirect"] is False and not {"timeout", "retries"} & set(calls[0])
     assert http._manager.pool_classes_by_scheme == {"https": http._GuardedPool}  # sin http
+
+
+@ALLOWED
+@pytest.mark.parametrize("name", ["Host", "HOST", "hOsT"])
+def test_host_header_cannot_be_overridden(name: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(socket, "getaddrinfo", lambda *a, **kw: pytest.fail("sin red"))
+    with pytest.raises(http.BlockedDestination):
+        http.request("GET", "https://api.example.com/x", headers={name: "169.254.169.254"})
 
 
 def test_connection_goes_to_the_pinned_ip_but_tls_keeps_the_hostname(
