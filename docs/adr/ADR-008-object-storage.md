@@ -23,7 +23,8 @@ class ObjectStorageService(Protocol):
     def head(key) -> ObjectInfo | None
     def delete(key) -> None
     def presign_get(key, *, expires_in, filename, disposition="attachment") -> str
-    def presign_put(key, *, expires_in, content_type, max_bytes) -> PresignedUpload   # opcional
+    def presign_put(key, *, expires_in, content_type, content_length, max_bytes) -> PresignedUpload
+        # F1-08: Content-Length firmado (content_length ≤ max_bytes), verificado contra Garage
 ```
 
 - **Una única implementación** inicial, `S3CompatibleStorage` (boto3), configurada con `endpoint_url`, `region`, `bucket`, credenciales y `addressing_style`. Cubre S3, R2 y MinIO. `InMemoryStorage` para tests.

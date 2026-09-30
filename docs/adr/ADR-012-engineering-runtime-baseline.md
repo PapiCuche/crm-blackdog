@@ -57,6 +57,8 @@ Sin rangos: estas son las versiones que se escriben en `pyproject.toml`, `.pytho
 | pytest 9.1.1 / pytest-django 4.14.0 | — | ✅ classifier |
 | djangorestframework 3.18.1, drf-spectacular 0.30.0, uvicorn 0.54.0, redis 8.1.0, structlog 26.1.0, argon2-cffi 25.1.0 | — | ✅ classifier |
 | **structlog 26.1.0** (fijada en F1-07) | 2026-06-06 | ✅ classifier 3.14, `py.typed`. Validada el **2026-09-30** (PyPI). Uso: logs JSON estructurados (ADR-011) |
+| **boto3 / botocore 1.43.105** (fijadas en F1-08) | 2026-09-29 | ✅ classifier 3.14 (sin `py.typed`: mypy las trata como `Any`). Validadas el **2026-09-30** (PyPI) y con la suite de contrato contra Garage v2.4.1. Uso: storage S3-compatible, solo en `core.storage` |
+| **urllib3 2.8.0** (fijada en F1-08) | 2026-09-15 | ✅ classifier 3.14, `py.typed`. Validada el **2026-09-30** (PyPI; compatible con botocore `<3`). Uso: cliente HTTP saliente anti-SSRF, solo en `core.http` |
 | **sentry-sdk 2.69.1** (fijada en F1-07) | 2026-09-08 | ✅ classifier 3.14, `py.typed`. Validada el **2026-09-30** (PyPI; la última publicada ese día era 2.71.0, pero se fija 2.69.1 por decisión del PR de F1-07, sin vulnerabilidades en `pip-audit`). Uso: reporte de errores opcional (`SENTRY_DSN`), solo dentro de `core.observability` |
 
 - **Restricción conocida (tipado, no runtime):** la serie `django-stubs 5.2.x` (última 5.2.9, 2026-01-20; mypy 1.13–1.19) declara probado Python 3.10–3.13, aunque se instala en 3.14 (`requires_python >=3.10`). La serie 6.x (6.1.1) sí declara Python 3.14 pero solo tiene **soporte parcial** de Django 5.2. **Decisión para F1-02:** usar `django-stubs 5.2.9` + `mypy 1.19.1` (stubs exactos de la API de 5.2) y verificar en CI que `mypy` corre sobre 3.14. Si falla, pasar a `django-stubs 6.0.x` (parcial 5.2) y documentarlo. **No es motivo para bajar a Python 3.13.**
@@ -128,7 +130,7 @@ Sin rangos: estas son las versiones que se escriben en `pyproject.toml`, `.pytho
 
 **Fallback documentado:** SeaweedFS (última versión con imagen publicada) si los tests de contrato de F1-08 revelan una incompatibilidad bloqueante de Garage con boto3.
 
-**Riesgo a verificar en F1-08:** las versiones recientes de boto3/botocore envían por defecto *checksums* de integridad en `PutObject` y multipart (`x-amz-checksum-*`), y algunos servicios S3-compatibles los rechazan. Si Garage los rechaza, se configura el cliente con `request_checksum_calculation="when_required"` y `response_checksum_validation="when_required"`, que también es la configuración recomendada para proveedores compatibles como R2. Se documentará en el PR.
+**Resultado F1-08 (2026-09-30):** Garage v2.4.1 **acepta** los checksums por defecto de boto3 1.43.105 (`put_object`, multipart y `get_object` verificados contra el contenedor). Aun así el cliente usa `when_required`, por portabilidad a R2 y a otros servicios S3-compatibles; la suite de contrato pasa completa con esa configuración. **Riesgo que se verificaba:** las versiones recientes de boto3/botocore envían por defecto *checksums* de integridad en `PutObject` y multipart (`x-amz-checksum-*`), y algunos servicios S3-compatibles los rechazan. Si Garage los rechaza, se configura el cliente con `request_checksum_calculation="when_required"` y `response_checksum_validation="when_required"`, que también es la configuración recomendada para proveedores compatibles como R2. Se documentará en el PR.
 
 **Fuera de F1-01:** Garage **no** se añade a `compose.yaml` en este PR; se añade en **F1-08 (object storage)**.
 

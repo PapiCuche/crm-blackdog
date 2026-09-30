@@ -14,6 +14,7 @@ INSTALLED_APPS = [
     "core",
     "apps.organizations",
     "apps.audit",
+    "apps.files",
 ]
 
 MIDDLEWARE = [
@@ -69,6 +70,16 @@ LOGGING = {
         "celery.app.trace": {"level": "WARNING"},  # "succeeded: <repr(resultado)>"
     },
 }
+# Object storage S3-compatible (ADR-008): credenciales solo por entorno.
+STORAGE_BACKEND = env.optional("STORAGE_BACKEND", "s3")  # s3 | memory (tests)
+STORAGE_ENDPOINT_URL = env.optional("STORAGE_ENDPOINT_URL", "")  # vacío = AWS S3
+STORAGE_REGION = env.optional("STORAGE_REGION", "us-east-1")
+STORAGE_BUCKET = env.optional("STORAGE_BUCKET", "")
+STORAGE_ACCESS_KEY_ID = env.optional("STORAGE_ACCESS_KEY_ID", "")
+STORAGE_SECRET_ACCESS_KEY = env.optional("STORAGE_SECRET_ACCESS_KEY", "")
+STORAGE_ADDRESSING_STYLE = env.optional("STORAGE_ADDRESSING_STYLE", "path")
+# HTTP saliente (security-boundaries B9): allowlist exacta de hosts; vacía = nada permitido.
+HTTP_ALLOWED_HOSTS: list[str] = env.csv_list("HTTP_ALLOWED_HOSTS")
 # Reporte de errores (ADR-011 §3): sin SENTRY_DSN, NoopReporter (sin red).
 SENTRY_DSN = env.optional("SENTRY_DSN", "")
 SENTRY_ENVIRONMENT = env.optional("SENTRY_ENVIRONMENT", "")

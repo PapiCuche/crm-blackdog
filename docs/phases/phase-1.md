@@ -114,6 +114,10 @@ El log de acceso de uvicorn no pasa por el redactor, porque incluye el query str
 - Celery no instala su propio logging (receptor de `setup_logging`).
 - Pendiente: el patrón de reprs de dicts (`'password': '…'`) en `core.redaction` cubre claves de secretos, pero no el contenido de mensajes dentro de un texto libre.
 
+### OBS-F1-08-2 — Cliente boto3 por llamada
+`storage()` crea un cliente boto3 por llamada. Reutilizarlo cuando existan consumidores reales.
+- Resuelto en F1-08: production exige `https` y sin credenciales en `STORAGE_ENDPOINT_URL`; el tamaño de las subidas firmadas va en la firma.
+
 ### OBS-F1-02-1 — Dependabot para Python
 `.github/dependabot.yml` todavía solo cubre `github-actions`. Hay que añadir el ecosistema de Python (uv/pip) sobre `backend/`, para recibir alertas y PRs de actualización de las dependencias fijadas en `uv.lock`.
 - No bloqueante. Se hará en un `chore` pequeño y separado.

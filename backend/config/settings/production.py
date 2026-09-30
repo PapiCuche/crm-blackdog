@@ -1,6 +1,7 @@
 """Producción. Sin valores por defecto inseguros: falla al arrancar si falta algo crítico."""
 
 import os
+from urllib.parse import urlsplit
 
 from django.core.exceptions import ImproperlyConfigured
 
@@ -26,6 +27,13 @@ if not ALLOWED_HOSTS:
 if SECRET_KEY.startswith("django-insecure") or len(SECRET_KEY) < 50:
     raise ImproperlyConfigured(
         "DJANGO_SECRET_KEY de production debe ser aleatoria y de 50+ caracteres"
+    )
+
+# ADR-008: storage con TLS. Vacío = AWS por defecto; explícito = https y sin credenciales.
+_storage = urlsplit(env.optional("STORAGE_ENDPOINT_URL", ""))
+if _storage.geturl() and (_storage.scheme != "https" or _storage.username or _storage.password):
+    raise ImproperlyConfigured(
+        "STORAGE_ENDPOINT_URL de production debe ser https y sin credenciales"
     )
 
 # Loopback para las sondas locales (HEALTHCHECK del contenedor): se añade DESPUÉS de validar,

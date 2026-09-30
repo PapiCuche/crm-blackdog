@@ -13,6 +13,7 @@ BASE_ENV: dict[str, str | None] = {
     "DATABASE_URL": "postgres://crm_app:secret@db:5432/crm",
     "DATABASE_MIGRATOR_URL": None,
     "CRM_MIGRATOR_PASSWORD": None,
+    "STORAGE_ENDPOINT_URL": None,
 }
 
 
@@ -81,6 +82,18 @@ def test_production_refuses_migrator_credentials(
     message = str(excinfo.value)
     assert variable in message
     assert MIGRATOR_SECRET not in message
+
+
+@pytest.mark.parametrize(
+    "endpoint", ["http://s.example.com", "https://u:" + "p" + "@s.example.com"]
+)
+def test_production_storage_endpoint_requires_tls(
+    monkeypatch: pytest.MonkeyPatch, endpoint: str
+) -> None:
+    for valid in ("https://storage.example.com", ""):  # vacío = AWS por defecto
+        load_production(monkeypatch, STORAGE_ENDPOINT_URL=valid)
+    with pytest.raises(ImproperlyConfigured):
+        load_production(monkeypatch, STORAGE_ENDPOINT_URL=endpoint)
 
 
 def load_migrate(monkeypatch: pytest.MonkeyPatch, **env: str | None) -> object:

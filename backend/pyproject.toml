@@ -5,12 +5,14 @@ description = "CRM BLACKDOG backend (Django, ASGI)"
 readme = "README.md"
 requires-python = "==3.14.*"
 dependencies = [
+    "boto3==1.43.105",
     "celery==5.6.3",
     "channels==4.3.2",
     "django==5.2.17",
     "psycopg[binary]==3.3.6",
     "sentry-sdk==2.69.1",
     "structlog==26.1.0",
+    "urllib3==2.8.0",
     "uvicorn==0.54.0",
 ]
 
@@ -48,7 +50,7 @@ plugins = ["mypy_django_plugin.main"]
 exclude = ["^\\.venv/"]
 
 [[tool.mypy.overrides]]  # sin py.typed (F1-04); types-channels exige django-stubs 6
-module = ["celery.*", "kombu.*", "channels.*"]
+module = ["celery.*", "kombu.*", "channels.*", "boto3.*", "botocore.*"]
 follow_imports = "skip"  # tipos Any: sin stubs compatibles
 ignore_missing_imports = true
 
@@ -77,12 +79,24 @@ source_modules = ["core"]
 forbidden_modules = ["config", "apps"]
 
 [[tool.importlinter.contracts]]
-name = "Capas (module-dependencies §1): organizations (L2) > audit (L1) > core (L0)"
+name = "Capas (module-dependencies §1): organizations (L2) > audit | files (L1) > core (L0)"
 type = "layers"
-layers = ["apps.organizations", "apps.audit", "core"]
+layers = ["apps.organizations", "apps.audit | apps.files", "core"]
 
 [[tool.importlinter.contracts]]
 name = "sentry_sdk solo dentro de core.observability (module-dependencies §5)"
 type = "protected"
 protected_modules = ["sentry_sdk"]
 allowed_importers = ["core.observability"]
+
+[[tool.importlinter.contracts]]
+name = "boto3/botocore solo dentro de core.storage (ADR-008)"
+type = "protected"
+protected_modules = ["boto3", "botocore"]
+allowed_importers = ["core.storage"]
+
+[[tool.importlinter.contracts]]
+name = "HTTP saliente solo vía core.http (allowlist anti-SSRF)"
+type = "protected"
+protected_modules = ["urllib3"]  # requests/httpx/urllib.request/http.client: tests/test_http.py
+allowed_importers = ["core.http"]

@@ -36,6 +36,26 @@ services:
       timeout: 3s
       retries: 20
 
+  # S3 local (ADR-008, ADR-012 §6): un nodo, bucket privado creado al arrancar.
+  garage:
+    image: dxflrs/garage:v2.4.1
+    command: ["/garage", "server", "--single-node", "--default-bucket"]
+    environment:
+      GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:?definir en infra/env/.env}
+      GARAGE_DEFAULT_ACCESS_KEY: ${STORAGE_ACCESS_KEY_ID:?definir en infra/env/.env}
+      GARAGE_DEFAULT_SECRET_KEY: ${STORAGE_SECRET_ACCESS_KEY:?definir en infra/env/.env}
+      GARAGE_DEFAULT_BUCKET: ${STORAGE_BUCKET:-crm-local}
+    ports:
+      - "127.0.0.1:3900:3900"
+    volumes:
+      - ./garage/garage.toml:/etc/garage.toml:ro
+      - garagedata:/var/lib/garage
+    healthcheck:
+      test: ["CMD", "/garage", "status"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
   mailpit:
     image: axllent/mailpit:v1.31.3
     ports:
@@ -45,3 +65,4 @@ services:
 volumes:
   pgdata:
   redisdata:
+  garagedata:

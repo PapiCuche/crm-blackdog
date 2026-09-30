@@ -89,6 +89,12 @@ jobs:
         run: |
           DJANGO_SECRET_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(64))')" \
             uv run python manage.py check --deploy --fail-level WARNING
+      - name: Compose válido (docker compose config)
+        env:  # valores ficticios: .env.example deja vacíos los secretos de Garage
+          GARAGE_RPC_SECRET: ci-config-only
+          STORAGE_ACCESS_KEY_ID: ci-config-only
+          STORAGE_SECRET_ACCESS_KEY: ci-config-only
+        run: docker compose -f ../infra/docker/compose.yaml --env-file ../infra/env/.env.example config -q
       - name: Migraciones sincronizadas
         env:
           DJANGO_SETTINGS_MODULE: config.settings.test
@@ -138,8 +144,26 @@ jobs:
           CRM_MIGRATOR_PASSWORD: migrator-ci
           CRM_APP_PASSWORD: app-ci
         run: sh ../infra/docker/postgres/init/01-roles.sh
+      # ADR-012 §6: Garage v2.4.1 de un nodo con credenciales generadas por ejecución (enmascaradas).
+      - name: Garage v2.4.1 (contrato S3)
+        run: |
+          set -euo pipefail
+          key="GK$(openssl rand -hex 16)"; secret="$(openssl rand -hex 32)"
+          echo "::add-mask::$secret"
+          { echo "STORAGE_ACCESS_KEY_ID=$key"; echo "STORAGE_SECRET_ACCESS_KEY=$secret"; } >> "$GITHUB_ENV"
+          docker run -d --name garage -p 127.0.0.1:3900:3900 \
+            -v "$GITHUB_WORKSPACE/infra/docker/garage/garage.toml:/etc/garage.toml:ro" \
+            -e GARAGE_RPC_SECRET="$(openssl rand -hex 32)" -e GARAGE_DEFAULT_ACCESS_KEY="$key" \
+            -e GARAGE_DEFAULT_SECRET_KEY="$secret" -e GARAGE_DEFAULT_BUCKET=crm-ci \
+            dxflrs/garage:v2.4.1 /garage server --single-node --default-bucket
+          for _ in $(seq 1 30); do docker exec garage /garage bucket info crm-ci >/dev/null 2>&1 && break; sleep 1; done
+          docker exec garage /garage bucket info crm-ci >/dev/null
+          docker exec garage /garage key allow --create-bucket "$key" >/dev/null  # test create_bucket
       - name: pytest (PostgreSQL 18.6; migra crm_migrator, tests como crm_app)
         env:
+          STORAGE_ENDPOINT_URL: http://127.0.0.1:3900
+          STORAGE_REGION: garage
+          STORAGE_BUCKET: crm-ci
           DATABASE_URL: postgres://crm_app:app-ci@localhost:5432/crm
           DATABASE_MIGRATOR_URL: postgres://crm_migrator:migrator-ci@localhost:5432/crm
         run: uv run pytest
