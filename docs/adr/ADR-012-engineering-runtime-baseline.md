@@ -27,13 +27,13 @@ También hay que elegir el emulador S3 local (D-ENG-2): MinIO dejó de publicar 
 | PostgreSQL | **18.6** (imagen `postgres:18.6`) | minor vigente | Soportada hasta 2030-11-14 | postgresql.org/support/versioning · Docker Hub `library/postgres` |
 | Redis | **8.8.3** (imagen `redis:8.8.3-alpine`) | 2026-09-17 | Línea 8.8 recibiendo parches (8.8.3 publicada junto con 8.10.2) | github.com/redis/redis/releases · Docker Hub `library/redis` |
 | Node.js | **24.21.0** LTS (*Krypton*) | 2026-09-07 | Active LTS hasta 2026-10-20; Maintenance hasta **2028-04-30** | nodejs.org/dist/index.json · github.com/nodejs/Release (schedule.json) |
-| Next.js | **16.3.6** (Active LTS) | 2026-09-22 | Última publicada; security release **16.3.7 anunciada para 2026-09-30** (ver §4) | npm `next` · nextjs.org/blog · nextjs.org/support-policy · GitHub advisories vercel/next.js |
-| React | **19.2.8** | 2026-07-21 | Versión que empareja `create-next-app` 16.3.6; incluye el fix de GHSA-wx67-qw84-cm4g | npm `react` · `packages/create-next-app/templates/index.ts@v16.3.6` · GitHub advisories facebook/react |
+| Next.js | **16.3.8** (Active LTS; fijada en F1-09) | 2026-09-30 | Security release que corrige 7 advisories del 2026-09-30; **2 más (1 crítica, 1 alta) siguen pendientes upstream** (§4.1, OBS-F1-09-2). 16.3.6 y 16.3.7 quedan descartadas | npm `next` · nextjs.org/blog · nextjs.org/support-policy · GitHub advisories vercel/next.js |
+| React | **19.2.8** | 2026-07-21 | Versión que empareja `create-next-app` 16.3.8 (`nextjsReactPeerVersion`); incluye el fix de GHSA-wx67-qw84-cm4g; revalidada el 2026-09-30 | npm `react` · `packages/create-next-app/templates/index.ts@v16.3.6` · GitHub advisories facebook/react |
 | React DOM | **19.2.8** | 2026-07-21 | Igual que React | npm `react-dom` |
-| @types/react | **19.2.18** | 2026-07-30 | Versión usada por el propio monorepo de Next.js v16.3.6 | npm `@types/react` · `package.json@v16.3.6` |
+| @types/react | **19.2.18** | 2026-07-30 | Versión usada por el propio monorepo de Next.js v16.3.8 (revalidada 2026-09-30) | npm `@types/react` · `package.json@v16.3.8` |
 | @types/react-dom | **19.2.7** | 2026-09-03 | Último patch 19.2.x | npm `@types/react-dom` |
-| TypeScript | **6.0.3** | 2026-04-16 | Next.js 16.3.6 instala `typescript@^6.0.0` y su monorepo usa 6.0.2 | npm `typescript` · `packages/next/src/lib/verify-typescript-setup.ts@v16.3.6` |
-| pnpm | **12.6.0** | 2026-09-22 | dist-tag `latest` / release "Latest" en GitHub | npm `pnpm` (dist-tags) · github.com/pnpm/pnpm/releases |
+| TypeScript | **6.0.3** | 2026-04-16 | Next.js 16.3.8 instala `typescript@^6.0.0` y su monorepo usa 6.0.2 | npm `typescript` · `packages/next/src/lib/verify-typescript-setup.ts@v16.3.6` |
+| pnpm | **12.8.1** (F1-09) | 2026-09-28 | Promovida a dist-tag `latest` el 2026-09-30 (antes en `next-12`, ver §5) | npm `pnpm` (dist-tags) · github.com/pnpm/pnpm/releases |
 | uv | **0.12.19** | 2026-09-25 | Última release estable | github.com/astral-sh/uv/releases · pypi.org/project/uv |
 | Mailpit | **v1.31.3** (imagen `axllent/mailpit:v1.31.3`) | 2026-09-27 | Última release | github.com/axllent/mailpit/releases · Docker Hub |
 | Emulador S3 local | **Garage v2.4.1** (imagen `dxflrs/garage:v2.4.1`) | 2026-09-08 | Última release estable | git.deuxfleurs.fr/Deuxfleurs/garage (releases) · garagehq.deuxfleurs.fr · Docker Hub |
@@ -85,19 +85,43 @@ Sin rangos: estas son las versiones que se escriben en `pyproject.toml`, `.pytho
 - **Node 24.21.0 LTS** y no 22 ni 26:
   - Node 22 pasa a EOL el 2027-04-30, dentro de la vida del MVP.
   - Node 26 todavía es *Current*: entra en LTS el 2026-10-28, y no se usa *Current* en producción.
-  - Node 24 tiene soporte hasta 2028-04-30 y cumple `engines.node >=20.9.0` de Next.js 16.3.6.
+  - Node 24 tiene soporte hasta 2028-04-30 y cumple `engines.node >=20.9.0` de Next.js 16.3.8.
   - **Revisión:** evaluar Node 26 cuando lleve ≥ 2 meses en LTS (≈ enero de 2027).
 - **Next.js 16.3.x Active LTS.** Sin canary, beta, rc ni preview.
 - **Estado de seguridad a la fecha de cierre (2026-09-28):**
-  - **16.3.6** es la última versión publicada y corrige el advisory crítico GHSA-vcvr-r3jv-pc5j (RCE en `next/og`, 2026-09-22).
+  - *(Situación al 2026-09-28; actualizada en §4.1.)* **16.3.6** era la última versión publicada y corregía el advisory crítico GHSA-vcvr-r3jv-pc5j (RCE en `next/og`, 2026-09-22).
   - Vercel anunció el 2026-09-23 una **security release programada para el 2026-09-30** (16.3.7 y 15.5.27) que corregirá **nueve vulnerabilidades** (una crítica, dos altas, cinco medias y una baja). **16.3.7 no está publicada**, así que no se fija.
   - **Consecuencia obligatoria:** 16.3.6 tiene vulnerabilidades conocidas aún no divulgadas. **El frontend (F1-09) no se crea con 16.3.6 si 16.3.7 ya existe**: F1-09 debe fijar la última patch 16.3.x publicada a esa fecha (actualizando esta tabla en el mismo PR). Hoy no hay código de frontend, así que no hay exposición.
-- **React 19.2.8 y no 19.3.0:** 19.3.0 (2026-09-09) es una minor más nueva, pero `create-next-app` 16.3.6 empareja `react@19.2.8`, que es la combinación probada por Next.js. 19.2.8 incluye el fix del último advisory de React Server Components (GHSA-wx67-qw84-cm4g). Se adopta 19.3 cuando Next.js la empareje.
-- **TypeScript 6.0.3 y no 7.0.2:** Next.js 16.3.6 hace el type-check con la **API JS** de TypeScript (`typescript/lib/typescript.js`) y, si falta, instala `typescript@^6.0.0`. TypeScript 7 (el compilador nativo) no ofrece esa API y provoca un error salvo en el modo CLI. Se usa `strict: true` y `noUncheckedIndexedAccess: true` (se configura en F1-09).
+- **React 19.2.8 y no 19.3.0:** 19.3.0 (2026-09-09) es una minor más nueva, pero `create-next-app` 16.3.8 (como 16.3.6) empareja `react@19.2.8`, que es la combinación probada por Next.js. 19.2.8 incluye el fix del último advisory de React Server Components (GHSA-wx67-qw84-cm4g). Se adopta 19.3 cuando Next.js la empareje.
+- **TypeScript 6.0.3 y no 7.0.2:** Next.js 16.3.x hace el type-check con la **API JS** de TypeScript (`typescript/lib/typescript.js`) y, si falta, instala `typescript@^6.0.0`. TypeScript 7 (el compilador nativo) no ofrece esa API y provoca un error salvo en el modo CLI. Se usa `strict: true` y `noUncheckedIndexedAccess: true` (se configura en F1-09).
+
+### 4.1 Revalidación de F1-09 (2026-09-30, OBS-F1-01-1)
+
+Combinación revalidada **junta** el día de inicio de F1-09 contra npm, los GitHub advisories y el propio repositorio de Next.js:
+
+| Paquete | Versión | Evidencia |
+|---|---|---|
+| next / eslint-config-next | **16.3.8** | Publicada el 2026-09-30 16:13 UTC; es la versión más reciente. Sus release notes enumeran los 7 advisories del día: 1 alta (SSRF en Image Optimization, GHSA-cjq9-62q9-8jv4), 5 medias y 1 baja. 16.3.7 (2026-09-29) solo era un backport sin fixes de seguridad. **Pendiente:** según el post oficial "Upcoming Next.js September Security Release" (actualizado el 2026-09-30), quedan **2 vulnerabilidades (1 crítica, 1 alta)** a la espera de coordinación upstream, sin fecha, para "una versión posterior" (OBS-F1-09-2) |
+| react / react-dom | **19.2.8** | `create-next-app@16.3.8` fija `nextjsReactPeerVersion = "19.2.8"`. Último 19.2.x; parchea el último advisory de RSC (GHSA-wx67-qw84-cm4g). 19.3.0 no es la pareja oficial |
+| @types/react | **19.2.18** | Versión del monorepo de Next.js v16.3.8 |
+| @types/react-dom | **19.2.7** | Último 19.2.x (el monorepo usa 19.2.4) |
+| typescript | **6.0.3** | Next 16.3.8 instala `^6`; TypeScript 7 no ofrece la API JS (§4) |
+| pnpm | **12.8.1** | `latest` en npm |
+| Node.js | **24.21.0** | Último 24.x (sin security release pendiente); `.nvmrc` |
+
+Tooling del frontend fijado en el mismo PR (npm, 2026-09-30):
+- tailwindcss / @tailwindcss/postcss 4.3.3, @tanstack/react-query 5.104.0, next-intl 4.14.8;
+- orval 8.38.0 (8.39.0 tenía menos de 24 h y no corrige nada de seguridad), con `undici` forzado a 7.29.1: la 7.29.0 transitiva tenía advisories altos (solo en dev);
+- eslint 10.11.0 con @eslint/compat 2.1.1. ESLint 9.x está en EOL desde el 2026-08-06, pero los plugins de eslint-config-next (eslint-plugin-react 7.37.5, jsx-a11y 6.10.2, import 2.32.0) aún declaran `eslint ≤ 9`, y la capa de compatibilidad oficial restaura la API que usan;
+- prettier 3.9.9, vitest 4.1.11 (el salto de major a vitest 5, publicado el 2026-09-03, se difiere a propósito: F1-09 no lo necesita), vite 8.3.1, jsdom 30.1.1, geist 1.7.2.
+
+**pnpm 12:**
+- `minimumReleaseAge: 1440` con `minimumReleaseAgeStrict: true` (ninguna excepción automática). Solo Next 16.3.8 y sus binarios quedan exceptuados, por ser security release (`frontend/pnpm-workspace.yaml`);
+- los scripts de instalación de dependencias están denegados explícitamente (`allowBuilds: false`).
 
 ### 5. Gestores de paquetes y herramientas
 
-- **pnpm 12.6.0:** es el dist-tag `latest` y la release "Latest" en GitHub. Las versiones 12.7.0, 12.8.0 y 12.8.1 están publicadas bajo el canal `next-12`, aún no promovidas a `latest`; se adoptarán cuando pnpm las promueva. Se fija con `"packageManager": "pnpm@12.6.0"` en `package.json`. En CI, la acción oficial de pnpm lee ese campo. En local, se instala con el método oficial vigente (standalone o `npm`). **No se depende de Corepack:** la documentación oficial de pnpm ya no lo presenta como método de instalación.
+- **pnpm 12.8.1** (F1-09; antes 12.6.0): dist-tag `latest` desde el 2026-09-30. Se fija con `"packageManager": "pnpm@12.8.1"` en `frontend/package.json`; en CI, `pnpm/action-setup` lee ese campo. En local, se instala con el método oficial vigente (standalone o `npm`). **No se depende de Corepack:** la documentación oficial de pnpm ya no lo presenta como método de instalación.
 - **uv 0.12.19:** única estrategia de dependencias Python (entorno, `uv.lock`, instalación reproducible, CI). **No** se usan Poetry, Pipenv ni pip-tools. Se fija con `required-version` en `pyproject.toml` (y la versión del instalador en CI).
 
 ### 6. Emulador S3 local (D-ENG-2): **Garage v2.4.1**
@@ -145,10 +169,10 @@ En CI se ejecuta contra Garage; contra S3 y R2 solo de forma manual o programada
 
 ## Compatibility matrix (resumen)
 
-| | Python 3.14.7 | Django 5.2.17 | PostgreSQL 18.6 | Node 24.21.0 | Next 16.3.6 | React 19.2.8 | TS 6.0.3 |
+| | Python 3.14.7 | Django 5.2.17 | PostgreSQL 18.6 | Node 24.21.0 | Next 16.3.8 | React 19.2.8 | TS 6.0.3 |
 |---|---|---|---|---|---|---|---|
 | Django 5.2.17 | ✅ (≥ 5.2.8) | — | ✅ (psycopg 3.3.6) | — | — | — | — |
-| Next 16.3.6 | — | — | — | ✅ (`>=20.9.0`) | — | ✅ (peer `^19.0.0`; pareja oficial) | ✅ (instala `^6.0.0`) |
+| Next 16.3.8 | — | — | — | ✅ (`>=20.9.0`) | — | ✅ (peer `^19.0.0`; pareja oficial) | ✅ (instala `^6.0.0`) |
 | Celery 5.6 / Channels 4.3 | ✅ | ✅ | — | — | — | — | — |
 | django-stubs 5.2.9 + mypy 1.19.1 | ⚠️ probado hasta 3.13, instalable; verificar en F1-02 | ✅ | — | — | — | — | — |
 | Garage v2.4.1 | — | — | — | — | — | — | — |
@@ -178,10 +202,9 @@ En CI se ejecuta contra Garage; contra S3 y R2 solo de forma manual o programada
 | Django 6.1 | Menos soporte (dic-2027) y menos madurez; forzaría un upgrade durante el MVP |
 | Node 22 / Node 26 | 22 termina en abril de 2027; 26 aún es Current |
 | Next.js canary/preview o 15.5.x | Sin estabilidad garantizada / major anterior en Maintenance LTS |
-| React 19.3.0 | No es la pareja oficial de Next 16.3.6 |
+| React 19.3.0 | No es la pareja oficial de Next 16.3.8 |
 | TypeScript 7.0.2 | Sin la API JS que Next.js usa en el type-check por defecto |
-| TypeScript 5.9.3 | Next 16.3.6 recomienda e instala `^6.0.0` |
-| pnpm 12.8.1 | Canal `next-12`, aún no promovido a `latest` |
+| TypeScript 5.9.3 | Next 16.3.x recomienda e instala `^6.0.0` |
 | Corepack | No recomendado ya por la documentación oficial de pnpm; se usa `packageManager` + instalación oficial |
 | Poetry / Pipenv / pip-tools | Una sola estrategia (uv) |
 | MinIO | Sin imágenes publicadas (ADR-008) |

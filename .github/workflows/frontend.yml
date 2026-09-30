@@ -1,0 +1,65 @@
+name: frontend
+
+# F1-09: CI del frontend (docs/architecture/ci-pipeline.md §3). Ejecuta código del PR, así que
+# usa `pull_request` (nunca `pull_request_target`), permisos de solo lectura y acciones por SHA.
+on:
+  pull_request:
+    paths: &paths
+      - "frontend/**"
+      - "backend/openapi/schema.yaml" # el cliente generado depende del contrato
+      - ".nvmrc"
+      - ".github/workflows/frontend.yml"
+  push:
+    branches: [main]
+    paths: *paths
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  checks:
+    name: frontend checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: pnpm (versión de packageManager)
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: frontend/package.json
+      - name: Node.js (versión de .nvmrc, ADR-012)
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: Dependencias (lockfile congelado; scripts de instalación denegados)
+        run: pnpm install --frozen-lockfile
+      - name: Formato (Prettier)
+        run: pnpm format:check
+      - name: Lint (ESLint)
+        run: pnpm lint
+      - name: Tipos (tsc)
+        run: pnpm typecheck
+      - name: Tests (Vitest)
+        run: pnpm test --run
+      - name: Cliente API reproducible desde backend/openapi/schema.yaml (orval)
+        run: |
+          pnpm api:generate
+          git diff --exit-code -- src/lib/api
+          test -z "$(git status --porcelain -- src/lib/api)"
+      - name: Build (Next.js)
+        run: pnpm build
+      - name: Dependencias vulnerables (pnpm audit)
+        run: pnpm audit --prod --audit-level=high

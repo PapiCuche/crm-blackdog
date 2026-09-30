@@ -1,0 +1,19 @@
+{
+  "app": {
+    "name": "Black Dog CRM",
+    "skipToContent": "Saltar al contenido"
+  },
+  "health": {
+    "title": "Estado del sistema",
+    "backend": "Backend",
+    "ok": "Operativo",
+    "fail": "No disponible"
+  },
+  "shell": {
+    "navigation": "Navegación principal",
+    "home": "Inicio",
+    "organization": "Organización",
+    "workspaceTitle": "Espacio de trabajo",
+    "workspaceEmpty": "Los módulos de la organización aparecerán aquí."
+  }
+}

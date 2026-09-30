@@ -78,7 +78,7 @@ frontend/
 ├── .prettierrc
 ├── vitest.config.ts
 ├── Dockerfile
-├── messages/                 catálogos i18n (es.json, en.json) — next-intl o equivalente
+├── messages/                 catálogos i18n (next-intl): es-PE.json (F1-09); otros idiomas cuando se necesiten
 └── src/
     ├── app/
     │   ├── (auth)/login/…
@@ -152,6 +152,6 @@ Las versiones exactas y su política de actualización están en **[ADR-012](../
 |---|---|
 | Python / Django | 3.14.7 / 5.2.17 LTS |
 | PostgreSQL / Redis | 18.6 / 8.8.3 |
-| Node.js / Next.js / React / TypeScript | 24.21.0 LTS / 16.3.x Active LTS (16.3.6 a 2026-09-28; F1-09 usa la última patch publicada) / 19.2.8 / 6.0.3 |
-| Gestores de paquetes | `uv` 0.12.19 (Python), `pnpm` 12.6.0 (Node) |
+| Node.js / Next.js / React / TypeScript | 24.21.0 LTS / 16.3.8 (F1-09, ADR-012 §4.1) / 19.2.8 / 6.0.3 |
+| Gestores de paquetes | `uv` 0.12.19 (Python), `pnpm` 12.8.1 (Node) |
 | Local | Mailpit v1.31.3, Garage v2.4.1 (emulador S3, se añade en F1-08) |
