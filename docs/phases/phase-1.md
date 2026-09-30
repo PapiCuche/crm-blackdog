@@ -118,10 +118,11 @@ El log de acceso de uvicorn no pasa por el redactor, porque incluye el query str
 `storage()` crea un cliente boto3 por llamada. Reutilizarlo cuando existan consumidores reales.
 - Resuelto en F1-08: production exige `https` y sin credenciales en `STORAGE_ENDPOINT_URL`; el tamaño de las subidas firmadas va en la firma.
 
-### OBS-F1-09-2 — Next.js: 2 fixes de seguridad pendientes (1 crítica, 1 alta)
-El post oficial de Next.js del 2026-09-30 indica que 2 de las 9 vulnerabilidades anunciadas quedan pendientes de coordinación upstream y llegarán en "una versión posterior", sin fecha. Ninguna versión publicada las corrige: 16.3.8 es la más reciente.
-- Actualizar a la siguiente 16.3.x en cuanto se publique (política de ADR-012: ≤ 72 h si es crítica o alta).
-- El frontend no está desplegado. No usa `next/image` ni `use cache`.
+### OBS-F1-09-2 — Next.js: 2 fixes de seguridad pendientes upstream (1 Critical, 1 High) — ABIERTA
+El post oficial de Next.js del 2026-09-30 indica que 2 de las 9 vulnerabilidades anunciadas quedan pendientes de coordinación upstream y llegarán en "una versión posterior", sin fecha. Ninguna versión estable las corrige: 16.3.8 es la más reciente.
+- Riesgo residual **aceptado** por el reviewer/PM para el esqueleto de F1-09, que no está desplegado en producción (ADR-012 §4.1).
+- No se declaran "no aplicables": sus detalles técnicos aún no son públicos.
+- Acción: actualizar a la primera 16.3.x estable que las corrija. **SLA ≤ 72 h** desde su publicación, sujeto a CI y revisión.
 
 ### OBS-F1-09-1 — Frontend: CSP, cabeceras y origen del backend
 - **CSP:** planificada. Se define junto con el proxy (F1-10), con nonce para los scripts de Next. Ya se envían `X-Frame-Options: DENY`, `nosniff` y `Referrer-Policy`.
@@ -149,7 +150,7 @@ Los checks `backend checks`, `backend tests` y `backend docker build` **no** se 
 - Solución futura (antes de hacerlos requeridos): un check con **nombre estable** presente en todos los PRs, que ejecute el CI del backend cuando haya cambios relevantes y haga un no-op exitoso cuando no.
 
 ### OBS-F1-01-1 — Revalidación conjunta de dependencias del frontend — revalidada en F1-09 (2026-09-30)
-Combinación revalidada y fijada: Next.js 16.3.8, security release del mismo día (ADR-012 §4.1). Sigue abierta por OBS-F1-09-2.
+Combinación revalidada y fijada: Next.js 16.3.8, security release del mismo día (ADR-012 §4.1). Sigue **abierta** hasta que exista una versión estable que resuelva el riesgo pendiente (OBS-F1-09-2). No bloquea F1-09.
 
 Antes de crear el frontend en **F1-09** hay que volver a verificar **juntos** Next.js, React, React DOM, @types/react, @types/react-dom y TypeScript. No basta con actualizar Next.js.
 - La baseline de ADR-012 está validada para Next.js 16.3.6, y existe una security release 16.3.7 programada para el 30/09/2026.

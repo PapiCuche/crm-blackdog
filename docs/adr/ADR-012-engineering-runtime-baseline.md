@@ -109,6 +109,23 @@ Combinación revalidada **junta** el día de inicio de F1-09 contra npm, los Git
 | pnpm | **12.8.1** | `latest` en npm |
 | Node.js | **24.21.0** | Último 24.x (sin security release pendiente); `.nvmrc` |
 
+**Riesgo residual aceptado (decisión del reviewer/PM, 2026-09-30):**
+
+1. **Next.js 16.3.8** es el Active LTS elegido para F1-09.
+2. Incorpora todos los parches de seguridad publicados al 2026-09-30: los 7 del September 2026 Security Release.
+3. Next.js mantiene **pendientes 2 vulnerabilidades (1 Critical y 1 High)** que dependen de coordinación upstream.
+4. Hoy **no existe un release estable** que las corrija: 16.3.8 es la versión más reciente. No se usan canary, RC ni prereleases para evitarlas.
+5. Es un **riesgo residual aceptado** para el esqueleto de F1-09, que **no está desplegado en producción**. No se considera "no aplicable" por no usar `next/image` ni `use cache`: los detalles técnicos de esas 2 vulnerabilidades aún no son públicos.
+6. Se actualizará a la **primera versión estable 16.3.x posterior** que incluya esos fixes.
+7. **SLA objetivo de actualización: ≤ 72 h** desde su publicación, sujeto a CI y revisión. Seguimiento: OBS-F1-09-2.
+
+**Criterio vigente**, que sustituye a la regla de "ningún security patch pendiente": usar la versión estable y soportada más reciente, con todos los security patches publicados; documentar cualquier riesgo residual upstream conocido; y actualizar con prioridad cuando salga el parche.
+
+**Evidencia oficial:**
+- Release notes de v16.3.8: https://github.com/vercel/next.js/releases/tag/v16.3.8
+- Post "Upcoming Next.js September Security Release" (actualización del 2026-09-30, "the remaining two (one critical, one high) are pending upstream coordination"): https://nextjs.org/blog/upcoming-nextjs-security-release-september-2026
+- GitHub Security Advisories de vercel/next.js: https://github.com/vercel/next.js/security/advisories
+
 Tooling del frontend fijado en el mismo PR (npm, 2026-09-30):
 - tailwindcss / @tailwindcss/postcss 4.3.3, @tanstack/react-query 5.104.0, next-intl 4.14.8;
 - orval 8.38.0 (8.39.0 tenía menos de 24 h y no corrige nada de seguridad), con `undici` forzado a 7.29.1: la 7.29.0 transitiva tenía advisories altos (solo en dev);
