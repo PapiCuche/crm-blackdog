@@ -1,0 +1,7 @@
+openapi: 3.0.3
+info:
+  title: CRM BLACKDOG API
+  version: 0.1.0
+  description: Contrato de la API del backend. Fuente para el cliente TypeScript (orval).
+paths: {}
+components: {}

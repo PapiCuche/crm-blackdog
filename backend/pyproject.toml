@@ -9,6 +9,8 @@ dependencies = [
     "celery==5.6.3",
     "channels==4.3.2",
     "django==5.2.17",
+    "djangorestframework==3.18.1",
+    "drf-spectacular==0.30.0",
     "psycopg[binary]==3.3.6",
     "sentry-sdk==2.69.1",
     "structlog==26.1.0",
@@ -50,7 +52,10 @@ plugins = ["mypy_django_plugin.main"]
 exclude = ["^\\.venv/"]
 
 [[tool.mypy.overrides]]  # sin py.typed (F1-04); types-channels exige django-stubs 6
-module = ["celery.*", "kombu.*", "channels.*", "boto3.*", "botocore.*"]
+module = [
+    "celery.*", "kombu.*", "channels.*", "boto3.*", "botocore.*", "rest_framework.*",
+    "drf_spectacular.*",
+]
 follow_imports = "skip"  # tipos Any: sin stubs compatibles
 ignore_missing_imports = true
 

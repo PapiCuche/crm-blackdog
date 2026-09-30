@@ -39,7 +39,8 @@ Se usan `paths` filtros para no ejecutar el pipeline del backend cuando solo cam
 
 **Estado en F1-02** (jobs `backend checks`, `backend tests` y `backend docker build`):
 - **Activos:** entorno, formato, lint, tipos, import-linter, `check` y `check --deploy`, migraciones sincronizadas, pip-audit (lock exportado con hashes, todos los grupos), pytest contra `postgres:18.6`, y docker build con smoke test de `/health/live` y usuario no root.
-- **Pendientes:** "migraciones aplicables con `crm_migrator`" y "tests con `crm_app`" llegan en F1-03 (hoy el servicio usa un rol de test); Redis y `--cov`, cuando haya código que lo justifique; contrato API, cuando exista DRF/drf-spectacular (pregunta abierta en #11).
+- **Pendientes:** "migraciones aplicables con `crm_migrator`" y "tests con `crm_app`" llegan en F1-03 (hoy el servicio usa un rol de test); Redis y `--cov`, cuando haya código que lo justifique.
+- **Contrato API (F1-08A):** el paso "Contrato OpenAPI sin drift" de `backend checks` ejecuta `spectacular --validate --fail-on-warn` y hace `diff -u` contra `backend/openapi/schema.yaml`. `tests/test_openapi.py` repite la comparación y comprueba el determinismo.
 - **Instalación de uv:** binario oficial fijado por versión y verificado por SHA-256, sin acciones de terceros.
 
 ## 3. Frontend (`frontend.yml`, Fase 1)
