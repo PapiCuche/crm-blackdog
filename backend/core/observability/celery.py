@@ -37,9 +37,17 @@ def correlation_from(request: Any) -> str | None:
     return str(value) if value else None
 
 
-def bind_task(task_id: str, task: Any = None, **kwargs: Any) -> None:
+def bind_task(
+    task_id: str, task: Any = None, kwargs: dict[str, Any] | None = None, **extra: Any
+) -> None:
+    """Prioridad: kwarg `correlation_id` explícito (outbox) > cabecera > llamador eager > None.
+
+    Queda activa desde `task_prerun` hasta `task_postrun`: cuerpo, logs, tareas hijas y
+    `task_failure` ven el mismo valor.
+    """
     request = getattr(task, "request", None)
-    correlation_id = correlation_from(request)
+    explicit = (kwargs or {}).get("correlation_id")
+    correlation_id = str(explicit) if explicit else correlation_from(request)
     if correlation_id is None and getattr(request, "is_eager", False):
         correlation_id = current_correlation_id()  # .delay() eager: no hay publish ni cabecera
     _tokens[task_id] = bind(request_id=None, correlation_id=correlation_id)

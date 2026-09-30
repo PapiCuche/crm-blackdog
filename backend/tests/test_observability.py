@@ -26,7 +26,7 @@ from core.tenancy.context import ActorType, TenantContext
 from core.tenancy.resolution import resolve_tenant
 from core.tenancy.scope import tenant_scope
 from tests import fakes
-from tests.tenancy_app.tasks import PROBES, log_probe, outbox_probe
+from tests.tenancy_app.tasks import FAILURES, PROBES, failing_probe, log_probe, outbox_probe
 
 pytestmark = pytest.mark.usefixtures("tenant_db")
 SECRETS = {
@@ -196,6 +196,25 @@ def test_celery_context_does_not_leak_between_tasks(out: Output) -> None:
     probes = [r["correlation_id"] for r in out.records() if r["event"] == "probe.ran"]
     assert probes == ["corr-A", None, "corr-C"]
     assert current_correlation_id() is None
+
+
+def test_explicit_correlation_survives_until_task_failure(
+    orgs: dict[str, UUID], out: Output
+) -> None:
+    FAILURES.clear()
+    org = str(orgs["A"])
+    failing_probe.apply(kwargs={"organization_id": org, "correlation_id": "corr-outbox"})
+    failing_probe.apply(
+        kwargs={"organization_id": org, "correlation_id": "corr-explicit"},
+        headers={HEADER: "corr-header"},
+    )  # el kwarg explícito prevalece sobre la cabecera
+    log_probe.apply().get()  # siguiente tarea sin correlación: sin fuga desde el fallo
+    failed = [r for r in out.records() if r["event"] == "celery.task.failed"]
+    assert [r["correlation_id"] for r in failed] == ["corr-outbox", "corr-explicit"]
+    assert all(r["exception_type"] == "RuntimeError" and "kwargs" not in r for r in failed)
+    assert [f["correlation_id"] for f in FAILURES] == ["corr-outbox", "corr-explicit"]
+    probe = next(r for r in out.records() if r["event"] == "probe.ran")
+    assert probe["correlation_id"] is None and current_correlation_id() is None
 
 
 def test_sentry_scrubber_removes_secrets_and_pii() -> None:

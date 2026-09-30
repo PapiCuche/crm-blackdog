@@ -19,7 +19,8 @@ Petición HTTP
   → TenantResolutionMiddleware: TenantContext.correlation_id = correlation_id actual
   → outbox.emit / audit.record: heredan ctx.correlation_id
   → apply_async: before_task_publish añade la cabecera crm_correlation_id
-  → worker: task_prerun fija correlation_id (request_id = None); task_postrun lo restaura
+  → worker: task_prerun fija correlation_id (kwarg explícito > cabecera > llamador eager > None;
+    request_id = None), activo hasta task_failure; task_postrun lo restaura
   → @tenant_task: TenantContext.correlation_id = kwarg explícito o el de la cabecera; ese valor
     también rige los logs y las tareas hijas durante la tarea
 ```
