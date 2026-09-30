@@ -16,3 +16,4 @@ MIGRATOR_DATABASE_URL = os.environ.get("DATABASE_MIGRATOR_URL", "")
 ROOT_URLCONF = "tests.urls"
 MIDDLEWARE = [*MIDDLEWARE[:-1], "tests.fakes.FakeAuthMiddleware", MIDDLEWARE[-1]]  # noqa: F405
 TENANCY_MEMBERSHIP_RESOLVER = "tests.fakes.membership"
+STORAGE_BACKEND = "memory"  # la suite de contrato usa Garage vía STORAGE_* (tests/test_storage.py)

@@ -1,0 +1,13 @@
+# Garage v2.4.1 (ADR-012 §6): emulador S3 de UN nodo, solo local y CI (OBS-F1-01-2: AGPL-3.0).
+# Sin secretos aquí: rpc_secret llega por GARAGE_RPC_SECRET; la clave y el bucket por defecto,
+# por GARAGE_DEFAULT_ACCESS_KEY / GARAGE_DEFAULT_SECRET_KEY / GARAGE_DEFAULT_BUCKET.
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+db_engine = "sqlite"
+replication_factor = 1
+rpc_bind_addr = "[::]:3901"
+rpc_public_addr = "127.0.0.1:3901"
+
+[s3_api]
+s3_region = "garage"
+api_bind_addr = "[::]:3900"
