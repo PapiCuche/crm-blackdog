@@ -56,6 +56,8 @@ Sin rangos: estas son las versiones que se escriben en `pyproject.toml`, `.pytho
 | mypy (2.3.1 / 1.19.1) | — | ✅ wheel `cp314` |
 | pytest 9.1.1 / pytest-django 4.14.0 | — | ✅ classifier |
 | djangorestframework 3.18.1, drf-spectacular 0.30.0, uvicorn 0.54.0, redis 8.1.0, structlog 26.1.0, argon2-cffi 25.1.0 | — | ✅ classifier |
+| **structlog 26.1.0** (fijada en F1-07) | 2026-06-06 | ✅ classifier 3.14, `py.typed`. Validada el **2026-09-30** (PyPI). Uso: logs JSON estructurados (ADR-011) |
+| **sentry-sdk 2.69.1** (fijada en F1-07) | 2026-09-08 | ✅ classifier 3.14, `py.typed`. Validada el **2026-09-30** (PyPI; la última publicada ese día era 2.71.0, pero se fija 2.69.1 por decisión del PR de F1-07, sin vulnerabilidades en `pip-audit`). Uso: reporte de errores opcional (`SENTRY_DSN`), solo dentro de `core.observability` |
 
 - **Restricción conocida (tipado, no runtime):** la serie `django-stubs 5.2.x` (última 5.2.9, 2026-01-20; mypy 1.13–1.19) declara probado Python 3.10–3.13, aunque se instala en 3.14 (`requires_python >=3.10`). La serie 6.x (6.1.1) sí declara Python 3.14 pero solo tiene **soporte parcial** de Django 5.2. **Decisión para F1-02:** usar `django-stubs 5.2.9` + `mypy 1.19.1` (stubs exactos de la API de 5.2) y verificar en CI que `mypy` corre sobre 3.14. Si falla, pasar a `django-stubs 6.0.x` (parcial 5.2) y documentarlo. **No es motivo para bajar a Python 3.13.**
 - **UUIDv7:** `uuid.uuid7()` está disponible y es estable en la stdlib de Python 3.14 (verificado en ejecución local con 3.14.6). **Se usa la stdlib, sin dependencia externa.** Se encapsulará en `core.ids.new_id()` en F1-05 (ADR-004).

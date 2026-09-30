@@ -39,6 +39,13 @@ PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
         ),
         rf"\1={REDACTED}",
     ),
+    (  # repr/JSON de un dict dentro de un texto: 'password': 'x', "api_key": "y"
+        re.compile(
+            r"(?i)(['\"][a-z0-9_.-]*?(?:api[_-]?key|token|secret|passw(?:or)?d)['\"]\s*:\s*)"
+            r"(['\"])[^'\"]*\2"
+        ),
+        rf"\1\2{REDACTED}\2",
+    ),
 )
 
 

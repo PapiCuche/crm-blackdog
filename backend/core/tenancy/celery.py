@@ -12,6 +12,7 @@ from uuid import UUID
 
 from celery import Task, bootsteps, shared_task
 
+from core.observability.context import bound, current_correlation_id
 from core.tenancy.context import ActorType, TenantContext, TenantContextError, require_no_tenant
 from core.tenancy.scope import assert_clean_connection, tenant_scope
 
@@ -45,11 +46,17 @@ def tenant_task(**options: Any) -> Callable[[Callable[..., Any]], Any]:
         ) -> Any:
             actor = UUID(actor_id) if actor_id else None
             ctx = TenantContext(
-                UUID(organization_id), "celery", None, ActorType(actor_type), actor, correlation_id
+                UUID(organization_id),
+                "celery",
+                None,
+                ActorType(actor_type),
+                actor,
+                correlation_id or current_correlation_id(),  # cabecera Celery → contexto
             )
             assert_clean_connection()
-            with tenant_scope(ctx):  # los argumentos son IDs: se re-lee el estado aquí
-                return fn(*args, **kwargs)
+            # La correlación del TenantContext también rige logs y tareas hijas (un solo valor).
+            with bound(request_id=None, correlation_id=ctx.correlation_id), tenant_scope(ctx):
+                return fn(*args, **kwargs)  # los argumentos son IDs: se re-lee el estado aquí
 
         return shared_task(base=TenantTask, **options)(run)
 

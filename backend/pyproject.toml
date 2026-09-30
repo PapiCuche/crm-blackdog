@@ -9,6 +9,8 @@ dependencies = [
     "channels==4.3.2",
     "django==5.2.17",
     "psycopg[binary]==3.3.6",
+    "sentry-sdk==2.69.1",
+    "structlog==26.1.0",
     "uvicorn==0.54.0",
 ]
 
@@ -66,6 +68,7 @@ filterwarnings = ["error::DeprecationWarning", "error::PendingDeprecationWarning
 
 [tool.importlinter]
 root_packages = ["config", "core", "apps"]
+include_external_packages = true
 
 [[tool.importlinter.contracts]]
 name = "core (kernel) no depende de config ni de apps"
@@ -77,3 +80,9 @@ forbidden_modules = ["config", "apps"]
 name = "Capas (module-dependencies §1): organizations (L2) > audit (L1) > core (L0)"
 type = "layers"
 layers = ["apps.organizations", "apps.audit", "core"]
+
+[[tool.importlinter.contracts]]
+name = "sentry_sdk solo dentro de core.observability (module-dependencies §5)"
+type = "protected"
+protected_modules = ["sentry_sdk"]
+allowed_importers = ["core.observability"]

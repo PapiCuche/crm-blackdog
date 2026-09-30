@@ -5,6 +5,7 @@ from collections.abc import Callable
 
 from django.http import HttpRequest, HttpResponseBase, JsonResponse
 
+from core.observability.context import current_correlation_id
 from core.tenancy.context import TenantContextError
 from core.tenancy.resolution import OrganizationSuspended, TenantNotFound, resolve_tenant
 from core.tenancy.scope import assert_clean_connection, tenant_scope
@@ -30,7 +31,7 @@ class TenantResolutionMiddleware:
             return JsonResponse({"code": "NOT_AUTHENTICATED"}, status=401)
         assert_clean_connection()
         try:
-            ctx = resolve_tenant(match["slug"], user, "http")  # correlation_id: F1-07
+            ctx = resolve_tenant(match["slug"], user, "http", current_correlation_id())
         except TenantNotFound:
             return not_found()
         except OrganizationSuspended:

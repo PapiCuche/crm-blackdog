@@ -44,6 +44,7 @@ def test_redacts_bearer_and_url_credentials() -> None:
     ):
         assert redact_text(text).endswith(f"={REDACTED}"), text
     assert redact_text("redis://:" + "pw9" + "@redis:6379/0") == f"redis://{REDACTED}@redis:6379/0"
+    assert "hunter2" not in redact_text("{'password': 'hunter2', \"api_key\": \"k9\"}")
     for text in ("input_tokens=1200&x=1", "http://host:8080/p", "Polo basic Oversize negro"):
         assert redact_text(text) == text  # sin falsos positivos
 
