@@ -27,6 +27,7 @@ Ambas se escriben **en la transacción del `tenant_scope` activo** (`require_sco
 - El payload **no se redacta**: se corrompería el dato para los consumidores. Por eso solo lleva IDs y campos mínimos, nunca contenido de mensajes, y tiene un máximo de 16 KiB.
 
 - El descubrimiento (`outbox_pending_organizations`) devuelve primero el tenant con el evento pendiente **más antiguo**, así ningún tenant queda sin servicio aunque haya más de `max_orgs` organizaciones con eventos pendientes.
+- Su límite se acota **dentro de la función** (fail-closed): `NULL` o ≤ 0 → 0 filas, y nunca más de 1000 (`LIMIT NULL` significaría "sin límite").
 - **Despliegues:** los workers deben ejecutar el código nuevo (con sus `@subscribe`) antes que el código que emite un tipo de evento nuevo, o pausar beat durante el despliegue. Un publisher sin suscriptores registrados marca el evento como publicado (OBS-F1-06-3).
 
 ## Decisiones frente a la documentación de la Fase 0

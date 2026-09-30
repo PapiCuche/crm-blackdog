@@ -1,6 +1,4 @@
-"""Publisher del outbox (`@platform_task`): descubre tenants con eventos pendientes por una
-función SECURITY DEFINER (solo IDs) y publica cada lote dentro del `tenant_scope` del tenant.
-"""
+"""Publisher del outbox: descubre tenants (SECURITY DEFINER, solo IDs) y publica en su scope."""
 
 import logging
 from uuid import UUID

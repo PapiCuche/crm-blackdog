@@ -7,6 +7,7 @@ from uuid import UUID
 
 import psycopg
 import pytest
+from django.db import connection
 from kombu.exceptions import OperationalError
 
 from apps.audit.services import Entity, record
@@ -102,6 +103,27 @@ def test_publisher_dispatches_per_tenant_with_correlation(
     assert state == (3,)
     assert publish_outbox.apply().get() == 0 and len(sent) == 2  # nada se reenvía
     assert pending_organizations(10) == []
+
+
+def test_discovery_limit_is_bounded_inside_the_function(
+    orgs: dict[str, UUID], migrator: psycopg.Connection[Any]
+) -> None:
+    low, high = sorted((orgs["A"], orgs["B"]))
+    emit_in(high)  # el UUID mayor tiene el evento más antiguo: se ordena por antigüedad, no por ID
+    emit_in(low)
+    assert pending_organizations(1) == [high] and pending_organizations(2) == [high, low]
+    with connection.cursor() as cursor:  # crm_app llama directamente a la función
+        for limit in (None, 0, -5):  # LIMIT NULL sería "sin límite": fail-closed → 0 filas
+            cursor.execute("SELECT public.outbox_pending_organizations(%s::integer)", [limit])
+            assert cursor.fetchall() == [], limit
+    migrator.execute(  # 1001 organizaciones más, cada una con un evento pendiente
+        "WITH o AS (INSERT INTO organizations (id, slug, name, status, created_at) "
+        "SELECT uuidv7(), 'bulk-' || g, 'Bulk', 'ACTIVE', now() FROM generate_series(1, 1001) g "
+        "RETURNING id) INSERT INTO outbox_events (id, organization_id, event_type, "
+        "aggregate_type, aggregate_id, payload, attempts, last_error) "
+        "SELECT uuidv7(), id, 'test.bulk.created', 'widget', uuidv7(), '{}', 0, '' FROM o"
+    )
+    assert len(pending_organizations(2**31 - 1)) == 1000  # nunca más de 1000
 
 
 def test_broker_failure_keeps_the_event_pending(

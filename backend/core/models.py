@@ -3,7 +3,7 @@
 from django.db import models
 
 from core.db.models import TenantModel
-from core.outbox.models import OutboxEvent
+from core.outbox.models import OutboxEvent  # noqa: F401 — registra el modelo en la app core
 
 
 class OrgSequence(TenantModel):
@@ -16,6 +16,3 @@ class OrgSequence(TenantModel):
 
     class Meta:
         db_table = "org_sequences"
-
-
-__all__ = ["OrgSequence", "OutboxEvent"]

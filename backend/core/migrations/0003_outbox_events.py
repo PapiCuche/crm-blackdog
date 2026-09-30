@@ -74,6 +74,7 @@ class Migration(migrations.Migration):
             # El tenant con el evento pendiente más antiguo primero: sin inanición.
             body="SELECT organization_id FROM public.outbox_events WHERE published_at IS NULL "
             "GROUP BY organization_id ORDER BY min(occurred_at) "
-            "LIMIT greatest(1, least(p_limit, 1000))",
+            # Fail-closed dentro de la función: NULL o <= 0 → 0 filas (LIMIT NULL = sin límite).
+            "LIMIT greatest(0, least(coalesce(p_limit, 0), 1000))",
         ),
     ]

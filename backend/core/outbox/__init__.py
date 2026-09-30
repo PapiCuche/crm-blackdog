@@ -1,6 +1,4 @@
-"""Outbox transaccional: `emit` en la transacción del `tenant_scope` activo y handlers
-`@tenant_task` suscritos por tipo de evento. Contrato: docs/architecture/outbox-audit.md.
-"""
+"""Outbox transaccional y registro de handlers. Contrato: docs/architecture/outbox-audit.md."""
 
 import json
 import re
