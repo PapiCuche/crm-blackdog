@@ -24,6 +24,6 @@ def test_schema_endpoint_serves_the_contract_without_internal_routes() -> None:
     response = Client().get("/api/schema/")
     assert response.status_code == 200
     schema = yaml.safe_load(response.content)
-    assert schema["info"]["title"] == "CRM BLACKDOG API"
+    assert schema["info"]["title"] == "Good Doggy CRM API"
     # Sin endpoints de negocio todavía: ni health, ni rutas de tenant, ni el propio schema.
     assert schema["paths"] == {} and schema["openapi"].startswith("3.")

@@ -1,7 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-/* Dark-first "Premium Operations OS": superficies oscuras, acento dorado Black Dog con
+/* Dark-first "Premium Operations OS": superficies oscuras, acento dorado Good Doggy con
    moderación. Tokens listos para sustituirse por los del sistema de diseño (Figma). */
 @theme inline {
   --font-sans: var(--font-geist-sans);
@@ -28,7 +28,7 @@
   --surface-raised: #1a1c21;
   --border: #2a2d34;
   --muted: #a0a3ab; /* 7.4:1 sobre --background */
-  --accent: #d4a849; /* dorado Black Dog: solo foco, estado activo y acciones primarias */
+  --accent: #d4a849; /* dorado Good Doggy: solo foco, estado activo y acciones primarias */
   --accent-foreground: #0b0c0e;
   --ring: #d4a849;
   --success: #4ade80;
