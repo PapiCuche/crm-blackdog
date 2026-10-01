@@ -126,6 +126,11 @@ Combinación revalidada **junta** el día de inicio de F1-09 contra npm, los Git
 - Post "Upcoming Next.js September Security Release" (actualización del 2026-09-30, "the remaining two (one critical, one high) are pending upstream coordination"): https://nextjs.org/blog/upcoming-nextjs-security-release-september-2026
 - GitHub Security Advisories de vercel/next.js: https://github.com/vercel/next.js/security/advisories
 
+**F1-10 (stack local, 2026-09-30):**
+- imágenes `caddy:2.11.4-alpine` (Caddy v2.11.4, última release) y `node:24.21.0-bookworm-slim`;
+- backend: `redis==8.1.0` (broker de Celery) y `websockets==17.1` (WebSocket en uvicorn), ambos con classifier 3.14;
+- pre-commit: `ruff-pre-commit` v0.16.9 (= ruff de `uv.lock`) y gitleaks v8.30.1 (= `security.yml`).
+
 Tooling del frontend fijado en el mismo PR (npm, 2026-09-30):
 - tailwindcss / @tailwindcss/postcss 4.3.3, @tanstack/react-query 5.104.0, next-intl 4.14.8;
 - orval 8.38.0 (8.39.0 tenía menos de 24 h y no corrige nada de seguridad), con `undici` forzado a 7.29.1: la 7.29.0 transitiva tenía advisories altos (solo en dev);

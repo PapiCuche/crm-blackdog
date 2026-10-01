@@ -1,0 +1,21 @@
+# pre-commit (F1-10): `pre-commit install`. Mismas versiones que CI (ruff de uv.lock, gitleaks
+# de security.yml); prettier usa el del frontend (pnpm). pre-commit instala ruff (pip) y gitleaks (Go) en su caché.
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.9
+    hooks:
+      - id: ruff-format
+        files: ^backend/
+      - id: ruff-check
+        files: ^backend/
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+  - repo: local
+    hooks:
+      - id: prettier
+        name: prettier (frontend)
+        language: system
+        entry: bash -c 'cd frontend && pnpm exec prettier --check --ignore-unknown "${@#frontend/}"' --
+        files: ^frontend/
