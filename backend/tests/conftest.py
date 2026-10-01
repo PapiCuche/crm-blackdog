@@ -86,7 +86,7 @@ def tenant_db(
             yield
         finally:
             connection.close()
-            for table in (*TENANT_TABLES, "organizations"):
+            for table in (*TENANT_TABLES, "organizations", "django_session", "users"):
                 migrator.execute(f"DELETE FROM {table}")  # noqa: S608 — nombres fijos
 
 
