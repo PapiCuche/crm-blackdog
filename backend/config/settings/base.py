@@ -57,7 +57,7 @@ DB_MIGRATOR_ROLE = env.optional("DB_MIGRATOR_ROLE", "crm_migrator")
 ENFORCE_RUNTIME_DB_ROLE = False
 # Tenancy (F1-04): inyección para que core no importe módulos superiores.
 TENANCY_ORGANIZATION_SELECTOR = "apps.organizations.selectors.organization_by_slug"
-TENANCY_MEMBERSHIP_RESOLVER = "core.tenancy.resolution.no_memberships"  # Fase 2: memberships
+TENANCY_MEMBERSHIP_RESOLVER = "apps.organizations.selectors.active_membership"  # F2-02
 # Celery (F1-10): broker Redis por entorno (compose: redis://redis:6379/0).
 CELERY_BROKER_URL = env.optional("CELERY_BROKER_URL", "")
 # Outbox (F1-06): el publisher corre cada segundo en beat.
