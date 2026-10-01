@@ -8,12 +8,16 @@
 set -eu
 
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname postgres \
-  -v db="$CRM_DB_NAME" \
   -v migrator_pw="$CRM_MIGRATOR_PASSWORD" \
   -v app_pw="$CRM_APP_PASSWORD" <<'EOSQL'
 CREATE ROLE crm_migrator LOGIN CREATEDB BYPASSRLS PASSWORD :'migrator_pw';
 CREATE ROLE crm_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD :'app_pw';
+EOSQL
 
+# La BD de la aplicación y, opcionalmente (CRM_TEST_DB_NAME, solo local), la de `make check`:
+# los tests limpian sus tablas, así que nunca deben correr contra la BD de desarrollo.
+for db in "$CRM_DB_NAME" ${CRM_TEST_DB_NAME:-}; do
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname postgres -v db="$db" <<'EOSQL'
 CREATE DATABASE :"db" OWNER crm_migrator;
 REVOKE ALL ON DATABASE :"db" FROM PUBLIC;
 GRANT CONNECT, TEMPORARY ON DATABASE :"db" TO crm_app;
@@ -34,3 +38,4 @@ ALTER DEFAULT PRIVILEGES FOR ROLE crm_migrator IN SCHEMA public
 ALTER DEFAULT PRIVILEGES FOR ROLE crm_migrator
   REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
 EOSQL
+done

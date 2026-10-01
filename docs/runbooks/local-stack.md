@@ -1,0 +1,72 @@
+# Runbook: stack local en limpio (F1-10)
+
+**Relacionado:** ADR-002 §1.1, ADR-003 §1, ADR-012, `infra/docker/compose.yaml`, `Makefile`
+**Probado:** 2026-09-30, Docker 29.5.3 (Docker Desktop, macOS arm64)
+
+## Requisitos
+
+- Docker con Compose v2.
+- Para `make check`: uv 0.12.19, pnpm 12.8.1 (Node 24.21.0) y gitleaks 8.30.1 en el `PATH`, las mismas versiones que CI (ADR-012). Opcional: `pre-commit install`.
+
+## 1. Configuración
+
+```bash
+cp infra/env/.env.example infra/env/.env
+```
+
+En `infra/env/.env`:
+
+- **Contraseñas:** `POSTGRES_PASSWORD`, `CRM_MIGRATOR_PASSWORD` y `CRM_APP_PASSWORD`. Usa valores propios, nunca credenciales reales.
+- **Garage:** genera `GARAGE_RPC_SECRET` (`openssl rand -hex 32`), `STORAGE_ACCESS_KEY_ID` (`GK` + `openssl rand -hex 16`) y `STORAGE_SECRET_ACCESS_KEY` (`openssl rand -hex 32`). Garage no arranca con valores de ejemplo.
+- **Puertos ocupados:** si 5432, 6379, 3900, 8080, 8025 o 1025 ya están en uso en tu máquina, define `POSTGRES_HOST_PORT`, `REDIS_HOST_PORT`, `GARAGE_HOST_PORT`, `PROXY_HOST_PORT`, `MAILPIT_UI_HOST_PORT` o `MAILPIT_SMTP_HOST_PORT`. Todos se publican solo en 127.0.0.1.
+
+## 2. Arranque
+
+```bash
+make up        # docker compose … up -d --build --wait
+```
+
+Orden de arranque:
+
+1. **postgres** inicializa los roles y las BD `crm` y `crm_test` (solo con el volumen vacío).
+2. **migrate** aplica las migraciones como `crm_migrator`, con solo `DATABASE_MIGRATOR_URL` (`config.settings.migrate`).
+3. **backend**, **ws**, **worker** y **beat** arrancan como `crm_app`, con solo `DATABASE_URL` (compose no les pasa `DATABASE_MIGRATOR_URL` ni `CRM_MIGRATOR_PASSWORD`) y `ENFORCE_RUNTIME_DB_ROLE=true`. Si el rol es superusuario, tiene BYPASSRLS o es propietario, web y ws se niegan a arrancar y el worker rechaza cada conexión. Beat no abre conexiones a la BD. El rechazo de las variables del migrador al arrancar solo existe en `config.settings.production`.
+4. **frontend** (Next.js standalone) y **proxy** (Caddy).
+
+Aplicación: **http://localhost:8080**, same-origin:
+
+| Ruta | Destino |
+|---|---|
+| `/api/*`, `/webhooks/*` | backend |
+| `/ws/*` | ws |
+| `/health/*` | 404 (sondas internas, no se publican) |
+| resto | frontend |
+
+## 3. Verificación
+
+```bash
+curl -s http://localhost:8080/ | grep -o Operativo       # salud del backend vista por el frontend
+curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8080/api/schema/   # 200: contrato OpenAPI
+make check                                               # las verificaciones de CI (ver Makefile)
+```
+
+`make check` ejecuta en local los checks de CI del backend, el frontend, `.github/scripts`, `docker compose config` y gitleaks.
+
+- Construye las imágenes de backend y frontend, comprueba el usuario no root y lanza la misma prueba de humo que CI (`infra/docker/smoke-image.sh`: `/health/live` y `/o/ci`). El contenedor usa un puerto libre de 127.0.0.1 y se elimina siempre.
+- La suite del backend corre contra el PostgreSQL 18.6 y el Garage v2.4.1 del compose, sobre la BD **`crm_test`** (los tests limpian sus tablas y nunca tocan `crm`).
+- Las migraciones se aplican como `crm_migrator` y los tests corren como `crm_app`.
+
+## 4. Operación
+
+| Tarea | Comando |
+|---|---|
+| Logs | `make logs` (JSON redactado, ADR-011) |
+| Parar | `make down` |
+| Reinicio en limpio (borra BD, Redis y storage locales) | `docker compose -f infra/docker/compose.yaml --env-file infra/env/.env down -v`, y después `make up` |
+| Solo los servicios base | `docker compose … up -d postgres redis garage mailpit` |
+
+## 5. Problemas frecuentes
+
+- **`ports are not available`:** el puerto del host está ocupado. Define el `*_HOST_PORT` correspondiente.
+- **`crm_test` no existe:** el volumen de PostgreSQL es anterior a F1-10. Reinicia en limpio (`down -v`).
+- **Garage `Invalid RPC secret key`:** `GARAGE_RPC_SECRET` debe tener 64 caracteres hex.

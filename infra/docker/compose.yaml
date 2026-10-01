@@ -1,6 +1,39 @@
-# Servicios base para desarrollo local (Fase 0.5).
-# Uso: docker compose -f infra/docker/compose.yaml --env-file infra/env/.env up -d
+# Stack local completo (F1-10): servicios base + migrate (job) + web/ws/worker/beat + frontend
+# + Caddy (same-origin en http://localhost:8080). Runbook: docs/runbooks/local-stack.md.
+# Uso: docker compose -f infra/docker/compose.yaml --env-file infra/env/.env up -d --build
 name: crm-blackdog
+
+# Runtime (web, ws, worker, beat): SOLO DATABASE_URL → crm_app (ADR-002 §1.1). Nunca reciben
+# DATABASE_MIGRATOR_URL ni CRM_MIGRATOR_PASSWORD. ENFORCE_RUNTIME_DB_ROLE: web/ws verifican el
+# rol al arrancar y el worker en cada conexión; beat no abre conexiones a la BD.
+# Sonda de la imagen (HEALTHCHECK), pero cada 1 s mientras arranca: `up --wait` no espera 30 s.
+x-probe: &probe
+  start_period: 30s
+  start_interval: 1s
+
+x-runtime: &runtime
+  image: crm-backend:local
+  pull_policy: never # la construye el servicio migrate
+  restart: unless-stopped
+  environment:
+    DJANGO_SETTINGS_MODULE: config.settings.local
+    DJANGO_ALLOWED_HOSTS: backend
+    ENFORCE_RUNTIME_DB_ROLE: "true"
+    DATABASE_URL: postgres://crm_app:${CRM_APP_PASSWORD:?definir en infra/env/.env}@postgres:5432/${CRM_DB_NAME:-crm}
+    CELERY_BROKER_URL: redis://redis:6379/0
+    STORAGE_BACKEND: s3
+    STORAGE_ENDPOINT_URL: http://garage:3900
+    STORAGE_REGION: garage
+    STORAGE_BUCKET: ${STORAGE_BUCKET:-crm-local}
+    STORAGE_ACCESS_KEY_ID: ${STORAGE_ACCESS_KEY_ID:?definir en infra/env/.env}
+    STORAGE_SECRET_ACCESS_KEY: ${STORAGE_SECRET_ACCESS_KEY:?definir en infra/env/.env}
+  depends_on:
+    migrate:
+      condition: service_completed_successfully
+    redis:
+      condition: service_healthy
+    garage:
+      condition: service_healthy
 
 services:
   postgres:
@@ -9,10 +42,11 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:?definir en infra/env/.env}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?definir en infra/env/.env}
       CRM_DB_NAME: ${CRM_DB_NAME:-crm}
+      CRM_TEST_DB_NAME: ${CRM_TEST_DB_NAME:-crm_test} # BD separada para `make check`
       CRM_MIGRATOR_PASSWORD: ${CRM_MIGRATOR_PASSWORD:?definir en infra/env/.env}
       CRM_APP_PASSWORD: ${CRM_APP_PASSWORD:?definir en infra/env/.env}
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"
     volumes:
       # PostgreSQL 18: el volumen se monta en /var/lib/postgresql (PGDATA en subdirectorio por versión)
       - pgdata:/var/lib/postgresql
@@ -27,7 +61,7 @@ services:
     image: redis:8.8.3-alpine
     command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
     ports:
-      - "127.0.0.1:6379:6379"
+      - "127.0.0.1:${REDIS_HOST_PORT:-6379}:6379"
     volumes:
       - redisdata:/data
     healthcheck:
@@ -46,7 +80,7 @@ services:
       GARAGE_DEFAULT_SECRET_KEY: ${STORAGE_SECRET_ACCESS_KEY:?definir en infra/env/.env}
       GARAGE_DEFAULT_BUCKET: ${STORAGE_BUCKET:-crm-local}
     ports:
-      - "127.0.0.1:3900:3900"
+      - "127.0.0.1:${GARAGE_HOST_PORT:-3900}:3900"
     volumes:
       - ./garage/garage.toml:/etc/garage.toml:ro
       - garagedata:/var/lib/garage
@@ -56,11 +90,68 @@ services:
       timeout: 3s
       retries: 20
 
+  # Job de migraciones: SOLO DATABASE_MIGRATOR_URL → crm_migrator (config.settings.migrate).
+  migrate:
+    build: ../../backend
+    image: crm-backend:local
+    command: ["python", "manage.py", "migrate", "--no-input"]
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.migrate
+      DATABASE_MIGRATOR_URL: postgres://crm_migrator:${CRM_MIGRATOR_PASSWORD:?definir en infra/env/.env}@postgres:5432/${CRM_DB_NAME:-crm}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  backend:
+    <<: *runtime
+    healthcheck: *probe
+
+  ws:
+    <<: *runtime
+    healthcheck: *probe
+
+  worker:
+    <<: *runtime
+    command: ["celery", "-A", "config", "worker", "--loglevel", "INFO", "--concurrency", "2"]
+    healthcheck:
+      disable: true
+
+  beat:
+    <<: *runtime
+    command: ["celery", "-A", "config", "beat", "--loglevel", "INFO", "--schedule", "/tmp/celerybeat-schedule"]
+    healthcheck:
+      disable: true
+
+  frontend:
+    build: ../../frontend
+    image: crm-frontend:local
+    restart: unless-stopped
+    healthcheck: *probe
+    environment:
+      BACKEND_ORIGIN: http://backend:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  proxy:
+    image: caddy:2.11.4-alpine
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${PROXY_HOST_PORT:-8080}:80"
+    volumes:
+      - ./proxy/Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      frontend:
+        condition: service_healthy
+      ws:
+        condition: service_healthy
+
   mailpit:
     image: axllent/mailpit:v1.31.3
     ports:
-      - "127.0.0.1:8025:8025"
-      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:${MAILPIT_UI_HOST_PORT:-8025}:8025"
+      - "127.0.0.1:${MAILPIT_SMTP_HOST_PORT:-1025}:1025"
 
 volumes:
   pgdata:

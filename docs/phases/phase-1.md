@@ -27,11 +27,11 @@ Previos transversales: [#3](https://github.com/PapiCuche/crm-gooddoggy/issues/3)
 
 ## Definition of Done de la fase
 
-- `docker compose up` levanta todo en limpio siguiendo `infra/README.md`.
-- CI verde en backend, frontend, security y PR governance; import-linter activo con los módulos existentes.
-- Tests de aislamiento ejecutados con el rol `crm_app`; el pipeline falla si el rol de test es superusuario o tiene BYPASSRLS.
-- Ninguna tabla de negocio: solo `organizations` (mínima), `org_sequences`, `outbox_events`, `audit_logs` y `files`.
-- **Gate heredado de la Fase 0.5:** PostgreSQL y el script de roles/RLS ejecutados contra una instancia real (CI en F1-03, Docker local en F1-10). *F1-03: el job `backend tests` ejecuta `01-roles.sh` contra `postgres:18.6` y los tests corren como `crm_app`.*
+- ✅ `docker compose up` levanta todo en limpio siguiendo `docs/runbooks/local-stack.md` (F1-10).
+- ✅ CI verde en backend, frontend, security y PR governance; import-linter activo con 5 contratos.
+- ✅ Tests de aislamiento ejecutados con el rol `crm_app`; el pipeline falla si el rol de test es superusuario o tiene BYPASSRLS.
+- ✅ Ninguna tabla de negocio: solo `organizations` (mínima), `org_sequences`, `outbox_events`, `audit_logs` y `files`.
+- **Gate heredado de la Fase 0.5:** PostgreSQL y el script de roles/RLS ejecutados contra una instancia real (CI en F1-03, Docker local en F1-10). *F1-03: el job `backend tests` ejecuta `01-roles.sh` contra `postgres:18.6` y los tests corren como `crm_app`.* ✅ **Cerrado en F1-10:** `make check` ejecuta la suite completa, RLS incluido, contra el PostgreSQL 18.6 del compose local, con los roles de `01-roles.sh`.
 
 ## Observaciones vivas (de revisiones)
 
@@ -125,7 +125,7 @@ El post oficial de Next.js del 2026-09-30 indica que 2 de las 9 vulnerabilidades
 - Acción: actualizar a la primera 16.3.x estable que las corrija. **SLA ≤ 72 h** desde su publicación, sujeto a CI y revisión.
 
 ### OBS-F1-09-1 — Frontend: CSP, cabeceras y origen del backend
-- **CSP:** planificada. Se define junto con el proxy (F1-10), con nonce para los scripts de Next. Ya se envían `X-Frame-Options: DENY`, `nosniff` y `Referrer-Policy`.
+- **CSP:** pendiente. No entró en F1-10 (#12 no la incluye): Caddy no añade cabeceras. Se hará en un work item propio, con nonce para los scripts de Next, antes de servir pantallas con datos. Ya se envían `X-Frame-Options: DENY`, `nosniff` y `Referrer-Policy`.
 - **Dependabot npm:** falta añadir el ecosistema npm sobre `frontend/` (junto con OBS-F1-02-1).
 - **CI `frontend checks`:** usa filtro `paths`, así que no puede ser un check requerido sin el mismo gate estable que el backend.
 - **`BACKEND_ORIGIN`:** se lee al hacer el `next build` (los rewrites quedan en el manifiesto). En producción el enrutado same-origin lo hace el proxy (Caddy, F1-10), no Next.

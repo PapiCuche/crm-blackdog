@@ -2,11 +2,12 @@ import type { NextConfig } from "next";
 import createNextIntlPlugin from "next-intl/plugin";
 
 // Topología same-origin (ADR-003 §1): el navegador solo habla con este origen. En local, Next
-// hace de proxy de /api y /ws hacia Django; en F1-10 lo hará Caddy con las mismas rutas.
+// hace de proxy de /api y /ws hacia Django; en el stack de compose lo hace Caddy (mismas rutas).
 const backend = (process.env.BACKEND_ORIGIN ?? "http://127.0.0.1:8000").replace(/\/+$/, "");
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  output: "standalone", // imagen mínima (frontend/Dockerfile)
   reactStrictMode: true,
   skipTrailingSlashRedirect: true, // Django usa barra final: /api/…/ pasa intacto al backend
   async rewrites() {
@@ -18,7 +19,7 @@ const nextConfig: NextConfig = {
     ];
   },
   async headers() {
-    // Cabeceras base; la CSP (con nonce) llega con el proxy en F1-10 (OBS-F1-09-1).
+    // Cabeceras base; la CSP (con nonce) sigue pendiente (OBS-F1-09-1).
     const base = [
       { key: "X-Frame-Options", value: "DENY" },
       { key: "X-Content-Type-Options", value: "nosniff" },
