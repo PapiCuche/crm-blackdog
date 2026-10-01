@@ -104,6 +104,32 @@ El bloque inicial F2-00 … F2-08 no cierra la fase: MFA y la gestión de roles 
 
 Se registran como `OBS-F2-<nn>-<n>`.
 
+### OBS-F2-04-1 — Las concesiones del rol Owner no siguen al catálogo
+`clone_role_templates` no toca un rol que ya existe y `sync_permissions` solo sincroniza `permissions`. El rol Owner se modela con concesiones explícitas de todo el catálogo, así que una organización ya creada no recibe los permisos que añada una fase posterior.
+- Todo work item que añada permisos al catálogo debe decidir cómo llegan al rol Owner de cada organización (localizado por `is_owner_role`, nunca por código): migración de datos o un paso tras el `migrate`.
+- Lo mismo aplica a las demás plantillas si se quiere que los cambios lleguen a roles ya clonados.
+
+### OBS-F2-04-2 — Los roles de sistema se pueden borrar y renombrar
+[02-modelo-de-datos.md](../fase-0/02-modelo-de-datos.md) §E.3 dice que un rol `is_system` no se borra y su código no cambia. F2-04 no lo impone: no existe gestión de roles hasta E01-08. Un rol plantilla borrado se vuelve a crear en el siguiente clonado.
+- Imponerlo en E01-08, junto con las reglas de edición del rol Owner.
+
+### OBS-F2-04-3 — `permissions`: PK UUIDv7 y `code` único
+[ADR-003](../adr/ADR-003-auth-session.md) §5 esboza `permissions(code PK)`; [ADR-004](../adr/ADR-004-identifiers.md) §1 exige PK UUIDv7 en todas las tablas y un test lo comprueba. Se cumple ADR-004: `id` UUIDv7 y `code` `UNIQUE`, que es la clave que referencian las concesiones (`permission_code`). Ningún ADR cambia.
+
+### OBS-F2-04-4 — Retirar, renombrar o cambiar el alcance de un permiso
+La sincronización del catálogo borra un código retirado solo si nadie lo tiene concedido; si está concedido lo conserva y avisa en el log. Cambiar `supports_scope` de un permiso concedido hace fallar el `migrate` por la FK, a propósito.
+- Cualquiera de esos cambios necesita una migración de datos que reescriba antes las concesiones.
+
+### OBS-F2-04-5 — Concesiones de las plantillas
+La matriz de [03 §H](../fase-0/03-tenancy-rbac-inbox-ia.md) no tiene filas para `organization.view`, `users.view`, `users.invite` ni `roles.view`. F2-04 asume mínimo privilegio: Owner, todo el catálogo; Administrador, `organization.view`, `users.view`, `users.manage`, `users.invite` y `roles.view`; Supervisor, `organization.view` y `users.view`; Vendedor, `organization.view`. Las plantillas Soporte, Marketing y Consulta se añadirán cuando el catálogo las distinga.
+- Pendiente de confirmación del PO.
+
+### OBS-F2-04-6 — Sin borrado lógico y un alcance por concesión
+Los roles no llevan `deleted_at` (convención [SD]): no hay flujo de borrado hasta E01-08. Un rol tiene un solo alcance por permiso; combinar `TEAM` y `BRANCH` sobre el mismo permiso requiere dos roles, y los permisos efectivos (F2-05) unen los alcances de todos los roles.
+
+### OBS-F2-04-7 — Capas para el bootstrap
+`apps.organizations` y `apps.access` son módulos hermanos que no se importan entre sí. El bootstrap (F2-06) y la regla "siempre un Owner activo" (F2-05) necesitan un punto de orquestación por encima de ambos.
+
 ### OBS-F2-02-1 — F2-03A no debe empezar con D-F2-1 y D-F2-2 abiertas
 Al cerrarse F2-02, el orquestador pasa #40 a `status:ready` porque solo lee dependencias entre issues. Las decisiones D-F2-1 (auditoría de plataforma) y D-F2-2 (almacén de sesiones) siguen sin resolver.
 - Propuesta: un work item de decisión (`docs/…`, con ADR nuevo si la auditoría de plataforma amplía ADR-001 o ADR-011) añadido como dependencia de #40. Lo crea el mantenedor.

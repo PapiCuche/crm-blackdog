@@ -19,6 +19,7 @@ INSTALLED_APPS = [
     "core",
     "apps.organizations",
     "apps.accounts",
+    "apps.access",
     "apps.audit",
     "apps.files",
 ]
