@@ -18,6 +18,14 @@
   --color-success: var(--success);
   --color-danger: var(--danger);
   --radius-lg: 0.75rem;
+  /* Demo visual (UI-01): tokens del Figma GOOD DOGGY, solo bajo /demo. */
+  --font-gd: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
+  --color-gd-foreground: var(--gd-foreground);
+  --color-gd-paper: var(--gd-paper);
+  --color-gd-canvas: var(--gd-canvas);
+  --color-gd-surface: var(--gd-surface);
+  --color-gd-honey: var(--gd-honey);
+  --color-gd-edge: var(--gd-edge);
 }
 
 :root {
@@ -33,6 +41,12 @@
   --ring: #d4a849;
   --success: #4ade80;
   --danger: #f87171;
+  --gd-foreground: #202020;
+  --gd-paper: #ffffff;
+  --gd-canvas: #ffffff;
+  --gd-surface: #f3f3f3;
+  --gd-honey: #ffdb5b;
+  --gd-edge: #202020;
 }
 
 @layer base {
