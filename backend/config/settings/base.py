@@ -11,10 +11,14 @@ DEBUG = False
 ALLOWED_HOSTS: list[str] = env.csv_list("DJANGO_ALLOWED_HOSTS")
 
 INSTALLED_APPS = [
+    "django.contrib.contenttypes",  # lo exige django.contrib.auth
+    "django.contrib.auth",
+    "django.contrib.sessions",
     "rest_framework",
     "drf_spectacular",
     "core",
     "apps.organizations",
+    "apps.accounts",
     "apps.audit",
     "apps.files",
 ]
@@ -22,13 +26,26 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "core.observability.middleware.RequestContextMiddleware",  # request/correlation id (F1-07)
     "django.middleware.security.SecurityMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",  # request.user (F2-01)
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "core.tenancy.middleware.TenantResolutionMiddleware",  # tras la autenticación (Fase 2)
+    "core.tenancy.middleware.TenantResolutionMiddleware",  # siempre tras la autenticación
 ]
 
 ROOT_URLCONF = "config.urls"
+# Identidad (F2-01): usuario global con email canónico y Argon2id (ADR-003 §2). Un usuario
+# autenticado no accede a ningún tenant sin membresía (TENANCY_MEMBERSHIP_RESOLVER).
+AUTH_USER_MODEL = "accounts.User"
+PASSWORD_HASHERS = ["django.contrib.auth.hashers.Argon2PasswordHasher"]
+_VALIDATORS = "django.contrib.auth.password_validation."
+AUTH_PASSWORD_VALIDATORS: list[dict[str, object]] = [
+    {"NAME": _VALIDATORS + "UserAttributeSimilarityValidator"},
+    {"NAME": _VALIDATORS + "MinimumLengthValidator", "OPTIONS": {"min_length": 12}},
+    {"NAME": _VALIDATORS + "CommonPasswordValidator"},
+    {"NAME": _VALIDATORS + "NumericPasswordValidator"},
+]
 ASGI_APPLICATION = "config.asgi.application"
 
 DATABASES = {"default": env.database(env.required("DATABASE_URL"))}
@@ -74,14 +91,14 @@ LOGGING = {
         "celery.app.trace": {"level": "WARNING"},  # "succeeded: <repr(resultado)>"
     },
 }
-# API (F1-08A): DRF solo JSON; sin autenticación todavía (Fase 2). Contrato OpenAPI con
+# API (F1-08A): DRF solo JSON; sin autenticación de API todavía (F2-03A). Contrato OpenAPI con
 # drf-spectacular, versionado en backend/openapi/schema.yaml (fuente de verdad para orval).
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
     "DEFAULT_PARSER_CLASSES": ["rest_framework.parsers.JSONParser"],
     "DEFAULT_AUTHENTICATION_CLASSES": [],
-    "UNAUTHENTICATED_USER": None,  # sin django.contrib.auth hasta la Fase 2
+    "UNAUTHENTICATED_USER": None,  # sin clases de autenticación hasta F2-03A
 }
 SPECTACULAR_SETTINGS = {
     "TITLE": "Good Doggy CRM API",

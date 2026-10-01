@@ -5,6 +5,7 @@ description = "Good Doggy CRM backend (Django, ASGI)"
 readme = "README.md"
 requires-python = "==3.14.*"
 dependencies = [
+    "argon2-cffi==25.1.0",
     "boto3==1.43.105",
     "celery==5.6.3",
     "channels==4.3.2",
@@ -86,9 +87,9 @@ source_modules = ["core"]
 forbidden_modules = ["config", "apps"]
 
 [[tool.importlinter.contracts]]
-name = "Capas (module-dependencies §1): organizations (L2) > audit | files (L1) > core (L0)"
+name = "Capas (module-dependencies §1): organizations | accounts (L2) > audit | files (L1) > core (L0)"
 type = "layers"
-layers = ["apps.organizations", "apps.audit | apps.files", "core"]
+layers = ["apps.organizations | apps.accounts", "apps.audit | apps.files", "core"]
 
 [[tool.importlinter.contracts]]
 name = "sentry_sdk solo dentro de core.observability (module-dependencies §5)"

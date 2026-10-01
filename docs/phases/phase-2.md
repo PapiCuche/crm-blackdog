@@ -70,7 +70,7 @@ Ninguna se resuelve en este documento. Un ADR `Accepted` no se modifica: si una 
 |---|---|---|---|
 | D-F2-1 | **Auditoría de plataforma.** `audit_logs.organization_id` es NOT NULL (OBS-F1-06-1 en [phase-1.md](phase-1.md)) y el login ocurre antes de elegir organización. No se inserta un `organization_id` ficticio, no se usa una organización arbitraria y no se relaja RLS. | Sin diseño. Probable ADR nuevo | F2-03A (#40) |
 | D-F2-2 | **Almacén de sesiones.** BD, Redis o híbrido. Debe cubrir revocación, expiración, cierre de las demás sesiones, desactivación de usuario y varias instancias. | [ADR-003](../adr/ADR-003-auth-session.md) §2 lo deja a la Fase 2 | F2-03A (#40) |
-| D-F2-3 | **Email case-insensitive.** `citext` (previsto en [02-modelo-de-datos.md](../fase-0/02-modelo-de-datos.md) §E.2) o canonicalización explícita con constraint. Se prefiere lo que no exija privilegios extraordinarios en la migración. `lower()` no resuelve por sí solo la semántica Unicode del correo: el criterio se documenta. | Se cierra en F2-01 | F2-01 (#38) |
+| D-F2-3 | **Email case-insensitive.** ✅ Resuelta en F2-01 (#38): canonicalización explícita en la aplicación (`apps.accounts.emails`) más `UNIQUE (email)` y `CHECK (email = lower(email))` en la BD. No se usa `citext`, previsto en [02-modelo-de-datos.md](../fase-0/02-modelo-de-datos.md) §E.2: evita una extensión y deja el comportamiento explícito. La parte local debe ser ASCII; un dominio internacionalizado se guarda en forma IDNA. Sin reglas por proveedor. Detalle en [backend/README.md](../../backend/README.md). | Resuelta | — |
 | D-F2-4 | **Dependencias nuevas** (bloqueo progresivo, TOTP). No se añaden sin su fila en [ADR-012](../adr/ADR-012-engineering-runtime-baseline.md). | `argon2-cffi` ya está fijado; el resto no | F2-03A / F2-03B, E01-03 |
 | D-F2-5 | **Envío de correo.** Mailpit es infraestructura local, no el diseño del envío en producción. Hace falta una abstracción. | Sin diseño | E01-06, E01-02 |
 | D-F2-6 | **Secretos TOTP.** Cifrado, KEK y rotación; nunca en claro. | Sin diseño | E01-03 |
@@ -102,4 +102,20 @@ El bloque inicial F2-00 … F2-08 no cierra la fase: MFA y la gestión de roles 
 
 ## Observaciones vivas (de revisiones)
 
-Sin observaciones todavía. Se registran como `OBS-F2-<nn>-<n>`.
+Se registran como `OBS-F2-<nn>-<n>`.
+
+### OBS-F2-01-1 — Tablas de `django.contrib.auth` sin uso
+Instalar `django.contrib.auth` crea `auth_permission`, `auth_group` y `auth_group_permissions`. El modelo `User` no usa `PermissionsMixin`: esas tablas quedan vacías de significado y el RBAC del producto será el de `access` (F2-04).
+- No bloqueante. Revisar si conviene retirarlas cuando exista `access`.
+
+### OBS-F2-01-2 — Parte local del email solo ASCII
+El validador de Django rechaza partes locales con caracteres no ASCII (direcciones SMTPUTF8). Se acepta como límite conocido.
+- No bloqueante. Reabrir si un cliente lo necesita.
+
+### OBS-F2-01-4 — El redactor no trata el email como dato sensible
+`core.redaction` redacta secretos (contraseñas, tokens, credenciales), pero no la clave `email`. F2-01 no registra emails: `User.__str__` devuelve el identificador, no la dirección.
+- Decidir antes de F2-03A si los eventos de acceso registran el email, un hash o solo el `user_id`.
+
+### OBS-F2-01-3 — Longitud mínima de contraseña
+ADR-003 §2 exige validar contraseñas comunes o filtradas, pero no fija una longitud. F2-01 usa 12 caracteres. La comprobación contra contraseñas filtradas (servicio externo) no está implementada.
+- Pendiente de confirmación del PO.
