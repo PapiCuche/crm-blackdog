@@ -54,6 +54,9 @@ class OrganizationMembership(TenantModel):
             models.UniqueConstraint(  # destino de las FK compuestas `*_user_id` (ADR-001)
                 fields=["organization_id", "user"], name="organization_memberships_org_user_uq"
             ),
+            models.UniqueConstraint(  # destino de las FK compuestas `membership_id` (access)
+                fields=["organization_id", "id"], name="organization_memberships_org_id_uq"
+            ),
             models.CheckConstraint(
                 condition=models.Q(status__in=["INVITED", "ACTIVE", "SUSPENDED", "DEACTIVATED"]),
                 name="organization_memberships_status_ck",

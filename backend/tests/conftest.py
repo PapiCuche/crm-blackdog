@@ -24,6 +24,8 @@ TENANT_TABLES: tuple[str, ...] = ("tenancy_app_widgetpart", "tenancy_app_widget"
 TENANT_TABLES += ("outbox_events", "audit_logs")  # F1-06
 TENANT_TABLES += ("files",)  # F1-08
 TENANT_TABLES += ("organization_memberships",)  # F2-02
+# F2-04: delante, porque referencian a las membresías y la limpieza borra en este orden.
+TENANT_TABLES = ("membership_roles", "role_permissions", "roles", *TENANT_TABLES)
 
 
 def migrator_settings() -> dict[str, Any]:
