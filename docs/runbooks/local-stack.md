@@ -52,6 +52,7 @@ make check                                               # las verificaciones de
 
 `make check` ejecuta en local los checks de CI del backend, el frontend, `.github/scripts`, `docker compose config` y gitleaks.
 
+- Construye las imágenes de backend y frontend, comprueba el usuario no root y lanza la misma prueba de humo que CI (`infra/docker/smoke-image.sh`: `/health/live` y `/o/ci`). El contenedor usa un puerto libre de 127.0.0.1 y se elimina siempre.
 - La suite del backend corre contra el PostgreSQL 18.6 y el Garage v2.4.1 del compose, sobre la BD **`crm_test`** (los tests limpian sus tablas y nunca tocan `crm`).
 - Las migraciones se aplican como `crm_migrator` y los tests corren como `crm_app`.
 

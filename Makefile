@@ -1,7 +1,7 @@
 # Stack local y verificación (F1-10). Runbook: docs/runbooks/local-stack.md.
 # `make check` ejecuta las mismas verificaciones que CI (backend.yml, frontend.yml, security.yml)
 # contra los servicios del compose (PostgreSQL 18.6 y Garage v2.4.1) y la BD separada de tests.
-# Las pruebas de humo de las imágenes las cubre `make up` (stack completo con healthchecks).
+# Las pruebas de humo de las imágenes usan el mismo script que CI (infra/docker/smoke-image.sh).
 # `.env` se lee con las reglas de make: usar valores alfanuméricos/hex (sin `$`, `#`, comillas).
 SHELL := /bin/bash
 .SHELLFLAGS := -eu -o pipefail -c  # GNU make ≥ 3.82; con 3.81 (macOS) cada cadena usa `&&`
@@ -35,11 +35,14 @@ check-repo:
 		--env-file infra/env/.env.example config -q
 	gitleaks git --config .gitleaks.toml --redact --no-banner --exit-code 1 .
 
-check-images: ## Imágenes como en CI: build y usuario no root
+check-images: ## Imágenes como en CI: build, usuario no root y prueba de humo HTTP
 	docker build --pull -t crm-backend:ci backend
 	test "$$(docker run --rm --entrypoint id crm-backend:ci -u)" = "10001"
+	DJANGO_SECRET_KEY="$$(openssl rand -hex 32)" sh infra/docker/smoke-image.sh crm-backend:ci 8000 /health/live \
+		-e DJANGO_SECRET_KEY -e DJANGO_ALLOWED_HOSTS=app.example.com -e DATABASE_URL=postgres://ci:ci@127.0.0.1:5432/ci
 	docker build --pull -t crm-frontend:ci frontend
 	test "$$(docker run --rm --entrypoint id crm-frontend:ci -u)" != "0"
+	sh infra/docker/smoke-image.sh crm-frontend:ci 3000 /o/ci
 
 check-backend:  # `@`: la línea lleva credenciales locales (TEST_ENV); make no la imprime
 	$(COMPOSE) up -d --wait postgres garage
