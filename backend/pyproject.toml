@@ -62,6 +62,10 @@ module = [
 follow_imports = "skip"  # tipos Any: sin stubs compatibles
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]  # rest_framework es Any (arriba): solo aquí se subclasifica DRF
+module = ["apps.access.permissions", "tests.test_access_api"]
+disallow_subclassing_any = false
+
 [[tool.mypy.overrides]]  # asgiref.testing sin anotaciones
 module = ["tests.test_entrypoints"]
 disallow_untyped_calls = false

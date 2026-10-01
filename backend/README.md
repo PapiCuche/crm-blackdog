@@ -111,8 +111,44 @@ Esta sección cubre el **modelo** RBAC de `apps.access`; el cálculo de permisos
 - `execution_context(ctx)`: membresía activa del usuario y sus permisos efectivos (unión de los alcances de todos sus roles), en dos consultas. Sin membresía activa lanza `AccessDenied`.
 - `has_permission`, `can(ectx, code, obj)`, `require(...)` y `scoped(ectx, code, queryset)`: permiso, alcance sobre un objeto y filtro de listado. Todo dentro del `tenant_scope` del propio contexto.
 - `apps.access.scopes.register(Modelo, FieldScopes(...))`: cada modelo declara una vez sus columnas de propietario, equipo y sucursal, por el nombre de la columna (`assigned_user_id`, no `assigned_user`); de ahí salen el filtro y la verificación por objeto.
+- Hasta E01-09 no hay equipos ni sucursales: `TEAM` y `BRANCH` equivalen a `OWN` (OBS-F2-05A-2).
 - El `ExecutionContext` es una foto de su transacción: usarlo en otro `tenant_scope` posterior falla; hay que recalcularlo.
 - Falla cerrado: un código de permiso inexistente lanza `UnknownPermission`; un modelo sin política lanza `ScopePolicyMissing`, también para quien tiene `ORGANIZATION`.
+
+## Autorización en DRF (F2-05B)
+
+DRF deniega por defecto: `apps.access.permissions.HasPermission` y `ScopeFilter` son sus clases por defecto. Una vista de tenant declara el permiso de cada método:
+
+```python
+class ContactDetail(generics.RetrieveUpdateAPIView):
+    required_permissions = {
+        "GET": "contacts.view",
+        "PUT": "contacts.update",
+        "PATCH": "contacts.update",
+    }
+
+    def get_queryset(self):  # nunca `queryset = ...` de clase: no hay tenant al importar
+        return Contact.objects.all()
+```
+
+- Vista sin `required_permissions` o método sin declarar: 403. HEAD usa el permiso de GET. (DRF negocia el formato antes: pedir uno que la API no sirve da 404 o 406, OBS-F2-05A-5.)
+- `ScopeFilter` aplica `scoped()` al queryset de listados y de `get_object()`: se filtra en SQL. Solo actúa donde la vista llama a `filter_queryset()`: una vista que consulte por su cuenta debe pasar su queryset por `scoped()`.
+- Cada método usa su permiso y, sobre un objeto que ya existe, su alcance. Crear (POST) solo comprueba el permiso, y el filtro mira la fila antes de escribirla, no los valores que llegan (OBS-F2-05B-5). Un método de escritura responde con el objeto, así que poder escribirlo implica leer esa respuesta.
+- Un serializador de tenant nunca acepta del cliente la clave primaria ni `organization_id`.
+- El contexto es el que resolvió el middleware, nunca `request.user` ni datos del cliente. Los permisos se leen una vez por petición.
+
+| Caso | Respuesta | Quién responde |
+|---|---|---|
+| Sin autenticación | 401 | middleware de tenant |
+| Organización inexistente o sin membresía activa | 404 | middleware de tenant |
+| Miembro sin el permiso, vista o método sin declarar | 403 | `HasPermission` |
+| Objeto fuera de alcance, de otra organización o inexistente | 404, idénticos entre sí | `ScopeFilter` |
+
+Las vistas de plataforma son las rutas fuera de `/api/v1/o/<slug>/`. Se excluyen por la ruta, nunca por el actor: declaran sus propias `permission_classes` (y `filter_backends` si son genéricas: sin tenant, `ScopeFilter` devuelve vacío) y se añaden a `PLATFORM` en `tests/test_access_api.py`. Ser staff de plataforma no abre ninguna ruta de tenant.
+
+Ese test recorre todo el URLconf y falla si una ruta de tenant no es una vista de DRF con `HasPermission`, un permiso del catálogo por cada método que implementa y, si es genérica, `ScopeFilter`, o si aparece una vista de DRF de plataforma que no está en `PLATFORM`. Mira lo que usa cada ruta (también `as_view(...)` y `@action(...)`). Exige las dos clases tal cual: una subclase o una composición (`A | B`) se rechazan y se revisan a mano. Rechaza también las vistas que redefinen `get_permissions`, `check_permissions`, `permission_denied`, `initial` o `dispatch`, las genéricas que redefinen `get_object` o `filter_queryset`, y las envueltas en un decorador (`cache_page`, por ejemplo). Una ruta fuera de `api/v1/o/` que pueda casar con una ruta de tenant (segmento dinámico antes del prefijo, o `re_path` sin `^`) también falla. Es una auditoría estática: no sustituye a la revisión de una vista con consultas o escrituras propias.
+
+`HasPermission` comprueba además cada objeto que pase por `check_object_permissions` y responde 404. Es una red de seguridad, no un sustituto de `scoped()`: su cuerpo puede diferir del de un objeto inexistente.
 
 ## Identificadores y numeración (F1-05, ADR-004)
 
