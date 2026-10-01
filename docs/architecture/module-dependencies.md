@@ -66,6 +66,7 @@ apps/<modulo>/
 ```
 
 - Otro módulo **solo** puede importar `services`, `selectors`, `events` y los tipos/DTO que estos exponen.
+- `access` expone además `scopes` (registro de `ScopePolicy`): cada módulo declara ahí el alcance de sus recursos. La autorización se consulta con `access.selectors` (`execution_context`, `can`, `require`, `scoped`).
 - Las FKs entre módulos se declaran con **referencia en texto** (`models.ForeignKey("contacts.Contact", …)`), sin importar el modelo, para no crear dependencias de import. La dirección de la FK debe respetar igualmente el grafo (una FK "hacia arriba", p. ej. `opportunities.conversation_id → inbox`, se permite solo si está documentada aquí; hoy: `deals → inbox` y `leads → inbox` para el origen, ambas nullable).
 
 ## 4. Contratos import-linter (borrador; se activan cuando existan los módulos)

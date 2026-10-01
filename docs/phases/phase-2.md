@@ -18,14 +18,17 @@ Cada work item es un issue con el alcance completo (Incluye / No incluye / crite
 | F2-02 | [#39](https://github.com/PapiCuche/crm-gooddoggy/issues/39) Organization memberships | `feature/f2-memberships` | #38 | backend |
 | F2-03A | [#40](https://github.com/PapiCuche/crm-gooddoggy/issues/40) Session authentication API | `feature/f2-session-auth` | #39 | backend + API |
 | F2-04 | [#41](https://github.com/PapiCuche/crm-gooddoggy/issues/41) RBAC model | `feature/f2-rbac-model` | #39 | backend |
-| F2-05 | [#42](https://github.com/PapiCuche/crm-gooddoggy/issues/42) RBAC enforcement | `feature/f2-rbac-enforcement` | #41 | backend |
+| F2-05A | [#42](https://github.com/PapiCuche/crm-gooddoggy/issues/42) RBAC enforcement engine | `feature/f2-rbac-enforcement` | #41 | backend |
+| F2-05B | [#50](https://github.com/PapiCuche/crm-gooddoggy/issues/50) RBAC: DRF integration | `feature/f2-rbac-drf` | #42 | backend |
+| F2-05C | [#51](https://github.com/PapiCuche/crm-gooddoggy/issues/51) RBAC: anti-escalation and last Owner | `feature/f2-rbac-anti-escalation` | #42 | backend |
 | F2-06 | [#43](https://github.com/PapiCuche/crm-gooddoggy/issues/43) Organization bootstrap | `feature/f2-org-bootstrap` | #41 | backend |
 | F2-07 | [#44](https://github.com/PapiCuche/crm-gooddoggy/issues/44) Frontend security / CSP | `feature/f2-frontend-csp` | #37 | frontend |
 | F2-08 | [#45](https://github.com/PapiCuche/crm-gooddoggy/issues/45) Frontend access integration | `feature/f2-frontend-access` | #40, #44 | frontend |
 
 ```text
 #37 F2-00 ─┬─► #38 F2-01 ─► #39 F2-02 ─┬─► #40 F2-03A ─────────────┐
-           │                           └─► #41 F2-04 ─┬─► #42 F2-05 │
+           │                           └─► #41 F2-04 ─┬─► #42 F2-05A ─┬─► #50 F2-05B
+           │                                          │               └─► #51 F2-05C
            │                                          └─► #43 F2-06 │
            └─► #44 F2-07 ───────────────────────────────────────────┴─► #45 F2-08
 ```
@@ -42,7 +45,7 @@ Objetivo: ≤ 400 líneas relevantes por PR. Más de 800 no se acepta ([ADR-009]
 Candidatos conocidos a división:
 
 - **F2-03A:** si el bloqueo progresivo de intentos no cabe, pasa a un F2-03B.
-- **F2-05:** la caché de permisos efectivos con invalidación por evento puede separarse.
+- **F2-05:** dividido antes de implementar (2026-10-01). El diseño estimó unas 1.290 líneas para el alcance original de #42. Quedan F2-05A (#42, motor de autorización), F2-05B (#50, integración con DRF) y F2-05C (#51, anti-escalada y último Owner). B y C dependen solo de A y no entre sí. La caché de permisos sigue fuera.
 
 ## Historias E01 fuera de este bloque
 
@@ -52,11 +55,11 @@ Se planifican como work items al cerrar el bloque inicial, un slice por historia
 |---|---|---|
 | E01-06 | Invitaciones | Abstracción de envío de correo |
 | E01-07 | Activar, desactivar y revocar sesiones | F2-03A |
-| E01-08 | API y pantallas de roles | F2-05 |
-| E01-09 | Sucursales y equipos | F2-05 |
+| E01-08 | API y pantallas de roles | F2-05B y F2-05C |
+| E01-09 | Sucursales y equipos | F2-05A |
 | E01-02 | Recuperación de contraseña | Abstracción de envío de correo |
 | E01-03 | MFA TOTP con `MFA_ENFORCEMENT` | Decisión de cifrado de secretos |
-| E01-13 | Auditoría filtrable | F2-05 |
+| E01-13 | Auditoría filtrable | F2-05B |
 | E01-10, E01-11 | Horarios; sesiones activas (P1) | — |
 | E01-12 | Impersonación (P2) | Auditoría de plataforma |
 
@@ -104,6 +107,21 @@ El bloque inicial F2-00 … F2-08 no cierra la fase: MFA y la gestión de roles 
 
 Se registran como `OBS-F2-<nn>-<n>`.
 
+### OBS-F2-05A-1 — Los permisos son una foto por petición
+`execution_context` lee la membresía y sus concesiones una vez, dentro del `tenant_scope` de la petición. Revocar un rol surte efecto en la siguiente petición, no a mitad de una (coherente con ADR-003 §5). Sin caché. La foto queda ligada a su transacción: usarla en un `tenant_scope` posterior falla con `TenantContextError`, aunque el contexto sea igual.
+
+### OBS-F2-05A-2 — TEAM y BRANCH equivalen a OWN hasta E01-09
+No existen tablas de equipos ni sucursales. `ExecutionContext.team_ids` y `branch_ids` están vacíos, así que esos alcances nunca dan más que OWN. E01-09 debe rellenarlos en `execution_context` sin añadir una consulta por rol.
+
+### OBS-F2-05A-3 — La transacción de la petición se confirma aunque la vista falle
+El middleware de tenant convierte la excepción en respuesta dentro del `tenant_scope`, así que un 403 o un 500 hacen COMMIT de lo ya escrito. Todo servicio debe comprobar antes de escribir y envolver sus escrituras en un savepoint. Es comportamiento previo a esta fase; afecta a F2-05C y a todo servicio posterior.
+
+### OBS-F2-05A-4 — Denegaciones sin auditar
+ADR-011 prevé auditar los accesos denegados. El motor no escribe filas `DENIED`: no hay todavía un punto HTTP donde decidirlo. Queda para F2-05B o E01-13.
+
+### OBS-F2-05A-5 — Cuerpo de error de la API
+No hay manejador de excepciones propio: una denegación en una vista de DRF devolverá `{"detail": …}` y no la convención `{"code": …}` del middleware. Decidirlo antes del primer endpoint real (F2-05B).
+
 ### OBS-F2-04-1 — Las concesiones del rol Owner no siguen al catálogo
 `clone_role_templates` no toca un rol que ya existe y `sync_permissions` solo sincroniza `permissions`. El rol Owner se modela con concesiones explícitas de todo el catálogo, así que una organización ya creada no recibe los permisos que añada una fase posterior.
 - Todo work item que añada permisos al catálogo debe decidir cómo llegan al rol Owner de cada organización (localizado por `is_owner_role`, nunca por código): migración de datos o un paso tras el `migrate`.
@@ -125,10 +143,10 @@ La matriz de [03 §H](../fase-0/03-tenancy-rbac-inbox-ia.md) no tiene filas para
 - Pendiente de confirmación del PO.
 
 ### OBS-F2-04-6 — Sin borrado lógico y un alcance por concesión
-Los roles no llevan `deleted_at` (convención [SD]): no hay flujo de borrado hasta E01-08. Un rol tiene un solo alcance por permiso; combinar `TEAM` y `BRANCH` sobre el mismo permiso requiere dos roles, y los permisos efectivos (F2-05) unen los alcances de todos los roles.
+Los roles no llevan `deleted_at` (convención [SD]): no hay flujo de borrado hasta E01-08. Un rol tiene un solo alcance por permiso; combinar `TEAM` y `BRANCH` sobre el mismo permiso requiere dos roles, y los permisos efectivos (F2-05A) unen los alcances de todos los roles.
 
 ### OBS-F2-04-7 — Capas para el bootstrap
-`apps.organizations` y `apps.access` son módulos hermanos que no se importan entre sí. El bootstrap (F2-06) y la regla "siempre un Owner activo" (F2-05) necesitan un punto de orquestación por encima de ambos.
+`apps.organizations` y `apps.access` son módulos hermanos que no se importan entre sí. El bootstrap (F2-06) y la regla "siempre un Owner activo" (F2-05C, #51) necesitan un punto de orquestación por encima de ambos.
 
 ### OBS-F2-02-1 — F2-03A no debe empezar con D-F2-1 y D-F2-2 abiertas
 Al cerrarse F2-02, el orquestador pasa #40 a `status:ready` porque solo lee dependencias entre issues. Las decisiones D-F2-1 (auditoría de plataforma) y D-F2-2 (almacén de sesiones) siguen sin resolver.

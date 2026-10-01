@@ -19,6 +19,7 @@ _SET = "SELECT " + ", ".join(f"set_config('{g}', %s, true)" for g in _GUCS)
 _READ = "SELECT " + ", ".join(f"current_setting('{g}', true)" for g in _GUCS)
 _user_scope_active: ContextVar[bool] = ContextVar("user_scope_active", default=False)
 _active_using: ContextVar[str | None] = ContextVar("tenant_scope_using", default=None)
+_scope_token: ContextVar[object | None] = ContextVar("tenant_scope_token", default=None)
 
 
 @contextmanager
@@ -45,11 +46,13 @@ def tenant_scope(ctx: TenantContext, *, using: str = "default") -> Iterator[Tena
         using, [str(ctx.organization_id), str(ctx.user_id or ""), ctx.actor_type]
     ):
         token, alias_token = _current.set(ctx), _active_using.set(using)
+        scope_token_ = _scope_token.set(object())
         try:
             yield ctx
         finally:
             _current.reset(token)
             _active_using.reset(alias_token)
+            _scope_token.reset(scope_token_)
 
 
 @contextmanager
@@ -75,6 +78,16 @@ def require_scope(ctx: TenantContext) -> str:
     if alias is None or _current.get() != ctx or not connections[alias].in_atomic_block:
         raise TenantContextError("Se requiere el tenant_scope activo de este mismo contexto")
     return alias
+
+
+def scope_token(ctx: TenantContext) -> object:
+    """Identidad de la transacción del `tenant_scope` activo de `ctx`.
+
+    Lo calculado dentro de un scope (p. ej., los permisos efectivos) no vale en otro posterior,
+    aunque su `TenantContext` sea igual: se compara este token.
+    """
+    require_scope(ctx)
+    return _scope_token.get()
 
 
 def read_context(*, using: str = "default") -> tuple[str, ...]:
