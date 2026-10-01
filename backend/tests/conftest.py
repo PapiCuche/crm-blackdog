@@ -23,6 +23,7 @@ from config.env import database
 TENANT_TABLES: tuple[str, ...] = ("tenancy_app_widgetpart", "tenancy_app_widget", "org_sequences")
 TENANT_TABLES += ("outbox_events", "audit_logs")  # F1-06
 TENANT_TABLES += ("files",)  # F1-08
+TENANT_TABLES += ("organization_memberships",)  # F2-02
 
 
 def migrator_settings() -> dict[str, Any]:

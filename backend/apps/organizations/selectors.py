@@ -1,9 +1,66 @@
-"""Selectores públicos de plataforma (docs/architecture/module-dependencies.md §3)."""
+"""Selectores públicos de plataforma (docs/architecture/module-dependencies.md §3).
 
-from apps.organizations.models import Organization
-from core.tenancy.resolution import OrganizationRef
+Se ejecutan sin tenant activo. Las membresías se leen dentro de `user_scope`: la política
+SELECT de `organization_memberships` solo deja ver las del propio usuario (ADR-002 §3.2).
+"""
+
+from dataclasses import dataclass
+from typing import Any
+from uuid import UUID
+
+from apps.organizations.models import Organization, OrganizationMembership
+from core.tenancy.resolution import ACCESSIBLE_STATUSES, OrganizationRef
+from core.tenancy.scope import user_scope
+
+ACTIVE = OrganizationMembership.Status.ACTIVE
+
+
+@dataclass(frozen=True, slots=True)
+class OrganizationSummary:
+    id: UUID
+    slug: str
+    name: str
 
 
 def organization_by_slug(slug: str) -> OrganizationRef | None:
     row = Organization.objects.filter(slug=slug).values_list("id", "status").first()
     return OrganizationRef(*row) if row else None
+
+
+def _active_user_id(user: Any) -> UUID | None:
+    """Identidad no es autorización: un usuario anónimo o inactivo no tiene membresías."""
+    user_id = getattr(user, "pk", None)
+    return user_id if isinstance(user_id, UUID) and getattr(user, "is_active", False) else None
+
+
+def active_membership(user: Any, organization_id: UUID) -> UUID | None:
+    """Resolvedor de tenancy (`TENANCY_MEMBERSHIP_RESOLVER`): fail-closed.
+
+    Devuelve el id del usuario solo si está activo y tiene una membresía `ACTIVE` en esa
+    organización. Ser staff de plataforma no cuenta: no hay membresías implícitas.
+    """
+    user_id = _active_user_id(user)
+    if user_id is None:
+        return None
+    with user_scope(user_id):
+        found = OrganizationMembership.for_user.filter(
+            organization_id=organization_id, user_id=user_id, status=ACTIVE
+        ).exists()
+    return user_id if found else None
+
+
+def organizations_for_user(user: Any) -> list[OrganizationSummary]:
+    """Organizaciones accesibles del usuario (membresía `ACTIVE` y organización no suspendida)."""
+    user_id = _active_user_id(user)
+    if user_id is None:
+        return []
+    with user_scope(user_id):
+        ids = list(
+            OrganizationMembership.for_user.filter(user_id=user_id, status=ACTIVE).values_list(
+                "organization_id", flat=True
+            )
+        )
+    rows = Organization.objects.filter(id__in=ids, status__in=ACCESSIBLE_STATUSES)
+    return [
+        OrganizationSummary(*row) for row in rows.order_by("name").values_list("id", "slug", "name")
+    ]

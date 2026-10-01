@@ -104,6 +104,18 @@ El bloque inicial F2-00 … F2-08 no cierra la fase: MFA y la gestión de roles 
 
 Se registran como `OBS-F2-<nn>-<n>`.
 
+### OBS-F2-02-1 — F2-03A no debe empezar con D-F2-1 y D-F2-2 abiertas
+Al cerrarse F2-02, el orquestador pasa #40 a `status:ready` porque solo lee dependencias entre issues. Las decisiones D-F2-1 (auditoría de plataforma) y D-F2-2 (almacén de sesiones) siguen sin resolver.
+- Propuesta: un work item de decisión (`docs/…`, con ADR nuevo si la auditoría de plataforma amplía ADR-001 o ADR-011) añadido como dependencia de #40. Lo crea el mantenedor.
+
+### OBS-F2-02-2 — FK de tenant por tabla
+`organization_memberships` añade su FK a `organizations` en la migración, igual que `files`. `TenantModel` sigue sin una FK genérica (OBS-F1-04-1 en [phase-1.md](phase-1.md)): cada tabla tenant-owned debe declararla.
+- No bloqueante.
+
+### OBS-F2-02-3 — Escrituras rechazadas en `user_scope`
+Sin tenant activo, `INSERT` falla con error de RLS; `UPDATE` y `DELETE` no fallan: afectan a cero filas, porque la política `USING` no deja ver ninguna. El efecto es el mismo (no se escribe), pero el código que espere una excepción no la recibirá.
+- No bloqueante.
+
 ### OBS-F2-01-1 — Tablas de `django.contrib.auth` sin uso
 Instalar `django.contrib.auth` crea `auth_permission`, `auth_group` y `auth_group_permissions`. El modelo `User` no usa `PermissionsMixin`: esas tablas quedan vacías de significado y el RBAC del producto será el de `access` (F2-04).
 - No bloqueante. Revisar si conviene retirarlas cuando exista `access`.

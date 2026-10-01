@@ -2,8 +2,7 @@
 
 La URL solo **selecciona**: la autorización sale de la membresía. El selector de
 organizaciones y el resolvedor de membresías se inyectan por settings (el kernel no importa
-módulos superiores). Hasta la Fase 2 no hay membresías reales: el resolvedor por defecto
-niega todo (fail-closed).
+módulos superiores). El resolvedor real vive en `apps.organizations.selectors` (F2-02).
 """
 
 from dataclasses import dataclass
@@ -33,7 +32,7 @@ class OrganizationSuspended(Exception):
 
 
 def no_memberships(user: Any, organization_id: UUID) -> UUID | None:
-    """Resolvedor por defecto hasta la Fase 2 (membresías reales): nadie es miembro."""
+    """Resolvedor que niega todo (fail-closed), para contextos sin membresías."""
     return None
 
 

@@ -91,10 +91,17 @@ def test_t4_every_tenant_table_has_forced_rls_and_one_permissive_policy() -> Non
         )
         policies = cursor.fetchall()
     assert {t for t, *_ in tables} >= set(TENANT_TABLES)
+    memberships = [
+        (f"memberships_{c.lower()}", c) for c in ("DELETE", "INSERT", "SELECT", "UPDATE")
+    ]
     for table, rls, forced in tables:
         assert rls and forced, table
-        own = [(name, cmd) for t, name, cmd in policies if t == table]
-        assert own == [("tenant_isolation", "ALL")], (table, own)
+        own = sorted((name, cmd) for t, name, cmd in policies if t == table)
+        # ADR-002 §3.2: única excepción, con una política por comando y sin `tenant_isolation`.
+        expected = (
+            memberships if table == "organization_memberships" else [("tenant_isolation", "ALL")]
+        )
+        assert own == expected, (table, own)
 
 
 def test_t5_runtime_role_is_not_owner_superuser_or_bypassrls() -> None:
