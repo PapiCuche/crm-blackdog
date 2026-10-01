@@ -2,7 +2,7 @@
 
 CRM omnicanal SaaS multiempresa con agentes de IA (WhatsApp, Instagram, Messenger, TikTok), motor de precios, stock, pipeline comercial y cotizaciones.
 
-**Estado:** Fase 1 — infraestructura base, en curso ([plan](docs/phases/phase-1.md), issue maestro #13). Aún no hay código de aplicación.
+**Estado:** Fase 2 — identidad, organizaciones y acceso, planificada ([plan](docs/phases/phase-2.md), issue maestro #36). Fase 1 — infraestructura base: work items mergeados ([plan](docs/phases/phase-1.md), issue maestro #13). Aún no hay funcionalidad de negocio; `/demo` es una demo visual con datos ficticios.
 
 ## Documentación
 
