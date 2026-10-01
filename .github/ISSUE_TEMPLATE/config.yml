@@ -4,5 +4,5 @@
 blank_issues_enabled: false
 contact_links:
   - name: Guía para agentes y contribuidores
-    url: https://github.com/PapiCuche/crm-blackdog/blob/main/AGENTS.md
+    url: https://github.com/PapiCuche/crm-gooddoggy/blob/main/AGENTS.md
     about: Reglas del flujo issue → rama → PR (sin merge propio).

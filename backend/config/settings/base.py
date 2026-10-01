@@ -82,7 +82,7 @@ REST_FRAMEWORK = {
     "UNAUTHENTICATED_USER": None,  # sin django.contrib.auth hasta la Fase 2
 }
 SPECTACULAR_SETTINGS = {
-    "TITLE": "CRM BLACKDOG API",
+    "TITLE": "Good Doggy CRM API",
     "DESCRIPTION": "Contrato de la API del backend. Fuente para el cliente TypeScript (orval).",
     "VERSION": "0.1.0",
     "SERVE_INCLUDE_SCHEMA": False,  # el propio /api/schema/ no forma parte del contrato
