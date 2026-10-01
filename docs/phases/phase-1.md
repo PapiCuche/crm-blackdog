@@ -118,6 +118,20 @@ El log de acceso de uvicorn no pasa por el redactor, porque incluye el query str
 `storage()` crea un cliente boto3 por llamada. Reutilizarlo cuando existan consumidores reales.
 - Resuelto en F1-08: production exige `https` y sin credenciales en `STORAGE_ENDPOINT_URL`; el tamaño de las subidas firmadas va en la firma.
 
+### OBS-F1-09-2 — Next.js: 2 fixes de seguridad pendientes upstream (1 Critical, 1 High) — ABIERTA
+El post oficial de Next.js del 2026-09-30 indica que 2 de las 9 vulnerabilidades anunciadas quedan pendientes de coordinación upstream y llegarán en "una versión posterior", sin fecha. Ninguna versión estable las corrige: 16.3.8 es la más reciente.
+- Riesgo residual **aceptado** por el reviewer/PM para el esqueleto de F1-09, que no está desplegado en producción (ADR-012 §4.1).
+- No se declaran "no aplicables": sus detalles técnicos aún no son públicos.
+- Acción: actualizar a la primera 16.3.x estable que las corrija. **SLA ≤ 72 h** desde su publicación, sujeto a CI y revisión.
+
+### OBS-F1-09-1 — Frontend: CSP, cabeceras y origen del backend
+- **CSP:** planificada. Se define junto con el proxy (F1-10), con nonce para los scripts de Next. Ya se envían `X-Frame-Options: DENY`, `nosniff` y `Referrer-Policy`.
+- **Dependabot npm:** falta añadir el ecosistema npm sobre `frontend/` (junto con OBS-F1-02-1).
+- **CI `frontend checks`:** usa filtro `paths`, así que no puede ser un check requerido sin el mismo gate estable que el backend.
+- **`BACKEND_ORIGIN`:** se lee al hacer el `next build` (los rewrites quedan en el manifiesto). En producción el enrutado same-origin lo hace el proxy (Caddy, F1-10), no Next.
+- **Salud del backend:** `/health/ready` se consulta desde el servidor de Next (sonda interna, fuera del contrato OpenAPI). Cuando la API exponga un estado público bajo `/api`, se consumirá con el cliente de orval.
+- **ESLint 10 + `@eslint/compat`:** revisar cuando eslint-plugin-react soporte ESLint 10 y retirar la capa de compatibilidad.
+
 ### OBS-F1-02-1 — Dependabot para Python
 `.github/dependabot.yml` todavía solo cubre `github-actions`. Hay que añadir el ecosistema de Python (uv/pip) sobre `backend/`, para recibir alertas y PRs de actualización de las dependencias fijadas en `uv.lock`.
 - No bloqueante. Se hará en un `chore` pequeño y separado.
@@ -135,7 +149,9 @@ El log de acceso de uvicorn no pasa por el redactor, porque incluye el query str
 Los checks `backend checks`, `backend tests` y `backend docker build` **no** se hacen requeridos todavía: `backend.yml` usa filtros `paths`, y un PR que solo toque documentación o frontend no los ejecutaría y quedaría bloqueado esperando un check que nunca llega.
 - Solución futura (antes de hacerlos requeridos): un check con **nombre estable** presente en todos los PRs, que ejecute el CI del backend cuando haya cambios relevantes y haga un no-op exitoso cuando no.
 
-### OBS-F1-01-1 — Revalidación conjunta de dependencias del frontend
+### OBS-F1-01-1 — Revalidación conjunta de dependencias del frontend — revalidada en F1-09 (2026-09-30)
+Combinación revalidada y fijada: Next.js 16.3.8, security release del mismo día (ADR-012 §4.1). Sigue **abierta** hasta que exista una versión estable que resuelva el riesgo pendiente (OBS-F1-09-2). No bloquea F1-09.
+
 Antes de crear el frontend en **F1-09** hay que volver a verificar **juntos** Next.js, React, React DOM, @types/react, @types/react-dom y TypeScript. No basta con actualizar Next.js.
 - La baseline de ADR-012 está validada para Next.js 16.3.6, y existe una security release 16.3.7 programada para el 30/09/2026.
 - F1-09 usará la combinación estable, publicada y soportada en su fecha.
