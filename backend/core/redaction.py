@@ -77,6 +77,22 @@ def is_sensitive_key(key: str) -> bool:
     return bool(_SECRET_SEGMENTS & segments) or any(f in name for f in _SECRET_FRAGMENTS)
 
 
+EMAIL_MASK = "[EMAIL]"
+# Cualquier cosa con forma de dirección, en cualquier alfabeto, con `@` o `%40`. Anclada por la
+# izquierda: una cadena larga sin `@` se recorre una sola vez.
+_LOCAL = r"[^\s<>()\[\]{},;:\"=@]"
+EMAIL = re.compile(
+    rf"(?i)(?:(?<!{_LOCAL}){_LOCAL}+?|\"[^\"\n]{{1,64}}\"|(?<=\[REDACTED\]))"
+    rf"(?:@|%40)(?:\[[^\]\s]{{0,64}}\]|[^\s<>()\[\]{{}},;:\"'@]+)"
+)
+
+
+def mask_emails(text: str) -> str:
+    """Un email no es un secreto y `redact` lo deja pasar; esto lo tapa donde no debe quedar:
+    la auditoría de plataforma (ADR-013 §4) y el texto libre que un operador manda al log."""
+    return EMAIL.sub(EMAIL_MASK, text)
+
+
 def redact_text(text: str) -> str:
     for pattern, replacement in PATTERNS:
         text = pattern.sub(replacement, text)

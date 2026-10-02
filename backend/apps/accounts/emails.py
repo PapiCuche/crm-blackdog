@@ -15,6 +15,8 @@ No hay reglas por proveedor: los puntos y los `+tag` se conservan y distinguen d
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 
+MAX_LENGTH = 254  # `users.email`
+
 
 def canonical_email(raw: str) -> str:
     local, _, domain = raw.strip().rpartition("@")
@@ -26,4 +28,6 @@ def canonical_email(raw: str) -> str:
             raise ValidationError("Email inválido", code="invalid") from error
     canonical = f"{local.lower()}@{domain}"
     validate_email(canonical)  # ValidationError: sin @, con espacios, parte local no ASCII…
+    if len(canonical) > MAX_LENGTH:  # el validador admite hasta 320; la columna, 254
+        raise ValidationError("Email demasiado largo", code="invalid")
     return canonical

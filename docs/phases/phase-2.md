@@ -137,6 +137,21 @@ El bloque inicial F2-00 … F2-13 no cierra la fase: MFA y la gestión de roles 
 
 Se registran como `OBS-F2-<nn>-<n>`.
 
+### OBS-F2-06-1 — La contraseña inicial del Owner la escribe el operador
+No hay envío de correo (D-F2-5): ni invitación ni restablecimiento. El comando de alta pide la contraseña del Owner nuevo al operador y no la muestra ni la registra. El producto no puede obligar todavía a cambiarla en el primer acceso.
+- Sustituir por una invitación con enlace de un solo uso cuando exista el envío de correo (E01-06, E01-02).
+- Con `--password-stdin` la contraseña es la línea recibida tal cual, leída como UTF-8 (sin BOM) sea cual sea el locale del proceso: sin recorte de espacios ni tope propio de longitud. La política única de contraseñas (`AUTH_PASSWORD_VALIDATORS`) es la que decide; si el login llega a acotar o normalizar, debe hacerlo también el alta. En una terminal, `--password-stdin` muestra lo tecleado: es el indicador para entornos sin terminal.
+- argparse admite abreviaturas: `--password <valor>` se toma por `--password-stdin` y el valor sobrante se repite en el mensaje de error. La contraseña nunca va en un argumento.
+- Si la salida del proceso no admite UTF-8, la línea final de confirmación falla después de que el alta quede hecha: el comando termina con error y la organización existe.
+
+### OBS-F2-06-3 — El operador de un comando es una etiqueta, no una identidad
+La auditoría del alta guarda `metadata.operator` con `getpass.getuser()`: el primer valor no vacío de `LOGNAME`, `USER`, `LNAME` y `USERNAME`, y solo después la cuenta del sistema del proceso. Quien ejecuta el comando puede elegir ese valor, y dentro de un contenedor suele ser el usuario de la imagen. No es un usuario del producto: el staff de plataforma no tiene todavía una identidad con la que lanzar comandos. Si el proceso no tiene ninguna de esas variables ni entrada en `passwd`, el comando falla antes de escribir nada. Una etiqueta con forma de email se enmascara en el log y en la auditoría de plataforma (queda `[EMAIL]`); la auditoría del tenant la guarda tal cual.
+- Revisar con la impersonación y el panel de plataforma (E01-12).
+
+### OBS-F2-06-7 — Direcciones que la máscara de emails no reconoce
+`core.redaction.mask_emails` (la máscara de la auditoría de plataforma, ADR-013 §4, que desde F2-06B también se aplica al log de los comandos) no reconoce una dirección cuya parte local termina en `}` o `=` (`ana{x}@dominio`, `ana=@dominio`): la deja entera. Son direcciones válidas y muy poco frecuentes.
+- Corregir la expresión cambia lo que guarda la auditoría de plataforma: va en un work item propio, con sus tests de coste lineal.
+
 ### OBS-F2-06-2 — Sin `organization_settings`
 El alta crea solo la fila de `organizations` (slug, nombre, estado `ACTIVE`). Nada de la Fase 2 lee todavía zona horaria, moneda ni otros ajustes, así que no se crea una tabla vacía.
 - Llega con el primer slice que use un ajuste de la organización.

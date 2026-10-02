@@ -9,7 +9,6 @@ lo auditado no ocurre sin su registro.
 
 import ipaddress
 import json
-import re
 from collections.abc import Mapping
 from enum import StrEnum
 from typing import Any
@@ -23,20 +22,12 @@ from apps.audit.services import Entity, Result
 from core.ids import new_id
 from core.observability.context import current_correlation_id, current_request_id
 from core.outbox import NAME, TYPE
-from core.redaction import redact, redact_text
+from core.redaction import mask_emails, redact, redact_text
 from core.tenancy.context import require_no_tenant
 
 ACTION_MAX = 100
 USER_AGENT_MAX = 512
 METADATA_MAX = 4096  # bytes del JSON: los metadatos son de quien llama, nunca texto del cliente
-EMAIL_MASK = "[EMAIL]"
-# Cualquier cosa con forma de dirección, en cualquier alfabeto, con `@` o `%40`. Anclada por la
-# izquierda: una cadena larga sin `@` se recorre una sola vez.
-_LOCAL = r"[^\s<>()\[\]{},;:\"=@]"
-EMAIL = re.compile(
-    rf"(?i)(?:(?<!{_LOCAL}){_LOCAL}+?|\"[^\"\n]{{1,64}}\"|(?<=\[REDACTED\]))"
-    rf"(?:@|%40)(?:\[[^\]\s]{{0,64}}\]|[^\s<>()\[\]{{}},;:\"'@]+)"
-)
 _HASH_SALT = "apps.audit.platform.identifier"
 _INSERT = (  # esquema explícito: una tabla temporal con el mismo nombre no captura la fila
     "INSERT INTO public.platform_audit_logs (id, occurred_at, actor_type, actor_id, "
@@ -65,7 +56,7 @@ def _mask(value: Any) -> Any:
     if isinstance(value, str):
         if "\x00" in value:  # PostgreSQL no admite el carácter nulo en `jsonb`
             raise ValueError("metadata contiene un carácter nulo")
-        return EMAIL.sub(EMAIL_MASK, value)
+        return mask_emails(value)
     if isinstance(value, dict):
         masked = {_mask(key): _mask(item) for key, item in value.items()}
         if len(masked) != len(value):  # dos claves distintas no se funden en una
