@@ -13,3 +13,10 @@ DEBUG = True
 ALLOWED_HOSTS = ["localhost", "127.0.0.1", *env.csv_list("DJANGO_ALLOWED_HOSTS")]
 # Compose lo activa: el stack local también prueba que el runtime es crm_app (ADR-002 §1.1).
 ENFORCE_RUNTIME_DB_ROLE = env.boolean("ENFORCE_RUNTIME_DB_ROLE", False)
+# `next dev` hace de proxy de /api y cambia la cabecera Host: sin esto, la comprobación de
+# Origin del CSRF rechazaría toda mutación hecha desde el navegador en desarrollo.
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    *env.csv_list("DJANGO_CSRF_TRUSTED_ORIGINS"),
+]

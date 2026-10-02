@@ -1,5 +1,7 @@
 """F2-05B: el motor de autorización en DRF. Denegación por defecto; 401, 404 y 403.
 
+F2-12 amplía la auditoría del URLconf a las rutas de plataforma y a la autenticación (ADR-014).
+
 Las vistas de DRF de prueba y su URLconf viven aquí (no en `tests/urls.py`): middleware y
 resolvedor reales, sesión de Django y PostgreSQL con el rol `crm_app`.
 """
@@ -15,10 +17,12 @@ import psycopg
 import pytest
 from django.db import connection
 from django.db.models import QuerySet
+from django.http import HttpResponse
 from django.test import Client
 from django.test.utils import CaptureQueriesContext
 from django.urls import URLResolver, path, re_path
 from django.urls.resolvers import RegexPattern
+from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from rest_framework import generics, serializers, viewsets
 from rest_framework.exceptions import NotFound
@@ -34,6 +38,7 @@ from apps.access.services import clone_role_templates
 from apps.accounts.models import User
 from apps.organizations.models import OrganizationMembership
 from config.settings import base
+from core.api.permissions import Authenticated, Public
 from core.tenancy.middleware import TENANT_PATH
 from core.tenancy.scope import tenant_scope
 from tests import urls as legacy_urls
@@ -46,10 +51,17 @@ from tests.test_memberships import ctx, join
 pytestmark = [pytest.mark.usefixtures("tenant_db"), pytest.mark.urls(__name__)]
 MANAGE = "widgets.manage"  # segundo permiso de prueba con alcance
 TENANT = "api/v1/o/<slug:org_slug>/"
-PLATFORM = frozenset({"api/schema/"})  # vistas de DRF de plataforma del proyecto: otra frontera
+PLATFORM = frozenset({"api/schema/"})  # rutas de plataforma del proyecto: otra frontera
 PREFIX = "api/v1/o/"  # las rutas de tenant, como `TENANT_PATH` en el middleware
+API = "api/"  # todo lo que hay debajo es contrato: o es de tenant o figura en `PLATFORM`
 DYNAMIC = re.compile(r"^.*\||.?[?*{]|[<(\[\\.+]")  # donde una ruta deja de ser texto literal
-GUARDS = ("get_permissions", "check_permissions", "permission_denied", "initial", "dispatch")
+GUARDS: tuple[str, ...] = (
+    "get_permissions", "check_permissions", "permission_denied", "initial", "dispatch",
+    # F2-12: la sesión y el contrato de errores no son por vista.
+    "get_authenticators", "perform_authentication", "get_authenticate_header",
+    "handle_exception", "check_object_permissions",
+)  # fmt: skip
+STALE = "exclusión de plataforma obsoleta"
 HOOKS = ("get_object", "filter_queryset")  # por donde `ScopeFilter` llega al queryset
 
 
@@ -87,9 +99,9 @@ class Members(APIView):
 
 
 class Open(Members):
-    """Vista de plataforma: se excluye declarando sus propias clases."""
+    """Vista de plataforma: se excluye declarando una clase de plataforma (ADR-014 §4)."""
 
-    permission_classes = [AllowAny]
+    permission_classes = [Public]
 
 
 class Undeclared(WidgetView, generics.ListAPIView):
@@ -139,13 +151,35 @@ class Lax(HasPermission):
         return True
 
 
+class CachedHandler(Members):
+    @method_decorator(cache_page(300))
+    def get(self, request: Any, **kwargs: Any) -> Response:
+        return Response({"ok": True})
+
+
+class OwnAuthentication(Members):
+    def perform_authentication(self, request: Any) -> None:
+        """No autentica."""
+
+
+def plain(request: Any) -> HttpResponse:
+    return HttpResponse("ok")
+
+
 secure = [
     path(TENANT + "widgets/", WidgetList.as_view()),
     path(TENANT + "widgets/<uuid:pk>/", WidgetDetail.as_view()),
     path(TENANT + "widgets/<uuid:pk>/described/", Described.as_view()),
     path(TENANT + "members/", Members.as_view()),
-    path("platform/open/", Open.as_view()),
+    path("api/platform/open/", Open.as_view()),
+    path("api/v1/auth/session/", Members.as_view(permission_classes=[Authenticated])),
 ]
+SECURE_PLATFORM = frozenset({"api/platform/open/", "api/v1/auth/session/"})
+# Rutas de plataforma listadas que aun así no cumplen: la lista no las salva.
+LISTED = frozenset(
+    {"api/platform/any/", "api/platform/both/", "api/platform/noauth/", "api/v1/auth/plain/"}
+    | {"api/platform/dup/", "platform/outside/"}
+)
 TENANT_RE = r"^api/v1/o/(?P<org_slug>[-\w]+)/"
 FLAWED: list[tuple[Any, str]] = [  # ruta y motivo que debe dar la auditoría
     (path(TENANT + "undeclared/", Undeclared.as_view()), "sin required_permissions"),
@@ -171,25 +205,57 @@ FLAWED: list[tuple[Any, str]] = [  # ruta y motivo que debe dar la auditoría
     (path(TENANT + "own-check/", OwnCheck.as_view()), "redefine check_permissions"),
     (path(TENANT + "own-lookup/<uuid:pk>/", OwnLookup.as_view()), "redefine get_object"),
     (path(TENANT + "cached/", cache_page(300)(Members.as_view())), "decorador"),
-    (path("platform/defaults/", Defaults.as_view()), "plataforma"),
+    (path("api/platform/defaults/", Defaults.as_view()), "plataforma"),
+    # F2-12: toda ruta bajo `api/` es de tenant o figura en la lista, sea o no de DRF…
+    (path("api/v1/auth/unlisted/", Open.as_view()), "sin exclusión explícita"),
+    (path("api/v1/plain/", plain), "sin exclusión explícita"),
+    # …y una ruta listada declara exactamente una clase de plataforma y la sesión del proyecto.
+    (path("api/v1/auth/plain/", plain), "no es una vista de DRF"),
+    (
+        path("api/platform/any/", Members.as_view(permission_classes=[AllowAny])),
+        "clase de plataforma",
+    ),
+    (
+        path("api/platform/both/", Members.as_view(permission_classes=[Public, Authenticated])),
+        "clase de plataforma",
+    ),
+    (path("api/platform/noauth/", Open.as_view(authentication_classes=[])), "autenticación"),
+    # La primera ruta que casa es la que responde: una gemela correcta después no la tapa.
+    (
+        path("api/platform/dup/", Members.as_view(permission_classes=[AllowAny])),
+        "clase de plataforma",
+    ),
+    # Una vista de DRF fuera de `api/` no tiene CSRF ni contrato de errores, esté o no listada.
+    (path("platform/outside/", Open.as_view()), "fuera de api/"),
+    # Un manejador decorado responde después del permiso y antes del filtro de alcance.
+    (path(TENANT + "cached-handler/", CachedHandler.as_view()), "manejador decorado"),
+    (path(TENANT + "kw-noauth/", Members.as_view(authentication_classes=[])), "autenticación"),
+    (path(TENANT + "own-auth/", OwnAuthentication.as_view()), "redefine perform_authentication"),
     # Rutas que pueden casar con `TENANT_PATH` sin empezar por el prefijo literal:
     (path("api/<str:version>/o/<slug:org_slug>/dynamic/", Open.as_view()), "ruta dinámica"),
     (re_path(r"^apis?/v1/o/(?P<org_slug>[-\w]+)/optional/$", Open.as_view()), "ruta dinámica"),
     (re_path(r"^healthz/$|" + TENANT_RE + "either/$", Open.as_view()), "ruta dinámica"),
     (re_path(r"unanchored/", Open.as_view()), "ruta dinámica"),  # sin `^`: casa en cualquier parte
+    # Sin `$`, Django casa por prefijo: `^api` y `^` sirven también las rutas de tenant.
+    (re_path(r"^api", plain), "ruta dinámica"),
+    (re_path(r"^", plain), "ruta dinámica"),
 ]
-urlpatterns = [*secure, *(entry for entry, _ in FLAWED)]
+urlpatterns = [
+    *secure,
+    *(entry for entry, _ in FLAWED),
+    path("api/platform/dup/", Open.as_view()),  # la gemela correcta de `dup/`, que nunca responde
+]
 
 
 def routes(patterns: Any, prefix: str = "") -> Iterator[tuple[str, Any]]:
     for entry in patterns:
         text = str(entry.pattern)
-        loose = isinstance(entry.pattern, RegexPattern) and not text.startswith("^")
-        route = prefix + (".*" if loose else "") + text.lstrip("^")
+        regex = isinstance(entry.pattern, RegexPattern)
+        route = prefix + (".*" if regex and not text.startswith("^") else "") + text.lstrip("^")
         if isinstance(entry, URLResolver):
             yield from routes(entry.url_patterns, route)
-        else:
-            yield route, entry.callback
+        else:  # una expresión sin `$` casa por prefijo: es abierta por la derecha
+            yield route + (".*" if regex and not text.endswith("$") else ""), entry.callback
 
 
 def insecure(patterns: Any, platform: frozenset[str]) -> dict[str, str]:
@@ -203,7 +269,7 @@ def insecure(patterns: Any, platform: frozenset[str]) -> dict[str, str]:
     de cualquier segmento dinámico (por exceso: un router de plataforma va bajo su propio prefijo).
     Es estática: una vista que consulte por su cuenta debe usar `scoped()` (OBS-F2-05B-2).
     """
-    found = dict.fromkeys(platform, "exclusión de plataforma obsoleta")
+    found = dict.fromkeys(platform, STALE)
     for route, callback in routes(patterns):
         cls: Any = getattr(callback, "cls", None)
         drf = isinstance(cls, type) and issubclass(cls, APIView)
@@ -212,18 +278,28 @@ def insecure(patterns: Any, platform: frozenset[str]) -> dict[str, str]:
         if not route.startswith(PREFIX):
             if PREFIX.startswith(literal) and literal != route.rstrip("$"):
                 found[route] = "ruta dinámica que puede coincidir con una ruta de tenant"
-            elif drf and route in platform:
-                found.pop(route, None)
-            elif drf:
-                found[route] = "vista de DRF de plataforma sin exclusión explícita"
+            elif not drf and not route.startswith(API):
+                continue  # sondas internas: fuera del contrato
+            elif drf and not route.startswith(API):
+                found[route] = "vista de DRF fuera de api/: sin CSRF ni contrato de errores"
+            elif route not in platform:
+                found[route] = "ruta de plataforma sin exclusión explícita"
+            elif reason := platform_flaw(callback, drf):
+                found[route] = reason
+            elif found.get(route) == STALE:
+                del found[route]  # solo la marca de obsoleta: un motivo ya escrito no se borra
         elif not drf:
             found[route] = "no es una vista de DRF"
         elif not uses(effective(callback, "permission_classes"), HasPermission):
             found[route] = "sin HasPermission"
+        elif effective(callback, "authentication_classes") != APIView.authentication_classes:
+            found[route] = "cambia la autenticación"
         elif redefined := [h for h in GUARDS if effective(callback, h) is not getattr(APIView, h)]:
             found[route] = "redefine " + ", ".join(redefined)
         elif wrapped(callback):
             found[route] = "vista envuelta en un decorador"
+        elif decorated := sorted(n for n in handlers(callback) if hasattr(n[1], "__wrapped__")):
+            found[route] = f"manejador decorado: {[name for name, _ in decorated]}"
         elif not isinstance(declared, Mapping):
             found[route] = "sin required_permissions"
         elif missing := implemented(callback) - set(declared):
@@ -243,6 +319,19 @@ def insecure(patterns: Any, platform: frozenset[str]) -> dict[str, str]:
     return found
 
 
+def platform_flaw(callback: Any, drf: bool) -> str | None:
+    """Una ruta de plataforma listada: vista de DRF con UNA clase de plataforma y la sesión."""
+    if not drf:
+        return "no es una vista de DRF"
+    if effective(callback, "permission_classes") not in ([Public], [Authenticated]):
+        return "sin una clase de plataforma (Public o Authenticated)"
+    if effective(callback, "authentication_classes") != APIView.authentication_classes:
+        return "cambia la autenticación"
+    if redefined := [h for h in GUARDS if effective(callback, h) is not getattr(APIView, h)]:
+        return "redefine " + ", ".join(redefined)
+    return "vista envuelta en un decorador" if wrapped(callback) else None
+
+
 def effective(callback: Any, name: str) -> Any:
     """Lo que la ruta usa: `as_view(**initkwargs)` pisa el atributo de la clase."""
     kwargs = getattr(callback, "initkwargs", None) or {}
@@ -259,6 +348,13 @@ def wrapped(callback: Any) -> bool:
     view = getattr(callback, "__wrapped__", None)  # DRF solo añade `csrf_exempt`
     dispatch = callback.cls.dispatch
     return view is None or getattr(view, "__wrapped__", dispatch) is not dispatch
+
+
+def handlers(callback: Any) -> list[tuple[str, Any]]:
+    """Las funciones que atienden cada método (o cada acción de un viewset)."""
+    actions = getattr(callback, "actions", None) or {}
+    names = set(actions.values()) or set(callback.cls.http_method_names)
+    return [(n, getattr(callback.cls, n)) for n in sorted(names) if hasattr(callback.cls, n)]
 
 
 def implemented(callback: Any) -> set[str]:
@@ -484,18 +580,20 @@ def test_platform_staff_gets_no_bypass_and_platform_routes_are_excluded_by_route
     give(api.a, membership.pk, {VIEW: "OWN"})
     assert client.get(url()).json() == []  # solo lo que conceden sus roles
     for anybody in (Client(), api.client, client):
-        assert anybody.get("/platform/open/").status_code == 200  # la vista declara sus clases
-        assert anybody.get("/platform/defaults/").status_code == 403  # sin declarar: denegada
+        assert anybody.get("/api/platform/open/").status_code == 200  # declara sus clases
+    assert Client().get("/api/platform/defaults/").status_code == 401  # sin declarar ni sesión
+    for somebody in (api.client, client):
+        assert somebody.get("/api/platform/defaults/").status_code == 403  # sin declarar: no
 
 
 def test_every_tenant_route_declares_its_permissions(api: Any) -> None:
     assert insecure(config.urls.urlpatterns, PLATFORM) == {}  # el proyecto real
-    assert insecure(secure, frozenset({"platform/open/"})) == {}
+    assert insecure(secure, SECURE_PLATFORM) == {}
     assert TENANT_PATH.match("/api/v1/o/org-a/") and not TENANT_PATH.match("/api/v1/x/org-a/")
 
 
 def test_audit_flags_every_insecure_route(api: Any) -> None:
-    found = insecure(urlpatterns, frozenset({"platform/open/"}))
+    found = insecure(urlpatterns, SECURE_PLATFORM | LISTED)
     flawed = {route: reason for entry, reason in FLAWED for route, _ in routes([entry])}
     assert set(found) == set(flawed) and len(flawed) == len(FLAWED)
     for route, reason in flawed.items():

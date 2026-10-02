@@ -86,6 +86,7 @@ Request /api/v1/o/{org_slug}/contacts/…
   ├─ SecurityMiddleware, SessionMiddleware, CsrfViewMiddleware, AuthenticationMiddleware
   ├─ RequestIdMiddleware (request_id, correlation_id)
   ├─ ApiEnvelopeMiddleware (F2-12, ADR-014 §1): por fuera de todos; errores de /api/ con el contrato
+  ├─ ApiCsrfMiddleware (F2-13, ADR-014 §2): CSRF en los métodos no seguros de /api/
   └─ TenantResolutionMiddleware
         1. ¿ruta tenant (prefijo /api/v1/o/)? si no → pasa sin contexto (rutas de auth/plataforma)
         2. user autenticado? si no → 401
