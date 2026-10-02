@@ -24,13 +24,46 @@ BACKEND_ORIGIN=http://127.0.0.1:8000 pnpm dev   # /api y /ws → Django (same-or
 ## Estructura
 
 - `src/app/`: `/` muestra el estado del backend (consultado desde el servidor); `/o/[orgSlug]` es la ruta de tenant con el App Shell; `/demo` es la demo visual (ver abajo).
-- `src/components/app-shell/`: Sidebar + Topbar + Workspace. Dark-first, Geist, acento dorado con moderación, WCAG AA, `prefers-reduced-motion`.
-- `src/components/ui/`: componentes shadcn/ui.
+- `src/components/app-shell/`: barra lateral, barra superior y workspace, con el lenguaje del Figma GOOD DOGGY. En pantallas pequeñas la barra lateral va en un menú (`<dialog>` nativo, con su botón de cerrar), que se abre con JavaScript: sin él, o antes de hidratar, la navegación no es alcanzable por debajo de `lg`. WCAG AA, `prefers-reduced-motion`.
+- `src/components/ui/`: componentes shadcn/ui y primitivas de formulario (`TextField`).
 - `src/lib/api/`: cliente generado por orval. **Nunca** tipos de API a mano: si cambia el contrato, regenerar el schema del backend y después ejecutar `pnpm api:generate`.
+- `src/lib/http.ts`: el único `fetch` hacia la API (ver «Cliente de API»).
 - `src/components/demo/`: landing y workspace de la demo visual, con sus datos ficticios.
 - `messages/es-PE.json`: catálogo i18n.
 
 Sin autenticación, RBAC ni pantallas de negocio todavía. Las pantallas reales se construyen en `/o/[orgSlug]`, sobre la API y el cliente generado, con el Figma GOOD DOGGY como referencia visual ([AGENTS.md](../AGENTS.md) §11).
+
+## Lenguaje visual (F2-08A, D-F2-7)
+
+Las pantallas oficiales usan el tema claro del Figma GOOD DOGGY a través de los tokens semánticos de `src/app/globals.css`. Un componente oficial nunca usa los tokens `--gd-*`, que son los de la demo congelada.
+
+| Token                | Valor                 | Uso                                                                      |
+| -------------------- | --------------------- | ------------------------------------------------------------------------ |
+| `background`         | `#f3f3f3`             | Lienzo de la aplicación                                                  |
+| `surface`            | `#ffffff`             | Barra lateral, tarjetas, formularios                                     |
+| `surface-raised`     | `#ebebeb`             | Hover (sutil: la selección usa además otra señal)                        |
+| `foreground`         | `#202020`             | Texto, bordes de control, botón primario                                 |
+| `muted`              | `#5c5c5c`             | Texto secundario (AA sobre papel y sobre el lienzo)                      |
+| `border`             | `#dedede`             | Divisores                                                                |
+| `accent`             | `#ffdb5b`             | Miel: elemento activo y acciones del workspace. Nunca color de texto     |
+| `success` / `danger` | `#1a7f37` / `#b42318` | Estados, con AA sobre papel y sobre el lienzo (no como texto sobre miel) |
+
+- **Fuente:** DM Sans (`next/font`, servida desde el propio origen); Geist Mono para identificadores.
+- **Botones** (`components/ui/button.tsx`): `primary` (tinta), `accent` (miel) y `ghost`. Responden a la pulsación con una escala breve. `ink` y `honey` son de la demo.
+- **Movimiento:** lo que se mueve usa solo `transform`, `scale` y `opacity`, con la curva `--ease-out` y menos de 300 ms; los cambios de color son transiciones breves. Lo que se usa muchas veces al día no se anima; `prefers-reduced-motion` lo desactiva todo, también el fondo del menú.
+- **Sin marco en Figma:** el Figma no tiene pantallas de login ni de selección de organización. Las pantallas nuevas derivan de los marcos del workspace y de «Acceso demo».
+
+## Cliente de API (F2-08A, ADR-014)
+
+orval genera las funciones y los hooks; todos llaman a `apiFetch` (`src/lib/http.ts`), el único `fetch` hacia `/api/`:
+
+- Mismo origen y cookies del mismo origen. La sesión es una cookie `HttpOnly`: el código no la ve ni guarda nada de ella en `localStorage`.
+- Solo para el navegador (URL relativa y `document.cookie`): un Server Component no lo llama. Si una página del servidor necesita datos del usuario, delega en un componente cliente.
+- En `POST`, `PUT`, `PATCH` y `DELETE` copia la cookie `csrftoken` en la cabecera `X-CSRFToken`. Si la cookie no existe todavía, la pide antes; si no la consigue, no envía la escritura y el error es el de esa petición. Una escritura a otro origen se rechaza sin enviarla.
+- Una respuesta de error se convierte en `ApiError` con `status`, `code`, `fields` y `retryAfter` (segundos enteros), y así se tipa el `error` de cada hook generado. La red caída, también a mitad de una respuesta, es `NETWORK_ERROR` (`status` 0). Un 2xx que no es JSON es `INTERNAL_ERROR`. El texto de la respuesta nunca se muestra.
+- Cancelación: TanStack Query cancela con su propia señal (cambio de `queryKey`, desmontaje, `cancelQueries`) y eso no llega a la pantalla como error. Con una señal propia, un `abort()` sin motivo se relanza como `AbortError`; un motivo propio o `AbortSignal.timeout` llegan como `NETWORK_ERROR`.
+- `apiErrorKey(error)` (`src/lib/api-errors.ts`) da la clave del mensaje en `messages/es-PE.json` → `errors.api`. Un `code` sin mensaje propio usa el genérico.
+- TanStack Query no repite una respuesta 4xx ni una escritura; reintenta una vez lo que no llegó o falló en el servidor.
 
 ## Seguridad del navegador (F2-07)
 
@@ -82,5 +115,5 @@ Límites de la demo:
 
 - Datos ficticios definidos en `src/components/demo/data.ts`. No llama a la API, no envía mensajes y no guarda nada: los cambios (chat, etapa de una oportunidad, búsquedas) viven en memoria y se pierden al recargar.
 - Sin autenticación ni permisos: el "acceso demo" solo lleva al workspace. Las rutas de tenant (`/o/[orgSlug]`) no cambian.
-- Los tokens del Figma (`--gd-*`) y la fuente DM Sans solo se aplican bajo `/demo`; el resto de la aplicación conserva su tema. DM Sans se descarga de Google Fonts durante el build (`next/font`) y se sirve desde el propio origen.
+- Los tokens `--gd-*` solo se usan bajo `/demo`; las pantallas oficiales tienen los suyos (ver «Lenguaje visual»). DM Sans se descarga de Google Fonts durante el build (`next/font`) y se sirve desde el propio origen.
 - El texto de la demo vive en los componentes, no en `messages/es-PE.json`: es contenido de prototipo, no catálogo del producto.

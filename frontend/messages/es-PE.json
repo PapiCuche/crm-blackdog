@@ -1,7 +1,8 @@
 {
   "app": {
     "name": "Good Doggy CRM",
-    "skipToContent": "Saltar al contenido"
+    "skipToContent": "Saltar al contenido",
+    "brand": "Good Doggy"
   },
   "health": {
     "title": "Estado del sistema",
@@ -14,7 +15,12 @@
     "home": "Inicio",
     "organization": "Organización",
     "workspaceTitle": "Espacio de trabajo",
-    "workspaceEmpty": "Los módulos de la organización aparecerán aquí."
+    "workspaceEmpty": "Los módulos de la organización aparecerán aquí.",
+    "workspace": "Workspace",
+    "menu": "Abrir menú",
+    "menuNavigation": "Navegación del menú",
+    "menuTitle": "Menú",
+    "closeMenu": "Cerrar menú"
   },
   "errors": {
     "notFoundTitle": "Página no encontrada",
@@ -22,6 +28,18 @@
     "backHome": "Volver al inicio",
     "errorTitle": "Algo salió mal",
     "errorBody": "No pudimos mostrar esta página. Puedes intentarlo de nuevo.",
-    "retry": "Reintentar"
+    "retry": "Reintentar",
+    "api": {
+      "NETWORK_ERROR": "No hay conexión con el servidor. Revisa tu red e inténtalo de nuevo.",
+      "NOT_AUTHENTICATED": "Tu sesión terminó. Vuelve a entrar para continuar.",
+      "INVALID_CREDENTIALS": "El correo o la contraseña no son correctos.",
+      "PERMISSION_DENIED": "No tienes permiso para hacer esto.",
+      "NOT_FOUND": "No encontramos lo que buscas.",
+      "VALIDATION_ERROR": "Revisa los campos marcados.",
+      "CSRF_FAILED": "La página caducó. Recárgala e inténtalo de nuevo.",
+      "RATE_LIMITED": "Demasiados intentos. Espera un momento antes de volver a probar.",
+      "ORG_SUSPENDED": "Esta organización está suspendida.",
+      "INTERNAL_ERROR": "Algo salió mal de nuestro lado. Inténtalo de nuevo en unos minutos."
+    }
   }
 }

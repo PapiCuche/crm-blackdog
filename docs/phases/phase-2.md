@@ -24,7 +24,8 @@ Cada work item es un issue con el alcance completo (Incluye / No incluye / crite
 | F2-06 | [#43](https://github.com/PapiCuche/crm-gooddoggy/issues/43) Organization bootstrap | `feature/f2-org-bootstrap` | #41, #56 | backend |
 | F2-06B | [#68](https://github.com/PapiCuche/crm-gooddoggy/issues/68) Organization bootstrap command | `feature/f2-org-bootstrap-command` | #43 | backend |
 | F2-07 | [#44](https://github.com/PapiCuche/crm-gooddoggy/issues/44) Frontend security / CSP | `feature/f2-frontend-csp` | #37 | frontend |
-| F2-08 | [#45](https://github.com/PapiCuche/crm-gooddoggy/issues/45) Frontend access integration | `feature/f2-frontend-access` | #40, #43, #44, #57 | frontend |
+| F2-08 | [#45](https://github.com/PapiCuche/crm-gooddoggy/issues/45) Frontend access integration | `feature/f2-frontend-access` | #40, #43, #44, #57, #67, #68, #70 | frontend |
+| F2-08A | [#70](https://github.com/PapiCuche/crm-gooddoggy/issues/70) Official design foundation and API client | `feature/f2-frontend-foundation` | #44 | frontend |
 | F2-09 | [#55](https://github.com/PapiCuche/crm-gooddoggy/issues/55) Production delivery rule and access decisions | `docs/f2-production-rule-decisions` | — | docs |
 | F2-10 | [#56](https://github.com/PapiCuche/crm-gooddoggy/issues/56) Platform audit sink | `feature/f2-platform-audit` | #55 | backend |
 | F2-11 | [#57](https://github.com/PapiCuche/crm-gooddoggy/issues/57) Self context endpoint | `feature/f2-self-context` | #40 | backend + API |
@@ -91,7 +92,7 @@ Un ADR `Accepted` no se modifica: si una decisión lo contradice o amplía, se p
 | D-F2-4 | **Dependencias nuevas** (bloqueo progresivo, TOTP). No se añaden sin su fila en [ADR-012](../adr/ADR-012-engineering-runtime-baseline.md). | `argon2-cffi` ya está fijado; el resto no | F2-03A / F2-03B, E01-03 |
 | D-F2-5 | **Envío de correo.** Mailpit es infraestructura local, no el diseño del envío en producción. Hace falta una abstracción. | Sin diseño | E01-06, E01-02 |
 | D-F2-6 | **Secretos TOTP.** Cifrado, KEK y rotación; nunca en claro. | Sin diseño | E01-03 |
-| D-F2-7 | **Lenguaje visual del shell real.** `/o/[orgSlug]` usa hoy el tema oscuro; el Figma GOOD DOGGY es la referencia para las pantallas nuevas. | Se concreta en F2-08 | F2-08 (#45) |
+| D-F2-7 | **Lenguaje visual del shell real.** ✅ Resuelta el 2026-10-02: las pantallas oficiales adoptan el tema claro del Figma GOOD DOGGY (archivo `nRg83fFjnBDp8EouIPvTEZ`): lienzo `#f3f3f3`, papel `#ffffff`, tinta `#202020`, miel `#ffdb5b` y DM Sans. El tema oscuro con acento dorado se retira. El Figma no tiene marcos de login ni de selector de organización: derivan de los marcos del workspace y de «Acceso demo». Detalle en [frontend/README.md](../../frontend/README.md). | Resuelta. Lo implementa F2-08A (#70) | — |
 
 ### D-F2-2 — Sesiones en base de datos
 

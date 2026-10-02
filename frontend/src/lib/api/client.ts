@@ -23,6 +23,10 @@ import type {
 
 import type { Error, LoginRequest, Session } from "./model";
 
+import { apiFetch } from "../http";
+import type { ErrorType } from "../http";
+type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
+
 const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKey: K } => {
   const result = { queryKey } as T & { queryKey: K };
   for (const key of Object.keys(query)) {
@@ -38,16 +42,6 @@ const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKe
   return result;
 };
 
-export type authCsrfResponse204 = {
-  data: void;
-  status: 204;
-};
-
-export type authCsrfResponseSuccess = authCsrfResponse204 & {
-  headers: Headers;
-};
-export type authCsrfResponse = authCsrfResponseSuccess;
-
 export const getAuthCsrfUrl = () => {
   return `/api/v1/auth/csrf/`;
 };
@@ -55,16 +49,11 @@ export const getAuthCsrfUrl = () => {
 /**
  * Entrega la cookie `csrftoken` antes del primer método no seguro.
  */
-export const authCsrf = async (options?: RequestInit): Promise<authCsrfResponse> => {
-  const res = await fetch(getAuthCsrfUrl(), {
+export const authCsrf = async (options?: Parameters<typeof apiFetch>[1]): Promise<void> => {
+  return apiFetch<void>(getAuthCsrfUrl(), {
     ...options,
     method: "GET",
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: authCsrfResponse["data"] = body ? JSON.parse(body) : undefined;
-  return { data, status: res.status, headers: res.headers } as authCsrfResponse;
 };
 
 export const getAuthCsrfQueryKey = () => {
@@ -73,17 +62,17 @@ export const getAuthCsrfQueryKey = () => {
 
 export const getAuthCsrfQueryOptions = <
   TData = Awaited<ReturnType<typeof authCsrf>>,
-  TError = unknown,
+  TError = ErrorType<unknown>,
 >(options?: {
   query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof authCsrf>>, TError, TData>>;
-  fetch?: RequestInit;
+  request?: SecondParameter<typeof apiFetch>;
 }) => {
-  const { query: queryOptions, fetch: fetchOptions } = options ?? {};
+  const { query: queryOptions, request: requestOptions } = options ?? {};
 
   const queryKey = queryOptions?.queryKey ?? getAuthCsrfQueryKey();
 
   const queryFn: QueryFunction<Awaited<ReturnType<typeof authCsrf>>> = ({ signal }) =>
-    authCsrf({ signal, ...fetchOptions });
+    authCsrf({ signal, ...requestOptions });
 
   return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
     Awaited<ReturnType<typeof authCsrf>>,
@@ -93,9 +82,12 @@ export const getAuthCsrfQueryOptions = <
 };
 
 export type AuthCsrfQueryResult = NonNullable<Awaited<ReturnType<typeof authCsrf>>>;
-export type AuthCsrfQueryError = unknown;
+export type AuthCsrfQueryError = ErrorType<unknown>;
 
-export function useAuthCsrf<TData = Awaited<ReturnType<typeof authCsrf>>, TError = unknown>(
+export function useAuthCsrf<
+  TData = Awaited<ReturnType<typeof authCsrf>>,
+  TError = ErrorType<unknown>,
+>(
   options: {
     query: Partial<UseQueryOptions<Awaited<ReturnType<typeof authCsrf>>, TError, TData>> &
       Pick<
@@ -106,11 +98,14 @@ export function useAuthCsrf<TData = Awaited<ReturnType<typeof authCsrf>>, TError
         >,
         "initialData"
       >;
-    fetch?: RequestInit;
+    request?: SecondParameter<typeof apiFetch>;
   },
   queryClient?: QueryClient,
 ): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-export function useAuthCsrf<TData = Awaited<ReturnType<typeof authCsrf>>, TError = unknown>(
+export function useAuthCsrf<
+  TData = Awaited<ReturnType<typeof authCsrf>>,
+  TError = ErrorType<unknown>,
+>(
   options?: {
     query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof authCsrf>>, TError, TData>> &
       Pick<
@@ -121,22 +116,28 @@ export function useAuthCsrf<TData = Awaited<ReturnType<typeof authCsrf>>, TError
         >,
         "initialData"
       >;
-    fetch?: RequestInit;
+    request?: SecondParameter<typeof apiFetch>;
   },
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-export function useAuthCsrf<TData = Awaited<ReturnType<typeof authCsrf>>, TError = unknown>(
+export function useAuthCsrf<
+  TData = Awaited<ReturnType<typeof authCsrf>>,
+  TError = ErrorType<unknown>,
+>(
   options?: {
     query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof authCsrf>>, TError, TData>>;
-    fetch?: RequestInit;
+    request?: SecondParameter<typeof apiFetch>;
   },
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
-export function useAuthCsrf<TData = Awaited<ReturnType<typeof authCsrf>>, TError = unknown>(
+export function useAuthCsrf<
+  TData = Awaited<ReturnType<typeof authCsrf>>,
+  TError = ErrorType<unknown>,
+>(
   options?: {
     query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof authCsrf>>, TError, TData>>;
-    fetch?: RequestInit;
+    request?: SecondParameter<typeof apiFetch>;
   },
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
@@ -149,37 +150,6 @@ export function useAuthCsrf<TData = Awaited<ReturnType<typeof authCsrf>>, TError
   return withQueryKey(query, queryOptions.queryKey);
 }
 
-export type authLoginResponse200 = {
-  data: Session;
-  status: 200;
-};
-
-export type authLoginResponse400 = {
-  data: Error;
-  status: 400;
-};
-
-export type authLoginResponse401 = {
-  data: Error;
-  status: 401;
-};
-
-export type authLoginResponse403 = {
-  data: Error;
-  status: 403;
-};
-
-export type authLoginResponseSuccess = authLoginResponse200 & {
-  headers: Headers;
-};
-export type authLoginResponseError = (
-  authLoginResponse400 | authLoginResponse401 | authLoginResponse403
-) & {
-  headers: Headers;
-};
-
-export type authLoginResponse = authLoginResponseSuccess | authLoginResponseError;
-
 export const getAuthLoginUrl = () => {
   return `/api/v1/auth/login/`;
 };
@@ -189,8 +159,8 @@ export const getAuthLoginUrl = () => {
  */
 export const authLogin = async (
   loginRequest: LoginRequest,
-  options?: RequestInit,
-): Promise<authLoginResponse> => {
+  options?: Parameters<typeof apiFetch>[1],
+): Promise<Session> => {
   const getHeaders = (
     h?: NonNullable<RequestInit["headers"]>,
   ): Record<string, string | readonly string[]> => {
@@ -210,29 +180,27 @@ export const authLogin = async (
     }
     return headers;
   };
-  const res = await fetch(getAuthLoginUrl(), {
+  return apiFetch<Session>(getAuthLoginUrl(), {
     ...options,
     method: "POST",
     headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
     body: JSON.stringify(loginRequest),
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: authLoginResponse["data"] = body ? JSON.parse(body) : {};
-  return { data, status: res.status, headers: res.headers } as authLoginResponse;
 };
 
 export const getAuthLoginMutationKey = () => ["authLogin"] as const;
 
-export const getAuthLoginMutationOptions = <TError = Error, TContext = unknown>(options?: {
+export const getAuthLoginMutationOptions = <
+  TError = ErrorType<Error>,
+  TContext = unknown,
+>(options?: {
   mutation?: UseMutationOptions<
     Awaited<ReturnType<typeof authLogin>>,
     TError,
     AuthLoginMutationVariables,
     TContext
   >;
-  fetch?: RequestInit;
+  request?: SecondParameter<typeof apiFetch>;
 }): UseMutationOptions<
   Awaited<ReturnType<typeof authLogin>>,
   TError,
@@ -240,11 +208,11 @@ export const getAuthLoginMutationOptions = <TError = Error, TContext = unknown>(
   TContext
 > => {
   const mutationKey = getAuthLoginMutationKey();
-  const { mutation: mutationOptions, fetch: fetchOptions } = options
+  const { mutation: mutationOptions, request: requestOptions } = options
     ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
       ? options
       : { ...options, mutation: { ...options.mutation, mutationKey } }
-    : { mutation: { mutationKey }, fetch: undefined };
+    : { mutation: { mutationKey }, request: undefined };
 
   const mutationFn: MutationFunction<
     Awaited<ReturnType<typeof authLogin>>,
@@ -252,7 +220,7 @@ export const getAuthLoginMutationOptions = <TError = Error, TContext = unknown>(
   > = (props) => {
     const { data } = props ?? {};
 
-    return authLogin(data, fetchOptions);
+    return authLogin(data, requestOptions);
   };
 
   return { mutationFn, ...mutationOptions };
@@ -260,10 +228,10 @@ export const getAuthLoginMutationOptions = <TError = Error, TContext = unknown>(
 
 export type AuthLoginMutationResult = NonNullable<Awaited<ReturnType<typeof authLogin>>>;
 export type AuthLoginMutationBody = LoginRequest;
-export type AuthLoginMutationError = Error;
+export type AuthLoginMutationError = ErrorType<Error>;
 export type AuthLoginMutationVariables = { data: LoginRequest };
 
-export const useAuthLogin = <TError = Error, TContext = unknown>(
+export const useAuthLogin = <TError = ErrorType<Error>, TContext = unknown>(
   options?: {
     mutation?: UseMutationOptions<
       Awaited<ReturnType<typeof authLogin>>,
@@ -271,7 +239,7 @@ export const useAuthLogin = <TError = Error, TContext = unknown>(
       AuthLoginMutationVariables,
       TContext
     >;
-    fetch?: RequestInit;
+    request?: SecondParameter<typeof apiFetch>;
   },
   queryClient?: QueryClient,
 ): UseMutationResult<
@@ -283,25 +251,6 @@ export const useAuthLogin = <TError = Error, TContext = unknown>(
   return useMutation(getAuthLoginMutationOptions(options), queryClient);
 };
 
-export type authSessionResponse200 = {
-  data: Session;
-  status: 200;
-};
-
-export type authSessionResponse401 = {
-  data: Error;
-  status: 401;
-};
-
-export type authSessionResponseSuccess = authSessionResponse200 & {
-  headers: Headers;
-};
-export type authSessionResponseError = authSessionResponse401 & {
-  headers: Headers;
-};
-
-export type authSessionResponse = authSessionResponseSuccess | authSessionResponseError;
-
 export const getAuthSessionUrl = () => {
   return `/api/v1/auth/session/`;
 };
@@ -310,16 +259,11 @@ export const getAuthSessionUrl = () => {
  * La sesión actual. 401 `NOT_AUTHENTICATED` si no hay, caducó o su usuario no está
  * activo.
  */
-export const authSession = async (options?: RequestInit): Promise<authSessionResponse> => {
-  const res = await fetch(getAuthSessionUrl(), {
+export const authSession = async (options?: Parameters<typeof apiFetch>[1]): Promise<Session> => {
+  return apiFetch<Session>(getAuthSessionUrl(), {
     ...options,
     method: "GET",
   });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: authSessionResponse["data"] = body ? JSON.parse(body) : {};
-  return { data, status: res.status, headers: res.headers } as authSessionResponse;
 };
 
 export const getAuthSessionQueryKey = () => {
@@ -328,17 +272,17 @@ export const getAuthSessionQueryKey = () => {
 
 export const getAuthSessionQueryOptions = <
   TData = Awaited<ReturnType<typeof authSession>>,
-  TError = Error,
+  TError = ErrorType<Error>,
 >(options?: {
   query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof authSession>>, TError, TData>>;
-  fetch?: RequestInit;
+  request?: SecondParameter<typeof apiFetch>;
 }) => {
-  const { query: queryOptions, fetch: fetchOptions } = options ?? {};
+  const { query: queryOptions, request: requestOptions } = options ?? {};
 
   const queryKey = queryOptions?.queryKey ?? getAuthSessionQueryKey();
 
   const queryFn: QueryFunction<Awaited<ReturnType<typeof authSession>>> = ({ signal }) =>
-    authSession({ signal, ...fetchOptions });
+    authSession({ signal, ...requestOptions });
 
   return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
     Awaited<ReturnType<typeof authSession>>,
@@ -348,9 +292,12 @@ export const getAuthSessionQueryOptions = <
 };
 
 export type AuthSessionQueryResult = NonNullable<Awaited<ReturnType<typeof authSession>>>;
-export type AuthSessionQueryError = Error;
+export type AuthSessionQueryError = ErrorType<Error>;
 
-export function useAuthSession<TData = Awaited<ReturnType<typeof authSession>>, TError = Error>(
+export function useAuthSession<
+  TData = Awaited<ReturnType<typeof authSession>>,
+  TError = ErrorType<Error>,
+>(
   options: {
     query: Partial<UseQueryOptions<Awaited<ReturnType<typeof authSession>>, TError, TData>> &
       Pick<
@@ -361,11 +308,14 @@ export function useAuthSession<TData = Awaited<ReturnType<typeof authSession>>, 
         >,
         "initialData"
       >;
-    fetch?: RequestInit;
+    request?: SecondParameter<typeof apiFetch>;
   },
   queryClient?: QueryClient,
 ): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-export function useAuthSession<TData = Awaited<ReturnType<typeof authSession>>, TError = Error>(
+export function useAuthSession<
+  TData = Awaited<ReturnType<typeof authSession>>,
+  TError = ErrorType<Error>,
+>(
   options?: {
     query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof authSession>>, TError, TData>> &
       Pick<
@@ -376,22 +326,28 @@ export function useAuthSession<TData = Awaited<ReturnType<typeof authSession>>, 
         >,
         "initialData"
       >;
-    fetch?: RequestInit;
+    request?: SecondParameter<typeof apiFetch>;
   },
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
-export function useAuthSession<TData = Awaited<ReturnType<typeof authSession>>, TError = Error>(
+export function useAuthSession<
+  TData = Awaited<ReturnType<typeof authSession>>,
+  TError = ErrorType<Error>,
+>(
   options?: {
     query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof authSession>>, TError, TData>>;
-    fetch?: RequestInit;
+    request?: SecondParameter<typeof apiFetch>;
   },
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
 
-export function useAuthSession<TData = Awaited<ReturnType<typeof authSession>>, TError = Error>(
+export function useAuthSession<
+  TData = Awaited<ReturnType<typeof authSession>>,
+  TError = ErrorType<Error>,
+>(
   options?: {
     query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof authSession>>, TError, TData>>;
-    fetch?: RequestInit;
+    request?: SecondParameter<typeof apiFetch>;
   },
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {

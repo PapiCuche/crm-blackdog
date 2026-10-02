@@ -12,6 +12,12 @@ export default defineConfig({
       baseUrl: "", // same-origin: /api/… lo enruta el proxy (Next en local, Caddy en F1-10)
       clean: true,
       formatter: "prettier",
+      override: {
+        // Todo pasa por `apiFetch` (CSRF, cookies del mismo origen, errores por `code`); las
+        // funciones devuelven el cuerpo, no el sobre `{ data, status, headers }`.
+        mutator: { path: "./src/lib/http.ts", name: "apiFetch" },
+        fetch: { includeHttpResponseReturnType: false },
+      },
     },
   },
 });
