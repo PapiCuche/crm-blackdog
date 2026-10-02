@@ -33,6 +33,7 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",  # request.user (F2-01)
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "core.api.middleware.ApiCsrfMiddleware",  # CSRF de /api/ antes de resolver el tenant
     "core.tenancy.middleware.TenantResolutionMiddleware",  # siempre tras la autenticación
 ]
 
@@ -97,16 +98,17 @@ LOGGING = {
     },
 }
 # API (F1-08A): DRF solo JSON. Contrato OpenAPI con drf-spectacular, versionado en
-# backend/openapi/schema.yaml (fuente de verdad para orval). Errores: ADR-014 §1 (F2-12).
+# backend/openapi/schema.yaml (fuente de verdad para orval). Convenciones: ADR-014 (F2-12).
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
     "DEFAULT_PARSER_CLASSES": ["rest_framework.parsers.JSONParser"],
     "URL_FORMAT_OVERRIDE": None,  # solo JSON: `?format=` no existe
-    "DEFAULT_AUTHENTICATION_CLASSES": [],
-    "UNAUTHENTICATED_USER": None,  # sin clases de autenticación hasta F2-13
+    # Sesión de Django; el CSRF lo exige ApiCsrfMiddleware para todo /api/.
+    "DEFAULT_AUTHENTICATION_CLASSES": ["core.api.authentication.SessionAuthentication"],
     "EXCEPTION_HANDLER": "core.api.errors.exception_handler",  # cuerpo de error único
-    # F2-05B: denegación por defecto. Las vistas de plataforma declaran las suyas.
+    # F2-05B: denegación por defecto. Las vistas de plataforma declaran las suyas
+    # (core.api.permissions).
     "DEFAULT_PERMISSION_CLASSES": ["apps.access.permissions.HasPermission"],
     "DEFAULT_FILTER_BACKENDS": ["apps.access.permissions.ScopeFilter"],
 }
@@ -117,6 +119,7 @@ SPECTACULAR_SETTINGS = {
     "SERVE_INCLUDE_SCHEMA": False,  # el propio /api/schema/ no forma parte del contrato
     "COMPONENT_SPLIT_REQUEST": True,  # tipos separados de petición/respuesta para orval
     "SCHEMA_PATH_PREFIX": r"/api/v[0-9]+",
+    "SERVE_PERMISSIONS": ["core.api.permissions.Public"],  # ruta de plataforma (ADR-014 §4)
 }
 # Object storage S3-compatible (ADR-008): credenciales solo por entorno.
 STORAGE_BACKEND = env.optional("STORAGE_BACKEND", "s3")  # s3 | memory (tests)

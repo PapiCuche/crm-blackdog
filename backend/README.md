@@ -166,7 +166,32 @@ Ese test recorre todo el URLconf y falla si una ruta de tenant no es una vista d
 
 Un slug imposible bajo `/api/v1/o/` responde 404 sin llegar a ninguna vista. El resolvedor de tenant consulta la membresía exista o no la organización, para que el tiempo de respuesta del 404 no delate qué slugs existen.
 
-La sesión, el CSRF y las rutas de plataforma (ADR-014 §2 y §4) llegan con F2-13.
+## Sesión, CSRF y rutas de plataforma (F2-13, ADR-014 §2 y §4)
+
+- `core.api.middleware.ApiCsrfMiddleware` exige el token CSRF en todo `POST`, `PUT`, `PATCH` y `DELETE` bajo `/api/`, haya sesión o no, y antes de resolver el tenant. No depende de la vista: DRF marca las suyas como exentas.
+- El token solo se acepta en la cabecera `X-CSRFToken` (con la cookie `csrftoken`). El campo de formulario `csrfmiddlewaretoken` no vale, y el cuerpo no se lee antes de autenticar. El motivo de un rechazo va al log `django.security.csrf`; al cliente, solo `CSRF_FAILED`.
+- `core.api.authentication.SessionAuthentication` es la clase por defecto de DRF: entrega a la vista el usuario de la sesión de Django y hace que la falta de sesión sea un 401 con `WWW-Authenticate: Session`. Además exige la marca del control de CSRF: una vista de DRF montada fuera de `/api/` rechaza los métodos no seguros.
+- En desarrollo, `next dev` hace de proxy y cambia la cabecera `Host`: `config.settings.local` confía en `http://localhost:3000` para la comprobación de `Origin`. En producción, `DJANGO_CSRF_TRUSTED_ORIGINS`.
+- Con el cliente de tests de Django, usar `Client(enforce_csrf_checks=True)` para probar el CSRF.
+
+| Caso en un método no seguro | Respuesta |
+|---|---|
+| Sin token CSRF válido, con sesión o sin ella | 403 `CSRF_FAILED` |
+| Con token y sin sesión | 401 `NOT_AUTHENTICATED` |
+
+**Rutas de plataforma** (todo `/api/` fuera de `/api/v1/o/<slug>/`): declaran exactamente una clase de `core.api.permissions`, `Public` (sin sesión) o `Authenticated` (sesión de un usuario activo), y se añaden a `PLATFORM` en `tests/test_access_api.py`. Las dos deniegan dentro de un `tenant_scope` y bajo el prefijo de tenant: no sirven para saltarse `HasPermission`.
+
+La auditoría del URLconf falla si:
+
+- una ruta bajo `api/` no es de tenant ni está en la lista, sea o no de DRF;
+- una vista de DRF está fuera de `api/`;
+- una ruta listada no declara una de las dos clases;
+- una vista cambia `authentication_classes` o redefine `get_authenticators`, `perform_authentication`, `get_authenticate_header`, `handle_exception` o `check_object_permissions`;
+- un manejador de una vista de tenant lleva un decorador (`method_decorator(cache_page(…))`);
+- una expresión regular sin `$` puede casar con una ruta de tenant;
+- dos rutas comparten el mismo texto y la primera, que es la que responde, no cumple.
+
+Todavía no hay login ni cookie de sesión propia: llegan con F2-03A.
 
 ## Cambios de RBAC sin escalada (F2-05C, ADR-003 §5)
 

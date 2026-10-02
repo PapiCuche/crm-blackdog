@@ -1,5 +1,9 @@
-"""F2-12 (ADR-014 §1 y §3): un solo cuerpo de error en toda la API, venga de donde venga."""
+"""F2-12 y F2-13 (ADR-014): cuerpo de error único, CSRF en todo `/api/`, 401/403 y rutas de
+plataforma."""
 
+import importlib
+import logging
+from types import SimpleNamespace
 from typing import Any
 from uuid import uuid4
 
@@ -13,14 +17,15 @@ from drf_spectacular.generators import SchemaGenerator
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
 from rest_framework import exceptions, generics, serializers
-from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.audit.services import Entity, record
 from core import outbox
+from core.api.authentication import SessionAuthentication
 from core.api.errors import ApiError
 from core.api.middleware import API_CSP
+from core.api.permissions import Authenticated, Public
 from core.api.schema import errors
 from tests import test_access_api, test_authorization
 from tests.tenancy_app.models import Widget
@@ -31,6 +36,8 @@ api, world = test_access_api.api, test_authorization.world  # fixtures de F2-05A
 
 pytestmark = [pytest.mark.usefixtures("tenant_db"), pytest.mark.urls(__name__)]
 NOT_FOUND = (404, b'{"code":"NOT_FOUND"}')
+CSRF_FAILED = (403, b'{"code":"CSRF_FAILED"}')
+TOKEN = "t" * 32  # secreto CSRF con el formato de Django
 
 
 class NoteSerializer(serializers.Serializer[Any]):
@@ -44,9 +51,9 @@ class NoteSerializer(serializers.Serializer[Any]):
 
 
 class Notes(generics.GenericAPIView[Any]):
-    """Ruta de plataforma que valida, falla y lanza un error de dominio."""
+    """Ruta de plataforma pública que valida, falla y lanza un error de dominio."""
 
-    permission_classes = [AllowAny]
+    permission_classes = [Public]
     serializer_class = NoteSerializer
 
     def get(self, request: Any) -> Response:
@@ -123,6 +130,22 @@ class Odd(Notes):
         raise error
 
 
+class Session(APIView):
+    permission_classes = [Authenticated]
+
+    def get(self, request: Any) -> Response:
+        return Response({"user": str(request.user.pk)})
+
+
+class PublicInsideTenant(APIView):
+    """Una clase de plataforma en una ruta de tenant no autoriza nada."""
+
+    permission_classes = [Public]
+
+    def get(self, request: Any, **kwargs: Any) -> Response:
+        return Response({"ok": True})
+
+
 def not_allowed(request: Any) -> HttpResponseNotAllowed:
     return HttpResponseNotAllowed(["GET"])  # una respuesta de Django, en HTML
 
@@ -143,6 +166,9 @@ urlpatterns = [
     path(TENANT + "widgets/", WidgetList.as_view()),
     path(TENANT + "widgets/<uuid:pk>/", WidgetDetail.as_view()),
     path(TENANT + "writes/<str:case>/", Writes.as_view()),
+    path(TENANT + "public/", PublicInsideTenant.as_view()),
+    path("api/v1/auth/session/", Session.as_view()),
+    path("outside/notes/", Notes.as_view()),  # una vista de DRF fuera de /api/
     path("api/v1/notes/", Notes.as_view()),
     path("api/v1/orders/", Orders.as_view()),
     path("api/v1/plain/", not_allowed),
@@ -159,6 +185,11 @@ def reply(response: Any) -> tuple[int, bytes]:
 
 def post(client: Client, target: str, body: Any = None, headers: Any = None) -> Any:
     return client.post(target, body or {}, content_type="application/json", headers=headers)
+
+
+def with_token(client: Client) -> dict[str, str]:
+    client.cookies["csrftoken"] = TOKEN
+    return {"X-CSRFToken": TOKEN}
 
 
 def test_drf_errors_use_the_contract_body(api: Any) -> None:
@@ -349,3 +380,113 @@ def test_html_errors_are_rewritten_with_clean_headers(api: Any) -> None:
             assert stale not in response.headers
     assert reply(client.get("/api")) == NOT_FOUND  # `/api` a secas también es de la API
     assert client.get("/api").headers["Content-Security-Policy"] == API_CSP
+
+
+def test_unsafe_methods_need_a_csrf_token_with_or_without_session(api: Any) -> None:
+    give(api.a, api.membership, {VIEW: "ORGANIZATION", MANAGE: "ORGANIZATION"})
+    anonymous, member = Client(enforce_csrf_checks=True), Client(enforce_csrf_checks=True)
+    member.force_login(api.ana)
+    for client in (anonymous, member):
+        failed = post(client, "/api/v1/notes/", {"title": "ok", "size": 1})
+        assert reply(failed) == CSRF_FAILED and failed.headers["Content-Security-Policy"] == API_CSP
+        for method in ("post", "put", "patch", "delete"):
+            assert reply(getattr(client, method)(detail(api.mine))) == CSRF_FAILED  # ruta de tenant
+        assert client.get("/api/v1/notes/").status_code == 200  # los métodos seguros, no
+    assert member.get(detail(api.mine)).json()["name"] == "mine"  # nada cambió
+    bad = post(member, "/api/v1/notes/", {"title": "ok", "size": 1}, {"X-CSRFToken": TOKEN})
+    assert reply(bad) == CSRF_FAILED  # sin cookie, la cabecera sola no vale
+    token = with_token(member)
+    assert post(member, "/api/v1/notes/", {"title": "ok", "size": 1}, token).status_code == 201
+    renamed = member.patch(detail(api.mine), {"name": "x"}, "application/json", headers=token)
+    assert renamed.status_code == 200 and renamed.json()["name"] == "x"
+    foreign = post(
+        member,
+        "/api/v1/notes/",
+        {"title": "ok", "size": 1},
+        {"Origin": "https://evil.example", **token},
+    )
+    assert reply(foreign) == CSRF_FAILED  # otro origen, aunque traiga el token
+    # Con token y sin sesión, la ruta de tenant responde 401: el token no autentica.
+    assert reply(anonymous.delete(detail(api.mine), headers=with_token(anonymous))) == (
+        401,
+        b'{"code":"NOT_AUTHENTICATED"}',
+    )
+
+
+def test_only_a_trusted_origin_passes_and_a_rejection_is_logged(
+    api: Any, settings: Any, caplog: pytest.LogCaptureFixture
+) -> None:
+    settings.CSRF_TRUSTED_ORIGINS = ["http://localhost:3000"]  # `next dev` cambia el Host
+    settings.ALLOWED_HOSTS = ["127.0.0.1"]
+    local = importlib.import_module("config.settings.local")
+    assert "http://localhost:3000" in local.CSRF_TRUSTED_ORIGINS
+    client = Client(enforce_csrf_checks=True, headers={"host": "127.0.0.1:8000"})
+    client.force_login(api.ana)
+    token, note = with_token(client), {"title": "ok", "size": 1}
+    trusted = post(client, "/api/v1/notes/", note, {"Origin": "http://localhost:3000", **token})
+    assert trusted.status_code == 201
+    caplog.set_level(logging.WARNING, logger="django.security.csrf")
+    origin = "http://localhost:3001/" + "x" * 3000
+    assert reply(post(client, "/api/v1/notes/", note, {"Origin": origin, **token})) == CSRF_FAILED
+    (logged,) = [r.getMessage() for r in caplog.records if r.name == "django.security.csrf"]
+    assert "/api/v1/notes/" in logged and "localhost:3001" in logged and len(logged) < 300
+    assert TOKEN not in logged
+
+
+def test_the_csrf_token_travels_only_in_the_header_and_the_body_is_not_read(api: Any) -> None:
+    client = Client(enforce_csrf_checks=True)
+    client.force_login(api.ana)
+    token = with_token(client)
+    form = client.post("/api/v1/notes/", {"csrfmiddlewaretoken": TOKEN, "title": "ok"})
+    assert reply(form) == CSRF_FAILED  # el campo de formulario no vale: solo la cabecera
+    multipart = client.post("/api/v1/notes/", {"title": "ok", "size": "1"}, headers=token)
+    assert reply(multipart) == (415, b'{"code":"UNSUPPORTED_MEDIA_TYPE"}')  # DRF sí ve el cuerpo
+    huge = client.post(
+        "/api/v1/notes/",
+        "a=" + "x" * 3_000_000,
+        content_type="application/x-www-form-urlencoded",
+        headers=token,
+    )
+    assert reply(huge) == (415, b'{"code":"UNSUPPORTED_MEDIA_TYPE"}')  # nadie lo leyó antes
+    for bad in ("corto", "x" * 32):
+        wrong = post(client, "/api/v1/notes/", {"title": "ok", "size": 1}, {"X-CSRFToken": bad})
+        assert reply(wrong) == CSRF_FAILED
+
+
+def test_a_drf_view_outside_the_api_prefix_refuses_unsafe_methods(api: Any) -> None:
+    anonymous, client = Client(enforce_csrf_checks=True), Client(enforce_csrf_checks=True)
+    client.force_login(api.ana)
+    assert client.get("/outside/notes/").status_code == 200
+    for sender in (anonymous, client):  # con sesión o sin ella
+        for headers in (None, with_token(sender)):  # ni con token: fuera de /api/ no hay control
+            response = post(sender, "/outside/notes/", {"title": "ok", "size": 1}, headers)
+            assert response.status_code == 403 and response.json() == {"code": "CSRF_FAILED"}
+
+
+def test_platform_classes_and_the_session_class_fail_closed_on_their_own() -> None:
+    """Sin el middleware delante: cada pieza deniega por sí misma (defensa en profundidad)."""
+    inside = SimpleNamespace(path_info="/api/v1/o/acme/x/", successful_authenticator=object())
+    assert not Public().has_permission(inside, None)
+    assert not Authenticated().has_permission(inside, None)
+    outside = SimpleNamespace(path_info="/api/v1/auth/session/", successful_authenticator=object())
+    assert Authenticated().has_permission(outside, None)
+    user = SimpleNamespace(is_authenticated=True, is_active=False)
+    request = SimpleNamespace(_request=SimpleNamespace(method="GET", user=user))
+    assert SessionAuthentication().authenticate(request) is None
+    user.is_active = True
+    assert SessionAuthentication().authenticate(request) == (user, None)
+
+
+def test_no_session_is_401_and_platform_classes_never_authorize_a_tenant(api: Any) -> None:
+    anonymous = Client().get("/api/v1/auth/session/")
+    assert reply(anonymous) == (401, b'{"code":"NOT_AUTHENTICATED"}')
+    assert anonymous.headers["WWW-Authenticate"] == "Session"
+    assert api.client.get("/api/v1/auth/session/").json() == {"user": str(api.ana.pk)}
+    type(api.ana).objects.filter(pk=api.ana.pk).update(is_active=False)
+    assert api.client.get("/api/v1/auth/session/").status_code == 401  # usuario desactivado
+    type(api.ana).objects.filter(pk=api.ana.pk).update(is_active=True)
+    assert reply(api.client.get(url("public/"))) == (403, b'{"code":"PERMISSION_DENIED"}')
+    tenant = Client().get(url("public/"))  # el 401 del middleware es el mismo que el de DRF
+    assert reply(tenant) == reply(anonymous)
+    assert tenant.headers["WWW-Authenticate"] == "Session"
+    assert reply(api.client.get(url("public/", org="org-b"))) == NOT_FOUND

@@ -64,8 +64,8 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]  # rest_framework es Any (arriba): solo aquí se subclasifica DRF
 module = [
-    "apps.access.permissions", "core.api.errors", "tests.test_access_api",
-    "tests.test_api_conventions",
+    "apps.access.permissions", "core.api.authentication", "core.api.errors",
+    "core.api.permissions", "tests.test_access_api", "tests.test_api_conventions",
 ]
 disallow_subclassing_any = false
 
