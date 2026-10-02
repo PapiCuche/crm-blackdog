@@ -30,9 +30,11 @@ BACKEND_ORIGIN=http://127.0.0.1:8000 pnpm dev   # /api y /ws → Django (same-or
 - `src/components/demo/`: landing y workspace de la demo visual, con sus datos ficticios.
 - `messages/es-PE.json`: catálogo i18n.
 
-Sin autenticación, RBAC ni pantallas de negocio (llegan en fases posteriores desde el diseño de Figma).
+Sin autenticación, RBAC ni pantallas de negocio todavía. Las pantallas reales se construyen en `/o/[orgSlug]`, sobre la API y el cliente generado, con el Figma GOOD DOGGY como referencia visual ([AGENTS.md](../AGENTS.md) §11).
 
 ## Demo visual (UI-01)
+
+**Congelada desde el 2026-10-02.** `/demo` es un prototipo heredado: no recibe funcionalidades nuevas, solo el mantenimiento que lo mantenga funcionando, y se retirará con un work item propio cuando existan las pantallas oficiales equivalentes. Su estado ficticio no se copia al producto.
 
 Prototipo navegable del diseño de Figma [GOOD DOGGY · CRM independiente y landing page](https://www.figma.com/design/nRg83fFjnBDp8EouIPvTEZ/GOOD-DOGGY-%C2%B7-CRM-independiente-y-landing-page?node-id=5-108), que es la referencia visual. Con `pnpm dev`, abrir `http://localhost:3000/demo`.
 

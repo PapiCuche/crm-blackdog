@@ -1,11 +1,11 @@
 # Fase 2 — Identidad, organizaciones y acceso
 
-- **Estado:** planificada (bloque inicial F2-00 … F2-08)
+- **Estado:** en curso (bloque inicial F2-00 … F2-11; mergeados F2-00, F2-01, F2-02, F2-04, F2-05A, F2-05B y F2-05C)
 - **Issue maestro:** [#36](https://github.com/PapiCuche/crm-gooddoggy/issues/36)
 - **Objetivo:** usuarios, membresías, sesión por cookie y RBAC con alcance reales sobre el kernel de la Fase 1, y la primera pantalla funcional (login y entrada al shell de tenant).
 - **Origen:** [roadmap §S.1](../fase-0/05-backlog-y-roadmap.md) (fila "Fase 2") e historias E01 del [backlog §R](../fase-0/05-backlog-y-roadmap.md).
 
-La fase empieza por el backend y conecta el frontend mediante el contrato OpenAPI y el cliente generado por orval. `/demo` sigue siendo una demo con datos ficticios ([frontend/README.md](../../frontend/README.md)): sirve de referencia visual, y las rutas reales viven en `/o/[orgSlug]`.
+La fase empieza por el backend y conecta el frontend mediante el contrato OpenAPI y el cliente generado por orval. Desde el 2026-10-02 el producto se construye como CRM oficial, no como demo ([AGENTS.md](../../AGENTS.md) §11): cada capacidad termina en `/o/[orgSlug]` contra el backend real. `/demo` queda **congelado** como prototipo visual con datos ficticios ([frontend/README.md](../../frontend/README.md)): no recibe funcionalidades nuevas.
 
 ## Work items
 
@@ -16,26 +16,33 @@ Cada work item es un issue con el alcance completo (Incluye / No incluye / crite
 | F2-00 | [#37](https://github.com/PapiCuche/crm-gooddoggy/issues/37) Phase 2 plan | `docs/phase-2-plan` | — | docs |
 | F2-01 | [#38](https://github.com/PapiCuche/crm-gooddoggy/issues/38) User model | `feature/f2-user-model` | #37 | backend |
 | F2-02 | [#39](https://github.com/PapiCuche/crm-gooddoggy/issues/39) Organization memberships | `feature/f2-memberships` | #38 | backend |
-| F2-03A | [#40](https://github.com/PapiCuche/crm-gooddoggy/issues/40) Session authentication API | `feature/f2-session-auth` | #39 | backend + API |
+| F2-03A | [#40](https://github.com/PapiCuche/crm-gooddoggy/issues/40) Session authentication API | `feature/f2-session-auth` | #39, #55, #56 | backend + API |
 | F2-04 | [#41](https://github.com/PapiCuche/crm-gooddoggy/issues/41) RBAC model | `feature/f2-rbac-model` | #39 | backend |
 | F2-05A | [#42](https://github.com/PapiCuche/crm-gooddoggy/issues/42) RBAC enforcement engine | `feature/f2-rbac-enforcement` | #41 | backend |
 | F2-05B | [#50](https://github.com/PapiCuche/crm-gooddoggy/issues/50) RBAC: DRF integration | `feature/f2-rbac-drf` | #42 | backend |
 | F2-05C | [#51](https://github.com/PapiCuche/crm-gooddoggy/issues/51) RBAC: anti-escalation and last Owner | `feature/f2-rbac-anti-escalation` | #42 | backend |
-| F2-06 | [#43](https://github.com/PapiCuche/crm-gooddoggy/issues/43) Organization bootstrap | `feature/f2-org-bootstrap` | #41 | backend |
+| F2-06 | [#43](https://github.com/PapiCuche/crm-gooddoggy/issues/43) Organization bootstrap | `feature/f2-org-bootstrap` | #41, #56 | backend |
 | F2-07 | [#44](https://github.com/PapiCuche/crm-gooddoggy/issues/44) Frontend security / CSP | `feature/f2-frontend-csp` | #37 | frontend |
-| F2-08 | [#45](https://github.com/PapiCuche/crm-gooddoggy/issues/45) Frontend access integration | `feature/f2-frontend-access` | #40, #44 | frontend |
+| F2-08 | [#45](https://github.com/PapiCuche/crm-gooddoggy/issues/45) Frontend access integration | `feature/f2-frontend-access` | #40, #43, #44, #57 | frontend |
+| F2-09 | [#55](https://github.com/PapiCuche/crm-gooddoggy/issues/55) Production delivery rule and access decisions | `docs/f2-production-rule-decisions` | — | docs |
+| F2-10 | [#56](https://github.com/PapiCuche/crm-gooddoggy/issues/56) Platform audit sink | `feature/f2-platform-audit` | #55 | backend |
+| F2-11 | [#57](https://github.com/PapiCuche/crm-gooddoggy/issues/57) Self context endpoint | `feature/f2-self-context` | #40 | backend + API |
+
+Mergeados: #37 … #39, #41, #42, #50 y #51. Lo que queda:
 
 ```text
-#37 F2-00 ─┬─► #38 F2-01 ─► #39 F2-02 ─┬─► #40 F2-03A ─────────────┐
-           │                           └─► #41 F2-04 ─┬─► #42 F2-05A ─┬─► #50 F2-05B
-           │                                          │               └─► #51 F2-05C
-           │                                          └─► #43 F2-06 │
-           └─► #44 F2-07 ───────────────────────────────────────────┴─► #45 F2-08
+#55 F2-09 ─► #56 F2-10 ─┬─► #43 F2-06 ──────────────────────┐
+                        └─► #40 F2-03A ─► #57 F2-11 ────────┤
+#44 F2-07 ──────────────────────────────────────────────────┴─► #45 F2-08
 ```
+
+### Serie: acceso al CRM oficial
+
+F2-09, F2-10, F2-06, F2-03A, F2-11 y F2-07 son prerrequisitos de **F2-08**, que cierra la serie con comportamiento real: un usuario creado por el bootstrap inicia sesión, elige organización y entra al shell oficial con la navegación que sus permisos permiten.
 
 - Los work items de backend llevan el gate `required-check:backend gate`.
 - El orquestador `work-item-dependencies` pasa cada issue a `status:ready` cuando sus dependencias están cerradas ([delivery-automation.md](../architecture/delivery-automation.md)).
-- Tras F2-00 quedan listos a la vez F2-01 y F2-07: no dependen entre sí. Con más de un issue listo, el mantenedor elige.
+- Tras F2-00 quedan listos a la vez F2-01 y F2-07: no dependen entre sí. Con más de un issue listo, el mantenedor elige; dentro del programa autónomo aplican los criterios de [ADR-015](../adr/ADR-015-autonomous-delivery-program.md) §4.
 - **Punto de integración del frontend:** F2-08. Hasta entonces ninguna ruta real muestra datos.
 
 ### Tamaño
@@ -49,7 +56,7 @@ Candidatos conocidos a división:
 
 ## Historias E01 fuera de este bloque
 
-Se planifican como work items al cerrar el bloque inicial, un slice por historia (backend y API primero; frontend en un issue aparte si supera el tamaño):
+Se planifican como work items al cerrar el bloque inicial. Cada historia es una serie (AGENTS.md §11): puede repartirse en varios work items, y el que la cierra entrega la pantalla oficial sobre la API real.
 
 | Historia | Contenido | Condición previa |
 |---|---|---|
@@ -67,17 +74,27 @@ La reasignación de conversaciones al desactivar un usuario (parte de E01-07) de
 
 ## Decisiones abiertas
 
-Ninguna se resuelve en este documento. Un ADR `Accepted` no se modifica: si una decisión lo contradice o amplía, se propone un ADR nuevo.
+Un ADR `Accepted` no se modifica: si una decisión lo contradice o amplía, se propone un ADR nuevo. Las decisiones resueltas quedan marcadas con ✅ y enlazan dónde se registran.
 
 | ID | Decisión | Estado actual | Bloquea |
 |---|---|---|---|
-| D-F2-1 | **Auditoría de plataforma.** `audit_logs.organization_id` es NOT NULL (OBS-F1-06-1 en [phase-1.md](phase-1.md)) y el login ocurre antes de elegir organización. No se inserta un `organization_id` ficticio, no se usa una organización arbitraria y no se relaja RLS. | Sin diseño. Probable ADR nuevo | F2-03A (#40) |
-| D-F2-2 | **Almacén de sesiones.** BD, Redis o híbrido. Debe cubrir revocación, expiración, cierre de las demás sesiones, desactivación de usuario y varias instancias. | [ADR-003](../adr/ADR-003-auth-session.md) §2 lo deja a la Fase 2 | F2-03A (#40) |
+| D-F2-1 | **Auditoría de plataforma.** ✅ Resuelta el 2026-10-02 en [ADR-013](../adr/ADR-013-platform-audit.md): un sumidero propio (`platform_audit_logs`), sin `organization_id`, solo de inserción para `crm_app`. `audit_logs` no cambia. No se usa un `organization_id` ficticio, una organización arbitraria, un rol con BYPASSRLS ni el log de aplicación. | Resuelta. Lo implementa F2-10 (#56) | — |
+| D-F2-2 | **Almacén de sesiones.** ✅ Resuelta el 2026-10-02: **sesiones de Django en base de datos** (`django.contrib.sessions.backends.db`), la primera opción de [ADR-003](../adr/ADR-003-auth-session.md) §2. Detalle abajo. | Resuelta. Lo implementa F2-03A (#40) | — |
 | D-F2-3 | **Email case-insensitive.** ✅ Resuelta en F2-01 (#38): canonicalización explícita en la aplicación (`apps.accounts.emails`) más `UNIQUE (email)` y `CHECK (email = lower(email))` en la BD. No se usa `citext`, previsto en [02-modelo-de-datos.md](../fase-0/02-modelo-de-datos.md) §E.2: evita una extensión y deja el comportamiento explícito. La parte local debe ser ASCII; un dominio internacionalizado se guarda en forma IDNA. Sin reglas por proveedor. Detalle en [backend/README.md](../../backend/README.md). | Resuelta | — |
 | D-F2-4 | **Dependencias nuevas** (bloqueo progresivo, TOTP). No se añaden sin su fila en [ADR-012](../adr/ADR-012-engineering-runtime-baseline.md). | `argon2-cffi` ya está fijado; el resto no | F2-03A / F2-03B, E01-03 |
 | D-F2-5 | **Envío de correo.** Mailpit es infraestructura local, no el diseño del envío en producción. Hace falta una abstracción. | Sin diseño | E01-06, E01-02 |
 | D-F2-6 | **Secretos TOTP.** Cifrado, KEK y rotación; nunca en claro. | Sin diseño | E01-03 |
 | D-F2-7 | **Lenguaje visual del shell real.** `/o/[orgSlug]` usa hoy el tema oscuro; el Figma GOOD DOGGY es la referencia para las pantallas nuevas. | Se concreta en F2-08 | F2-08 (#45) |
+
+### D-F2-2 — Sesiones en base de datos
+
+- **Motivos:** es simple y durable; PostgreSQL ya lo comparten todas las instancias; revocar es borrar una fila; no añade dependencias (D-F2-4) ni una segunda invalidación en Redis. ADR-003 §2 permite pasar a caché Redis con respaldo en BD más adelante, sin ADR nuevo, si las lecturas de sesión llegan a ser un coste medido.
+- **Tabla:** `django_session` es platform-owned, sin RLS de tenant. F2-03A verifica los privilegios de `crm_app` sobre ella y no usa el rol migrador en el runtime.
+- **Cookie:** `HttpOnly`, `SameSite=Lax`, `Path=/`, sin `Domain`. En producción, `Secure` y nombre `__Host-crm_session`. En local sobre HTTP, nombre `crm_session`: el prefijo `__Host-` solo es válido con HTTPS ([ADR-014](../adr/ADR-014-api-errors-and-authentication.md) §2). Producción no se relaja.
+- **Caducidad:** 12 horas de inactividad y 7 días absolutos. Las filas caducadas se purgan con una tarea de plataforma.
+- **Fuera de F2-03A:** el vínculo usuario-sesión para cerrar las demás sesiones y listar las activas (E01-07, E01-11). En base de datos se resuelve con una columna o tabla propia.
+
+Otras decisiones cerradas el 2026-10-02 en [ADR-014](../adr/ADR-014-api-errors-and-authentication.md): cuerpo de error único (OBS-F2-05A-5), CSRF en todo método no seguro y clase de autenticación (OBS-F2-05B-1), semántica de 401, 403 y 404, y separación entre rutas de plataforma y de tenant. La política de contraseñas vigente (OBS-F2-01-3) no cambia.
 
 Decisiones de producto cerradas por el mantenedor el 2026-10-02, para F2-05C (#51):
 
@@ -96,7 +113,7 @@ Resumen operativo; la fuente es la arquitectura enlazada.
 - **Autorización** ([ADR-003](../adr/ADR-003-auth-session.md) §5, [security-boundaries.md](../architecture/security-boundaries.md) B2): usuario autenticado, membresía activa, organización activa, permiso y scope se verifican por separado, y cada denegación tiene su test.
 - **Auditoría** ([ADR-011](../adr/ADR-011-observability-and-logs.md)): los cambios relevantes usan `audit.record`. Nunca contraseñas, tokens ni secretos.
 - **API:** DRF y drf-spectacular, errores con la convención vigente, schema commiteado sin drift y cliente TypeScript generado con orval. Sin `fetch` manual que duplique un contrato generable.
-- **Orden de un slice:** modelo e invariantes → migraciones y RLS → servicio → autorización → API → OpenAPI → tests de backend → orval → frontend → tests de frontend → revisión de tenancy y seguridad.
+- **Orden de un slice:** modelo e invariantes → migraciones y RLS → servicio → autorización → API → OpenAPI → tests de backend → orval → frontend → tests de frontend → revisión de tenancy y seguridad. La regla completa, y cuándo una capacidad está terminada, en [AGENTS.md](../../AGENTS.md) §11.
 - **Rutas reales:** cada dato mostrado tiene fuente, autorización, tenant, contrato, estados de error y tests. Una pantalla de `/demo` no adelanta su dominio.
 
 ## Definition of Done de la fase
@@ -127,7 +144,7 @@ No hay API HTTP (E01-08) ni bootstrap (F2-06). Tampoco existen revocar una conce
 Comparten el bloqueo del rol Owner. Un cambio que escribe lo mantiene hasta el COMMIT de la petición; una denegación lo libera al deshacer su savepoint. `ensure_owner_remains` no abre savepoint: su bloqueo dura hasta el final del `tenant_scope`, también si deniega, porque quien la llama debe escribir bajo ese mismo bloqueo. Es deliberado: son operaciones poco frecuentes y así la relectura de permisos y el recuento de Owners no tienen carreras. Una organización sin rol Owner no admite ningún cambio.
 
 ### OBS-F2-05B-1 — Las vistas de DRF no pasan por la protección CSRF de Django
-`APIView.as_view()` marca la vista como `csrf_exempt`; DRF solo comprueba CSRF dentro de `SessionAuthentication`, y el proyecto no tiene clases de autenticación hasta F2-03A. Hoy no hay endpoints reales. Antes del primer endpoint que escriba, F2-03A debe aportar una clase de autenticación que exija CSRF. Al añadirla, DRF solo responderá 401 en lugar de 403 a una petición sin autenticar si `authenticate_header()` de la primera clase de `authentication_classes` devuelve un valor; `SessionAuthentication` hereda el de `BaseAuthentication`, que devuelve `None`, y sigue respondiendo 403, con otro `detail`.
+**Decisión:** [ADR-014](../adr/ADR-014-api-errors-and-authentication.md) §2–3; la implementa F2-03A. `APIView.as_view()` marca la vista como `csrf_exempt`; DRF solo comprueba CSRF dentro de `SessionAuthentication`, y el proyecto no tiene clases de autenticación hasta F2-03A. Hoy no hay endpoints reales. Antes del primer endpoint que escriba, F2-03A debe aportar una clase de autenticación que exija CSRF. Al añadirla, DRF solo responderá 401 en lugar de 403 a una petición sin autenticar si `authenticate_header()` de la primera clase de `authentication_classes` devuelve un valor; `SessionAuthentication` hereda el de `BaseAuthentication`, que devuelve `None`, y sigue respondiendo 403, con otro `detail`.
 
 ### OBS-F2-05B-2 — `ScopeFilter` solo actúa en vistas genéricas
 DRF aplica los filtros en `GenericAPIView`, y solo donde la vista llama a `filter_queryset()` (el listado y el `get_object()` de serie). Una vista que consulte por su cuenta debe pasar su queryset por `scoped()` (por ejemplo `get_object_or_404(scoped(...), pk=…)`). La auditoría del URLconf es estática: rechaza las vistas genéricas que redefinen `get_object` o `filter_queryset`, las que redefinen los ganchos de permiso de DRF y las que usan una subclase de `HasPermission` o de `ScopeFilter`, pero no puede revisar una consulta escrita a mano ni el orden en que un handler propio escribe. `HasPermission.has_object_permission` queda como red de seguridad para quien llame a `check_object_permissions`: responde 404, pero con un cuerpo que puede diferir del de un objeto inexistente, así que no equivale a filtrar con `scoped()`. Un serializador de tenant nunca acepta del cliente la clave primaria ni `organization_id`: la clave primaria es única entre organizaciones, y un `id` escribible convierte esa unicidad en un oráculo de existencia y deja que un PATCH inserte una fila. Los modelos reales usan `uuid7_primary_key()` (`editable=False`), que DRF expone como solo lectura.
@@ -157,7 +174,7 @@ El middleware de tenant convierte la excepción en respuesta dentro del `tenant_
 ADR-011 prevé auditar los accesos denegados. El motor no escribe filas `DENIED`. F2-05B crea el punto HTTP (`HasPermission`) pero no audita: falta decidir qué denegaciones se registran y con qué detalle. Queda para E01-13.
 
 ### OBS-F2-05A-5 — Cuerpo de error de la API
-No hay manejador de excepciones propio: una denegación en una vista de DRF devuelve `{"detail": …}` y no la convención `{"code": …}` del middleware. Con F2-05B conviven las dos: 401, 404 y 403 `ORG_SUSPENDED` del middleware con `{"code": …}`; 403 y 404 de DRF con `{"detail": …}`. En las vistas genéricas con `ScopeFilter`, los 404 son idénticos entre sí (fuera de alcance, otra organización, inexistente); el 404 de `HasPermission.has_object_permission` tiene otro texto (OBS-F2-05B-2). La decisión, antes del primer endpoint real, debe dejar un único cuerpo para todos los 404 de una ruta de tenant. DRF negocia el formato antes de comprobar el permiso: en una ruta de tenant, un miembro activo que pida un formato que la API no sirve recibe 404 (`?format=xml`) o 406 (`Accept: application/xml`) en lugar del 403 o del 404 de alcance, tenga o no el permiso. No concede ni revela nada: la vista no se ejecuta y el 401 y el 404 del middleware van antes. Esa decisión debe cubrir también estas dos respuestas; como la API es solo JSON, una opción es fijar `URL_FORMAT_OVERRIDE: None`, que hoy no está configurado.
+**Decisión:** [ADR-014](../adr/ADR-014-api-errors-and-authentication.md) §1 y §3; la implementa F2-03A. Hasta entonces sigue siendo cierto lo siguiente. No hay manejador de excepciones propio: una denegación en una vista de DRF devuelve `{"detail": …}` y no la convención `{"code": …}` del middleware. Con F2-05B conviven las dos: 401, 404 y 403 `ORG_SUSPENDED` del middleware con `{"code": …}`; 403 y 404 de DRF con `{"detail": …}`. En las vistas genéricas con `ScopeFilter`, los 404 son idénticos entre sí (fuera de alcance, otra organización, inexistente); el 404 de `HasPermission.has_object_permission` tiene otro texto (OBS-F2-05B-2). La decisión, antes del primer endpoint real, debe dejar un único cuerpo para todos los 404 de una ruta de tenant. DRF negocia el formato antes de comprobar el permiso: en una ruta de tenant, un miembro activo que pida un formato que la API no sirve recibe 404 (`?format=xml`) o 406 (`Accept: application/xml`) en lugar del 403 o del 404 de alcance, tenga o no el permiso. No concede ni revela nada: la vista no se ejecuta y el 401 y el 404 del middleware van antes. Esa decisión debe cubrir también estas dos respuestas; como la API es solo JSON, una opción es fijar `URL_FORMAT_OVERRIDE: None`, que hoy no está configurado.
 
 ### OBS-F2-04-1 — Las concesiones del rol Owner no siguen al catálogo
 `clone_role_templates` no toca un rol que ya existe y `sync_permissions` solo sincroniza `permissions`. El rol Owner se modela con concesiones explícitas de todo el catálogo, así que una organización ya creada no recibe los permisos que añada una fase posterior.
@@ -188,6 +205,7 @@ Los roles no llevan `deleted_at` (convención [SD]): no hay flujo de borrado has
 ### OBS-F2-02-1 — F2-03A no debe empezar con D-F2-1 y D-F2-2 abiertas
 Al cerrarse F2-02, el orquestador pasa #40 a `status:ready` porque solo lee dependencias entre issues. Las decisiones D-F2-1 (auditoría de plataforma) y D-F2-2 (almacén de sesiones) siguen sin resolver.
 - Propuesta: un work item de decisión (`docs/…`, con ADR nuevo si la auditoría de plataforma amplía ADR-001 o ADR-011) añadido como dependencia de #40. Lo crea el mantenedor.
+- ✅ Resuelta el 2026-10-02: F2-09 (#55) cierra las dos decisiones y #40 depende de #55 y de #56.
 
 ### OBS-F2-02-2 — FK de tenant por tabla
 `organization_memberships` añade su FK a `organizations` en la migración, igual que `files`. `TenantModel` sigue sin una FK genérica (OBS-F1-04-1 en [phase-1.md](phase-1.md)): cada tabla tenant-owned debe declararla.
@@ -208,6 +226,7 @@ El validador de Django rechaza partes locales con caracteres no ASCII (direccion
 ### OBS-F2-01-4 — El redactor no trata el email como dato sensible
 `core.redaction` redacta secretos (contraseñas, tokens, credenciales), pero no la clave `email`. F2-01 no registra emails: `User.__str__` devuelve el identificador, no la dirección.
 - Decidir antes de F2-03A si los eventos de acceso registran el email, un hash o solo el `user_id`.
+- ✅ Resuelta en [ADR-013](../adr/ADR-013-platform-audit.md) §4: `user_id` cuando se conoce y una huella HMAC del email en los intentos fallidos. Nunca el email en claro.
 
 ### OBS-F2-01-3 — Longitud mínima de contraseña
 ADR-003 §2 exige validar contraseñas comunes o filtradas, pero no fija una longitud. F2-01 usa 12 caracteres. La comprobación contra contraseñas filtradas (servicio externo) no está implementada.

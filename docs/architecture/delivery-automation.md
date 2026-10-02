@@ -38,7 +38,7 @@ BACKLOG (roadmap: docs/fase-0/05, docs/phases/)
   → DONE (issue cerrado por "Closes #N"; se desbloquean los dependientes)
 ```
 
-**No se automatiza:** la aprobación final, el merge, el auto-merge ni la merge queue sin revisión.
+**No se automatiza:** la aprobación final, el merge, el auto-merge ni la merge queue sin revisión. La única excepción es el programa autónomo de §8.
 
 ## 2. Estados de un work item
 
@@ -189,3 +189,15 @@ Merge recommendation:
 - **PO:**
   - hace squash merge fijando el SHA revisado (`gh pr merge N --squash --match-head-commit <sha>`);
   - pasa a `status:ready` los issues desbloqueados.
+
+## 8. Programa autónomo (ADR-015)
+
+El mantenedor puede autorizar que un programa de agentes ejecute el roadmap de forma continua ([ADR-015](../adr/ADR-015-autonomous-delivery-program.md), [AGENTS.md](../../AGENTS.md) §12). Cambia tres puntos del flujo de §1; el resto sigue igual:
+
+| Punto | Flujo normal | Programa autónomo |
+|---|---|---|
+| Elección con varios `status:ready` | El mantenedor elige | El programa elige con los criterios de ADR-015 §4 |
+| Issues nuevos y etiquetas | El mantenedor | El programa crea los work items que falten, justo antes de necesitarlos, y ajusta dependencias y estados |
+| Merge | Humano | El programa, con squash y `--match-head-commit`, solo tras los diez gates de ADR-015 §2 |
+
+El ruleset `main-protection`, los checks requeridos y la prohibición de auto-merge no cambian. La revisión adversarial independiente sustituye al Reviewer de §3 y queda resumida en el PR.

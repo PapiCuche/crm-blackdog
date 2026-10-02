@@ -14,7 +14,7 @@ python3 .github/scripts/work_item_dependencies.py next   # needs GITHUB_REPOSITO
 
 - **Exactly 1** → execute that issue following AGENTS.md.
 - **0** → do not invent work. Reply briefly `No hay work item status:ready.` and show what blocks the next one: open dependencies and missing gates.
-- **More than 1** → do not choose. List the numbers and titles and ask the user to pick one.
+- **More than 1** → do not choose. List the numbers and titles and ask the user to pick one. Exception: inside the autonomous program (AGENTS.md §12) choose with the criteria of ADR-015 §4.
 
 ## Executing an issue
 
@@ -29,7 +29,7 @@ python3 .github/scripts/work_item_dependencies.py next   # needs GITHUB_REPOSITO
 9. Push the branch.
 10. Open a PR with the repository template, referencing `Closes #N`.
 11. Wait for the real checks, then fill `## Handoff para Reviewer` in the PR body with the current HEAD and the real results (AGENTS.md §9).
-12. Do NOT merge. Do NOT enable auto-merge.
+12. Do NOT merge. Do NOT enable auto-merge. Exception: inside the autonomous program authorized by the maintainer (AGENTS.md §12, ADR-015), squash merge only after its ten gates pass; GitHub auto-merge stays forbidden.
 13. Reply briefly, e.g. `PR #N listo para revisión. El handoff está actualizado en el PR.`
 
 Accepted ADRs cannot be silently overridden. If the issue contradicts them, stop the affected part and document it in the PR.
