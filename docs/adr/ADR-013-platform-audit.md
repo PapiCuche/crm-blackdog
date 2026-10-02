@@ -30,12 +30,12 @@ Regla de reparto: un evento va a `platform_audit_logs` solo si no pertenece a ni
 |---|---|
 | `id`, `occurred_at` | UUIDv7 y hora de la transacción. Clave primaria `(occurred_at, id)` |
 | `actor_type` | `USER`, `SYSTEM`, `PLATFORM_STAFF` o `ANONYMOUS` |
-| `actor_id` | `users.id` cuando se conoce; `NULL` si no |
+| `actor_id` | `users.id` de un actor **autenticado**; `NULL` si no lo hay |
 | `identifier_hash` | Huella del identificador presentado (ver §4); `NULL` si no aplica |
 | `action` | `dominio.entidad.verbo`, del catálogo de [04 §N.2](../fase-0/04-precios-pipeline-seguridad-infra.md) |
-| `entity_type`, `entity_id` | Entidad afectada, si existe (por ejemplo `organization` en un alta) |
-| `metadata` | JSONB, siempre pasado por el redactor |
-| `ip`, `user_agent`, `request_id`, `correlation_id` | Trazabilidad. `user_agent` se trunca a 512 caracteres |
+| `entity_type`, `entity_id` | Entidad afectada, si existe: `organization` en un alta, o `user` cuando un acceso fallido apunta a una cuenta que existe |
+| `metadata` | JSONB con tamaño acotado, filtrado según §4 |
+| `ip`, `user_agent`, `request_id`, `correlation_id` | Trazabilidad. `ip` es la dirección del cliente que resuelve el servidor ASGI a partir de los proxies de confianza (`FORWARDED_ALLOW_IPS`), nunca una cabecera leída por la aplicación. `user_agent` se trunca a 512 caracteres. Los dos identificadores salen del contexto de observabilidad |
 | `result` | `SUCCESS`, `DENIED` o `FAILED` |
 
 Particionada por mes desde su creación (ADR-011), con el mismo mecanismo que `audit_logs`: una función propiedad de `crm_migrator`, sin EXECUTE para `crm_app`, que crea el mes actual más doce desde la migración y el `post_migrate`. Sin partición DEFAULT: si el horizonte se agota, la inserción falla.
@@ -43,14 +43,17 @@ Particionada por mes desde su creación (ADR-011), con el mismo mecanismo que `a
 ### 3. Privilegios: solo inserción
 
 - `crm_app` tiene **solo `INSERT`** en la tabla padre. No tiene `SELECT`, `UPDATE`, `DELETE` ni `TRUNCATE`, ni privilegios directos sobre las particiones.
-- El runtime web no puede leer el historial de accesos. Una lectura futura (panel de plataforma, o "mis accesos recientes") se diseña en su propio work item, con una vía estrecha y auditada.
+- El runtime web no puede leer el historial de accesos.
 - No se crea el rol `crm_platform` ni se usa BYPASSRLS. No hace falta: la tabla no tiene RLS de tenant.
+- **Lectura:** este ADR no crea ningún rol. Hoy solo puede leer el propietario (`crm_migrator`), cuya credencial es exclusiva del job de migraciones (ADR-002 §1.1): consultarla es una intervención de operación excepcional. La lectura habitual (investigación, panel de plataforma, "mis accesos recientes") necesita un rol propio de solo lectura sobre esta tabla, sin BYPASSRLS ni propiedad, en la línea del `crm_readonly` que ADR-002 §1 prevé. Se diseña y se crea en el work item que añada esa lectura.
 
 ### 4. Identidad y datos personales
 
-- Con usuario identificado, la fila guarda `actor_id` y **nunca el email**.
-- En un intento fallido, el identificador presentado puede no corresponder a ningún usuario. La fila guarda `identifier_hash`: un HMAC-SHA-256 del email canónico con una clave derivada de `DJANGO_SECRET_KEY` (`salted_hmac`, con una sal propia de este uso). Permite ver que varios intentos apuntan al mismo identificador sin almacenar la dirección, y no es reversible con solo la base de datos. Si el intento corresponde a un usuario que existe, se guarda además su `actor_id`.
+- Con un actor autenticado (`auth.login.succeeded`, `auth.logout`), la fila guarda `actor_type = USER` y su `actor_id`, y **nunca el email**.
+- Un intento fallido no tiene actor autenticado: `actor_type = ANONYMOUS` y `actor_id = NULL`. Quien envía la petición no es la cuenta atacada. Si el identificador corresponde a un usuario que existe, la cuenta va como entidad afectada (`entity_type = 'user'`, `entity_id`).
+- El identificador presentado se guarda solo como `identifier_hash`: `salted_hmac(<sal propia>, identificador, algorithm="sha256")`, es decir, un HMAC-SHA-256 con una clave derivada de `DJANGO_SECRET_KEY`. Permite ver que varios intentos apuntan al mismo identificador sin almacenar la dirección, y no es reversible con solo la base de datos. Quien llama pasa el email canónico cuando el valor se puede canonicalizar (`apps.accounts.emails`), y el texto recibido cuando no; el servicio solo quita espacios y pasa a minúsculas, porque `apps.audit` no puede importar `apps.accounts`.
 - Nunca se guarda la contraseña, ni correcta ni incorrecta, ni su longitud. Nunca el ID de sesión, el token CSRF ni ninguna cookie.
+- **Filtro de `metadata` y `user_agent`.** El redactor compartido no trata un email como secreto, porque la auditoría de un tenant necesita registrar cambios de email de un contacto. Por eso el escritor de plataforma añade su propio filtro: enmascara cualquier cadena con forma de email, además de pasar por el redactor, que trata como secretas las claves de sesión y de CSRF (`session_key`, `sessionid`, `csrftoken`…). `metadata` tiene un tamaño máximo. Los tests de cada evento comprueban que la fila no contiene el identificador.
 - La IP y el agente de usuario son datos personales necesarios para investigar un acceso; se conservan con la retención de §6.
 - Rotar `DJANGO_SECRET_KEY` rompe la correlación entre huellas anteriores y posteriores. Se acepta.
 
@@ -59,22 +62,30 @@ Particionada por mes desde su creación (ADR-011), con el mismo mecanismo que `a
 ```python
 apps.audit.platform.record(
     action, *, actor_type, actor_id=None, identifier=None, entity=None,
-    metadata=None, result=Result.SUCCESS, request=None,
+    metadata=None, result=Result.SUCCESS, ip=None, user_agent=None,
 ) -> UUID
 ```
 
 - No recibe `TenantContext` ni `organization_id`. Lanza un error si `core.tenancy.context.current()` devuelve un tenant.
-- `identifier` es el email en claro; el servicio lo convierte en `identifier_hash` y no lo guarda.
-- `request` aporta IP, agente de usuario y los identificadores de petición y correlación.
-- Escribe en la transacción del llamador, si la hay. **Falla cerrado:** si la inserción falla, la operación auditada falla. Un inicio de sesión que no puede auditarse no crea sesión.
+- `identifier` es el identificador presentado; el servicio lo convierte en `identifier_hash` y no lo guarda.
+- `ip` es una dirección válida o `None`; `user_agent` se filtra y se trunca. Los identificadores de petición y de correlación los toma de `core.observability.context`.
 - No usa `RETURNING` (el rol no tiene `SELECT`).
 
-Eventos de acceso que escribe F2-03A: `auth.login.succeeded`, `auth.login.failed` (con un motivo interno en `metadata`, nunca devuelto al cliente) y `auth.logout`. El alta de una organización (F2-06) escribe `organization.bootstrapped` con el operador y el motivo.
+Cuándo se escribe depende del resultado, porque una fila escrita dentro de una transacción que se deshace desaparece con ella:
+
+| Evento | Cuándo se escribe | Si la inserción falla |
+|---|---|---|
+| Éxito de una operación de plataforma (`auth.login.succeeded`) | En la misma transacción que la operación | **Falla cerrado:** la operación no ocurre. Un inicio de sesión que no puede auditarse no crea sesión |
+| Fallo o denegación (`auth.login.failed`) | Fuera de cualquier transacción que se vaya a deshacer; se confirma por sí misma | La respuesta sigue siendo el mismo rechazo. El error va al log y al reporte de errores |
+| `auth.logout` | Después de invalidar la sesión | La sesión **ya está cerrada**: un fallo de auditoría nunca mantiene viva una sesión. El error se reporta |
+| Operación que entra en un tenant (alta de una organización, F2-06) | Una fila de **intención** antes de abrir el `tenant_scope` y una de **resultado** (`SUCCESS` o `FAILED`) al terminar. `tenant_scope` es dueño de su transacción y este servicio no escribe dentro de él | Si falla la fila de intención, la operación no empieza. El cambio en sí queda además en `audit_logs` del tenant, dentro de su transacción |
+
+Eventos de acceso que escribe F2-03A: `auth.login.succeeded`, `auth.login.failed` (con un motivo interno en `metadata`, nunca devuelto al cliente) y `auth.logout`. El alta de una organización (F2-06) escribe `organization.bootstrap.started` y `organization.bootstrapped`, con el operador y el motivo.
 
 ### 6. Retención y lectura
 
 - Retención mínima de dos años, igual que `audit_logs` (ADR-011). El archivado o borrado de particiones antiguas lo hace el job de migraciones u operación, nunca el runtime.
-- La lectura solo se hace mediante selectores de plataforma (ADR-001 §2). Hasta que exista uno, solo el rol propietario puede leer.
+- La lectura sigue §3: no existe todavía desde la aplicación.
 
 ## Alternatives considered
 
@@ -97,10 +108,12 @@ Eventos de acceso que escribe F2-03A: `auth.login.succeeded`, `auth.login.failed
 
 - El aislamiento entre tenants no cambia: ninguna política de RLS se toca y no aparece ningún rol nuevo.
 - El registro es inmutable para el runtime y, además, ilegible para él: comprometer `crm_app` no da el historial de accesos.
+- El login escribe una fila por intento y el runtime no puede borrarlas. El endpoint de acceso debe tener un límite de intentos por IP y por identificador antes de salir a producción (ADR-003 §2; F2-03A o F2-03B), para que nadie haga crecer la tabla sin control.
 - La respuesta al cliente no depende de lo que se audita: el motivo de un fallo de acceso solo queda en la fila.
 - Los tests comprueban los privilegios por introspección y que ningún campo contiene contraseña, email en claro ni cookies.
 
 ## Operational implications
 
 - El job de migraciones debe ejecutarse al menos una vez al año para extender las particiones, como con `audit_logs`.
-- Las alertas por picos de `auth.login.failed` (ADR-003, Operational implications) leen este sumidero con el rol de operación, no con `crm_app`.
+- Las alertas por picos de accesos fallidos (ADR-003, Operational implications) se derivan de las métricas y del log de aplicación, que no necesitan leer esta tabla. La investigación de un incidente sí la lee, con el rol de §3.
+- Si se agota el horizonte de particiones, los inicios de sesión fallan (falla cerrado) y los cierres de sesión siguen funcionando.

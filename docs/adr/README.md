@@ -14,7 +14,7 @@ Registro formal de las decisiones de arquitectura. Cada ADR es **inmutable una v
 | [ADR-006](ADR-006-pricing-engine.md) | PricingService como autoridad única de precios | Accepted | 2026-09-28 |
 | [ADR-007](ADR-007-conversation-assignment.md) | Modelo de asignación de conversaciones con FKs explícitas | Accepted | 2026-09-28 |
 | [ADR-008](ADR-008-object-storage.md) | Almacenamiento de objetos S3-compatible | Accepted | 2026-09-28 |
-| [ADR-009](ADR-009-git-strategy.md) | GitHub Flow | Accepted | 2026-09-28 |
+| [ADR-009](ADR-009-git-strategy.md) | GitHub Flow | Accepted (enmendado en parte por ADR-015) | 2026-09-28 |
 | [ADR-010](ADR-010-messaging-policy.md) | MessagingPolicyService, ventana de atención y plantillas | Accepted | 2026-09-28 |
 | [ADR-011](ADR-011-observability-and-logs.md) | Observabilidad y separación de logs (aplicación / auditoría / IA) | Accepted | 2026-09-28 |
 | [ADR-012](ADR-012-engineering-runtime-baseline.md) | Baseline de runtimes, herramientas e imágenes; emulador S3 local (Garage) | Accepted | 2026-09-28 |
@@ -46,3 +46,5 @@ Registro formal de las decisiones de arquitectura. Cada ADR es **inmutable una v
 - **Accepted:** vigente; el código debe cumplirla.
 - **Deprecated:** ya no aplica para código nuevo.
 - **Superseded:** reemplazada por otro ADR (enlazado).
+
+Un ADR nuevo puede enmendar solo una parte de otro: el anterior sigue `Accepted`, no se edita, y el índice indica qué ADR lo enmienda.

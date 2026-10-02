@@ -1,7 +1,7 @@
 # Delivery automation: flujo supervisado por IA
 
 **Relacionado:** [AGENTS.md](../../AGENTS.md), [CLAUDE.md](../../CLAUDE.md), ADR-009 (GitHub Flow), [ci-pipeline.md](ci-pipeline.md)
-**Objetivo:** que un agente pueda ejecutar un incremento recibiendo **solo el número de un issue**, con trazabilidad completa y aprobación final humana.
+**Objetivo:** que un agente pueda ejecutar un incremento recibiendo **solo el número de un issue**, con trazabilidad completa y aprobación final humana (o, en el programa autónomo de §8, con sus gates).
 
 ---
 
@@ -15,7 +15,7 @@ usuario: "continuar"
   → implementa, valida y abre el PR con "## Handoff para Reviewer" actualizado al HEAD
   → usuario: "revisa"
   → Reviewer: lee el PR en GitHub (handoff + diff + checks) → APPROVE / REQUEST CHANGES
-  → merge explícito y humano (squash, --match-head-commit)
+  → merge explícito y humano (squash, --match-head-commit); en el programa autónomo, §8
   → work-item-state (trusted): issue → status:done
   → work-item-dependencies (trusted): siguiente status:blocked → status:ready si sus dependencias están CLOSED y sus gates existen
   → usuario: "continuar"
@@ -45,7 +45,7 @@ BACKLOG (roadmap: docs/fase-0/05, docs/phases/)
 | Estado | Cómo se representa | Quién lo cambia |
 |---|---|---|
 | BLOCKED | label `status:blocked` | Estado inicial (issue form) o el mantenedor |
-| READY | label `status:ready` | Mantenedor, cuando las dependencias están mergeadas |
+| READY | label `status:ready` | Mantenedor, cuando las dependencias están mergeadas (o el programa autónomo, §8) |
 | IN_PROGRESS | label `status:in-progress` | Workflow `work-item-state` al abrir el PR (o al pasarlo a ready for review) |
 | REVIEW | PR abierto, no draft, con CI terminado | Derivado del PR (sin label, para no duplicar estado) |
 | DONE | label `status:done` + issue cerrado | Workflow al mergear; GitHub cierra el issue por `Closes #N` |
@@ -96,7 +96,7 @@ BACKLOG (roadmap: docs/fase-0/05, docs/phases/)
 ### Builder Agent
 - Ejecuta un issue `status:ready` siguiendo AGENTS.md.
 - Implementa, valida y abre el PR.
-- **No se revisa a sí mismo ni hace merge.**
+- **No se revisa a sí mismo ni hace merge** (salvo en el programa autónomo, §8, donde la revisión la hace una pasada adversarial independiente).
 - Si encuentra una contradicción, detiene solo la parte afectada y la documenta.
 
 ### Reviewer Agent
@@ -117,7 +117,7 @@ BACKLOG (roadmap: docs/fase-0/05, docs/phases/)
   - sin force-push ni borrado.
 
 ### Humano (mantenedor)
-- **Único** que da la aprobación final de producto y hace el merge (squash).
+- **Único** que da la aprobación final de producto y hace el merge (squash), salvo en el programa autónomo que él mismo autoriza (§8).
 
 ## 4. Qué valida `PR governance (trusted)` (solo estructura, no calidad)
 
@@ -141,7 +141,7 @@ BACKLOG (roadmap: docs/fase-0/05, docs/phases/)
   - no pide permisos de escritura salvo `issues: write` en `work-item-state`.
 - **Arranque:** el workflow trusted solo protege cuando ya está en `main`. El PR que lo introduce (A-02) todavía se protege con el legacy `PR governance`. Tras su merge, el ruleset pasa a requerir `PR governance (trusted)` en lugar del legacy (OBS-A-01-1 resuelto; retirada del legacy en OBS-A-02-1).
 - **Excepción:** los PRs de `dependabot[bot]` no siguen el template. Para ellos las reglas se informan como avisos y el check pasa, y la revisión humana sigue siendo obligatoria.
-- `large-pr-approved` solo lo aplica el mantenedor, de forma consciente.
+- `large-pr-approved` solo lo aplica el mantenedor, de forma consciente. El programa autónomo nunca lo aplica.
 
 ## 5. Política de triggers de GitHub Actions
 
@@ -192,12 +192,13 @@ Merge recommendation:
 
 ## 8. Programa autónomo (ADR-015)
 
-El mantenedor puede autorizar que un programa de agentes ejecute el roadmap de forma continua ([ADR-015](../adr/ADR-015-autonomous-delivery-program.md), [AGENTS.md](../../AGENTS.md) §12). Cambia tres puntos del flujo de §1; el resto sigue igual:
+El mantenedor puede autorizar que un programa de agentes ejecute el roadmap de forma continua ([ADR-015](../adr/ADR-015-autonomous-delivery-program.md), [AGENTS.md](../../AGENTS.md) §12). Solo está activo en la sesión en la que lo autoriza. Cambia estos puntos de §1–§3 y §7; el resto sigue igual:
 
 | Punto | Flujo normal | Programa autónomo |
 |---|---|---|
 | Elección con varios `status:ready` | El mantenedor elige | El programa elige con los criterios de ADR-015 §4 |
-| Issues nuevos y etiquetas | El mantenedor | El programa crea los work items que falten, justo antes de necesitarlos, y ajusta dependencias y estados |
+| Issues nuevos y etiquetas | El mantenedor | El programa crea los work items que falten, justo antes de necesitarlos, y ajusta dependencias y estados. Nunca aplica `large-pr-approved` |
+| Revisión | Reviewer de §3 | Revisión adversarial independiente del autor, resumida en el PR |
 | Merge | Humano | El programa, con squash y `--match-head-commit`, solo tras los diez gates de ADR-015 §2 |
 
-El ruleset `main-protection`, los checks requeridos y la prohibición de auto-merge no cambian. La revisión adversarial independiente sustituye al Reviewer de §3 y queda resumida en el PR.
+El ruleset `main-protection`, los checks requeridos y la prohibición de auto-merge no cambian. El merge queda registrado en un comentario del PR; su cuerpo no se edita después del merge.
