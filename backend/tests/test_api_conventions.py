@@ -332,6 +332,7 @@ def test_api_responses_carry_a_closed_csp(api: Any) -> None:
         Client().get(url()),
     ):
         assert response.headers["Content-Security-Policy"] == API_CSP
+        assert response.headers["Cache-Control"] == "no-store"  # nada de la API se guarda
     assert "Content-Security-Policy" not in Client().get("/health/live").headers
 
 

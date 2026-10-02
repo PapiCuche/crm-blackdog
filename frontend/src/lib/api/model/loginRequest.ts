@@ -6,8 +6,15 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export * from "./error";
-export * from "./errorFields";
-export * from "./loginRequest";
-export * from "./session";
-export * from "./user";
+export interface LoginRequest {
+  /**
+   * @minLength 1
+   * @maxLength 254
+   */
+  email: string;
+  /**
+   * @minLength 1
+   * @maxLength 1024
+   */
+  password: string;
+}

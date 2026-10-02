@@ -51,6 +51,9 @@ class ApiEnvelopeMiddleware:
         if response.status_code >= 400 and "json" not in content_type:
             response = self._contract(response)
         response.headers["Content-Security-Policy"] = API_CSP
+        # Las respuestas llevan datos de la sesión o del tenant: ni el navegador ni un proxy
+        # intermedio las guardan. Una vista que quiera caché lo decide de forma explícita.
+        response.headers.setdefault("Cache-Control", "no-store")
         return response
 
     @staticmethod

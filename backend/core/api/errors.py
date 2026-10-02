@@ -110,8 +110,8 @@ def exception_handler(exc: Exception, context: dict[str, Any]) -> Response | Non
         # Sin sesión es siempre 401 (ADR-014 §3). DRF lo baja a 403 si la vista no tiene una
         # clase de autenticación con `authenticate_header`.
         exc.status_code, exc.auth_header = 401, AUTH_SCHEME
-    if getattr(exc, "auth_header", None):
-        headers["WWW-Authenticate"] = exc.auth_header
+    if getattr(exc, "auth_header", None) or exc.status_code == 401:  # todo 401 lleva el esquema
+        headers["WWW-Authenticate"] = getattr(exc, "auth_header", None) or AUTH_SCHEME
     if getattr(exc, "wait", None):
         headers["Retry-After"] = f"{int(exc.wait)}"
     if isinstance(exc, ApiError):

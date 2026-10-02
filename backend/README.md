@@ -82,7 +82,7 @@ Variables de producción: `DJANGO_SECRET_KEY`, `DJANGO_ALLOWED_HOSTS`, `DATABASE
 - **Email canónico** (`apps.accounts.emails.canonical_email`): se quita el espacio exterior; parte local en minúsculas y solo ASCII; dominio en minúsculas y en forma IDNA si es internacionalizado; formato validado. No hay reglas por proveedor: los puntos y los `+tag` distinguen direcciones.
 - **Unicidad sin distinguir mayúsculas, garantizada en la BD:** `UNIQUE (email)` más `CHECK (email = lower(email))`. No se usa la extensión `citext` (decisión D-F2-3 en [phase-2.md](../docs/phases/phase-2.md)).
 - **Contraseñas:** solo Argon2id (`argon2-cffi`, ADR-012). Validadores: mínimo 12 caracteres, contraseñas comunes, solo numéricas y parecido con los datos del usuario.
-- **Sesiones:** `django.contrib.sessions` y `AuthenticationMiddleware` están activos para que exista `request.user`. Los endpoints de login, la cookie `__Host-crm_session` y el almacén de sesiones llegan en F2-03A.
+- **Sesiones:** `django.contrib.sessions` y `AuthenticationMiddleware` están activos para que exista `request.user`. Los endpoints de login, la cookie de sesión y el almacén de sesiones están en la sección «Inicio de sesión».
 
 ## Membresías (F2-02, ADR-002 §3.2)
 
@@ -211,7 +211,23 @@ La auditoría del URLconf falla si:
 - una expresión regular sin `$` puede casar con una ruta de tenant;
 - dos rutas comparten el mismo texto y la primera, que es la que responde, no cumple.
 
-Todavía no hay login ni cookie de sesión propia: llegan con F2-03A.
+## Inicio de sesión (F2-03A, ADR-003 §2–3, ADR-013 §5)
+
+| Ruta de plataforma | Clase | Qué hace |
+|---|---|---|
+| `GET /api/v1/auth/csrf/` | `Public` | Entrega la cookie `csrftoken` antes del primer método no seguro. 204 |
+| `POST /api/v1/auth/login/` | `Public` | `{email, password}`. Abre la sesión y devuelve `{user}`. Exige CSRF |
+| `GET /api/v1/auth/session/` | `Authenticated` | El usuario de la sesión actual, o 401 `NOT_AUTHENTICATED` |
+
+- **Una sola respuesta de rechazo.** Email desconocido, contraseña incorrecta y usuario desactivado responden 401 `INVALID_CREDENTIALS` con el mismo cuerpo. El motivo real solo queda en la auditoría de plataforma.
+- **Cookie.** `crm_session`: `HttpOnly`, `SameSite=Lax`, `Path=/`, sin `Domain`. En producción se llama `__Host-crm_session` y lleva `Secure`. Sesiones de Django en base de datos (D-F2-2); el login rota el identificador de sesión y el token CSRF.
+- **Caducidad.** 12 horas desde el inicio de sesión. La renovación por actividad, el límite absoluto, el cierre de sesión y la purga llegan con F2-03C.
+- **Auditoría de plataforma.** `auth.login.succeeded` (actor `USER`) y `auth.login.failed` (actor `ANONYMOUS`, huella del email presentado, la cuenta como entidad si existe y `metadata.reason`). Nunca la contraseña ni el email. Si el acceso correcto no se puede auditar, no se abre la sesión y la anterior del mismo navegador sigue valiendo. Un fallo al auditar un rechazo no cambia su respuesta: va al log y al reporte de errores, solo con el nombre de la acción.
+- **Rotación.** Todo login correcto emite un identificador de sesión nuevo, también el de un usuario que ya tenía sesión: la anterior deja de valer.
+- **Sin caché.** Toda respuesta bajo `/api/` lleva `Cache-Control: no-store`.
+- **Cuerpos.** `core.api.parsers.Utf8JSONParser` es el analizador por defecto: JSON y solo en UTF-8. Un `charset` como `zlib` o `bz2` responde 415 `UNSUPPORTED_MEDIA_TYPE`; nunca elige el códec con el que se lee el cuerpo.
+- **Todo 401** lleva `WWW-Authenticate: Session`, también `INVALID_CREDENTIALS`.
+- **Contrato.** Las rutas están en `openapi/schema.yaml` (esquema de seguridad `sessionCookie`) y en el cliente generado del frontend.
 
 ## Cambios de RBAC sin escalada (F2-05C, ADR-003 §5)
 

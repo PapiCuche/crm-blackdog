@@ -51,6 +51,7 @@ SECURE_HSTS_PRELOAD = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
 SESSION_COOKIE_SECURE = True
+SESSION_COOKIE_NAME = "__Host-crm_session"  # solo válido con Secure, Path=/ y sin Domain
 CSRF_COOKIE_SECURE = True
 X_FRAME_OPTIONS = "DENY"
 CSRF_TRUSTED_ORIGINS = env.csv_list("DJANGO_CSRF_TRUSTED_ORIGINS")

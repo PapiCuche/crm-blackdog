@@ -25,5 +25,17 @@ def test_schema_endpoint_serves_the_contract_without_internal_routes() -> None:
     assert response.status_code == 200
     schema = yaml.safe_load(response.content)
     assert schema["info"]["title"] == "Good Doggy CRM API"
-    # Sin endpoints de negocio todavía: ni health, ni rutas de tenant, ni el propio schema.
-    assert schema["paths"] == {} and schema["openapi"].startswith("3.")
+    # Solo el contrato: ni health, ni el propio schema.
+    assert schema["openapi"].startswith("3.") and set(schema["paths"]) == {
+        "/api/v1/auth/csrf/",
+        "/api/v1/auth/login/",
+        "/api/v1/auth/session/",
+    }
+    login = schema["paths"]["/api/v1/auth/login/"]["post"]
+    assert login["operationId"] == "auth_login" and "security" not in login  # sin sesión previa
+    error = {"$ref": "#/components/schemas/Error"}
+    assert login["responses"]["401"]["content"]["application/json"]["schema"] == error
+    assert schema["paths"]["/api/v1/auth/session/"]["get"]["security"] == [{"sessionCookie": []}]
+    parts = schema["components"]["schemas"]
+    assert set(parts["User"]["properties"]) == {"id", "email", "first_name", "last_name"}
+    assert parts["LoginRequest"]["properties"]["password"]["writeOnly"] is True

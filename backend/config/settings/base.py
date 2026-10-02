@@ -53,6 +53,15 @@ AUTH_PASSWORD_VALIDATORS: list[dict[str, object]] = [
     {"NAME": _VALIDATORS + "CommonPasswordValidator"},
     {"NAME": _VALIDATORS + "NumericPasswordValidator"},
 ]
+# Sesión (ADR-003 §2, D-F2-2): filas en `django_session`, cookie HttpOnly y SameSite=Lax. El
+# nombre con prefijo `__Host-` y `Secure` los pone production.py: sobre HTTP no son válidos.
+SESSION_ENGINE = "django.contrib.sessions.backends.db"
+SESSION_COOKIE_NAME = "crm_session"
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+SESSION_COOKIE_AGE = 12 * 60 * 60  # desde el inicio de sesión; la renovación llega con F2-03C
+CSRF_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_HTTPONLY = False  # legible por JS: el cliente la copia en X-CSRFToken (ADR-003 §3)
 ASGI_APPLICATION = "config.asgi.application"
 
 DATABASES = {"default": env.database(env.required("DATABASE_URL"))}
@@ -103,7 +112,7 @@ LOGGING = {
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
-    "DEFAULT_PARSER_CLASSES": ["rest_framework.parsers.JSONParser"],
+    "DEFAULT_PARSER_CLASSES": ["core.api.parsers.Utf8JSONParser"],  # el charset no elige códec
     "URL_FORMAT_OVERRIDE": None,  # solo JSON: `?format=` no existe
     # Sesión de Django; el CSRF lo exige ApiCsrfMiddleware para todo /api/.
     "DEFAULT_AUTHENTICATION_CLASSES": ["core.api.authentication.SessionAuthentication"],
