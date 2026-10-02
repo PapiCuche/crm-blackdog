@@ -10,6 +10,7 @@ from typing import Any
 
 from django.core.management.base import BaseCommand, CommandError
 
+from core.redaction import mask_emails
 from core.tenancy.context import TenantContext, require_no_tenant
 from core.tenancy.resolution import organization_by_slug
 from core.tenancy.scope import assert_clean_connection, tenant_scope
@@ -26,7 +27,9 @@ class PlatformCommand(BaseCommand):
     def handle(self, *args: Any, **options: Any) -> None:
         require_no_tenant(f"comando {self._name()}")  # también TenantCommand: abre su propio scope
         assert_clean_connection()
-        logger.info("comando %s por %s: %s", self._name(), getpass.getuser(), options["reason"])
+        # Texto libre del operador y etiqueta de su cuenta: sin direcciones de email en el log.
+        operator, reason = mask_emails(getpass.getuser()), mask_emails(options["reason"])
+        logger.info("comando %s por %s: %s", self._name(), operator, reason)
         self.handle_platform(**options)
 
     def handle_platform(self, **options: Any) -> None:

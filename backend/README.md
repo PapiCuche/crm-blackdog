@@ -96,7 +96,16 @@ Variables de producción: `DJANGO_SECRET_KEY`, `DJANGO_ALLOWED_HOSTS`, `DATABASE
 
 ## Alta de una organización (F2-06, E01-04)
 
-`apps.provisioning.services.bootstrap_organization` crea la organización, la membresía de su Owner inicial, los cuatro roles plantilla y la asignación del rol Owner. Es una operación de plataforma: la lanza un operador, no un usuario del CRM. El comando que la expone llega con F2-06B.
+```bash
+python manage.py bootstrap_organization --slug acme --name "Acme SAC" \
+    --owner-email ana@acme.pe --reason "alta del cliente"
+```
+
+`apps.provisioning.services.bootstrap_organization` crea la organización, la membresía de su Owner inicial, los cuatro roles plantilla y la asignación del rol Owner. Es una operación de plataforma: la lanza un operador con el comando de arriba (F2-06B), no un usuario del CRM.
+
+- **Contraseña del Owner.** El comando la pide dos veces sin mostrarla. Sin terminal: `--password-stdin` (una sola línea por la entrada estándar). Nunca va en un argumento, en el log ni en la auditoría.
+- **Cuenta existente.** Para dar el rol a una cuenta que ya existe hay que decirlo con `--existing-owner`; conserva su contraseña. Una contraseña entregada para un email que ya existe se rechaza y no crea nada.
+- **Motivo.** `--reason` es obligatorio. Llega al log del comando sin direcciones de email (`core.redaction.mask_emails`, la misma máscara de la auditoría de plataforma).
 
 - **Atómica.** Todo va en una sola transacción, la del `tenant_scope` de la organización nueva. Si un paso falla no queda organización, membresía, roles ni usuario.
 - **Owner.** Con contraseña, una cuenta nueva que cumple la política vigente. Sin contraseña, una cuenta que ya existe, activa y con contraseña utilizable; nunca se le cambia.

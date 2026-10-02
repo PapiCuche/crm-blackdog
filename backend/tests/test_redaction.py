@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from core.redaction import REDACTED, redact, redact_text
+from core.redaction import REDACTED, mask_emails, redact, redact_text
 
 OPENAI_PROJECT = "sk-" + "proj-" + "Ab1" * 16
 OPENAI_LEGACY = "sk-" + "Zx9Yw8" * 8
@@ -133,3 +133,9 @@ def test_redaction_cost_is_linear_on_hostile_text() -> None:
     for text in hostile:
         redact_text(text)
     assert time.perf_counter() - started < 1  # antes: varios segundos con 16 000 puntos
+
+
+def test_mask_emails_hides_every_address_and_nothing_else() -> None:
+    text = "alta pedida por ana@acme.pe (ticket 42), copia a O'Brien%40gooddoggy.pe y a nadie más"
+    assert mask_emails(text) == "alta pedida por [EMAIL] (ticket 42), copia a [EMAIL] y a nadie más"
+    assert mask_emails("sin direcciones: 3 @ 4, a las 10") == "sin direcciones: 3 @ 4, a las 10"

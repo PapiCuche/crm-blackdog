@@ -65,6 +65,18 @@ make check                                               # las verificaciones de
 | Reinicio en limpio (borra BD, Redis y storage locales) | `docker compose -f infra/docker/compose.yaml --env-file infra/env/.env down -v`, y después `make up` |
 | Solo los servicios base | `docker compose … up -d postgres redis garage mailpit` |
 
+### Crear una organización de prueba
+
+El stack arranca sin organizaciones. Para crear una con su Owner (F2-06):
+
+```bash
+docker compose -f infra/docker/compose.yaml --env-file infra/env/.env exec backend \
+  python manage.py bootstrap_organization --slug demo --name "Organización de prueba" \
+  --owner-email owner@example.com --reason "entorno local"
+```
+
+Pide la contraseña del Owner dos veces y no la muestra. Debe cumplir la política vigente (12 caracteres como mínimo, no común, no solo números). Sin terminal, añade `-T` a `exec` y pasa la contraseña por la entrada estándar con `--password-stdin`. Si el email ya es un usuario, indícalo con `--existing-owner`.
+
 ## 5. Problemas frecuentes
 
 - **`ports are not available`:** el puerto del host está ocupado. Define el `*_HOST_PORT` correspondiente.
