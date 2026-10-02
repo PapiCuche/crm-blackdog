@@ -6,6 +6,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { NextIntlClientProvider } from "next-intl";
 import { getTranslations } from "next-intl/server";
+import { connection } from "next/server";
 
 import { LOCALE } from "@/i18n/request";
 
@@ -16,7 +17,9 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t("name") };
 }
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  // La CSP usa un nonce por petición (src/proxy.ts): ninguna página se prerenderiza en el build.
+  await connection();
   return (
     <html lang={LOCALE} className={`dark ${GeistSans.variable} ${GeistMono.variable}`}>
       <body>

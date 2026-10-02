@@ -70,3 +70,6 @@ jobs:
           docker build --pull -t crm-frontend:ci .
           test "$(docker run --rm --entrypoint id crm-frontend:ci -u)" != "0"
           sh ../infra/docker/smoke-image.sh crm-frontend:ci 3000 /o/ci
+        env:
+          # F2-07: la imagen envía la CSP estricta (script-src solo con nonce por petición).
+          SMOKE_HEADER_PATTERN: "^content-security-policy: default-src 'self'; script-src 'self' 'nonce-[A-Za-z0-9+/]{22}==' 'strict-dynamic'; style-src 'self' 'nonce-"

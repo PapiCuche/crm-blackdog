@@ -19,11 +19,15 @@ const nextConfig: NextConfig = {
     ];
   },
   async headers() {
-    // Cabeceras base; la CSP (con nonce) sigue pendiente (OBS-F1-09-1).
+    // Cabeceras fijas. La CSP lleva un nonce por petición y la emite src/proxy.ts (F2-07).
+    // HSTS: el navegador lo ignora sobre HTTP (stack local) y lo aplica tras el proxy con TLS.
     const base = [
       { key: "X-Frame-Options", value: "DENY" },
       { key: "X-Content-Type-Options", value: "nosniff" },
       { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+      { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains; preload" },
+      { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+      { key: "Permissions-Policy", value: "camera=(), geolocation=(), microphone=(), payment=()" },
     ];
     return [{ source: "/:path*", headers: base }];
   },

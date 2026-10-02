@@ -15,6 +15,8 @@ TEST_ENV := DATABASE_URL=postgres://crm_app:$(CRM_APP_PASSWORD)@$(PG) \
 	STORAGE_ENDPOINT_URL=http://127.0.0.1:$(or $(GARAGE_HOST_PORT),3900) STORAGE_REGION=garage \
 	STORAGE_BUCKET=$(or $(STORAGE_BUCKET),crm-local) STORAGE_ACCESS_KEY_ID=$(STORAGE_ACCESS_KEY_ID) \
 	STORAGE_SECRET_ACCESS_KEY=$(STORAGE_SECRET_ACCESS_KEY) CI=1
+# La imagen del frontend debe enviar la CSP estricta (F2-07): script-src solo con nonce.
+CSP_PATTERN := ^content-security-policy: default-src 'self'; script-src 'self' 'nonce-[A-Za-z0-9+/]{22}==' 'strict-dynamic'; style-src 'self' 'nonce-
 DEPLOY_ENV := DJANGO_SETTINGS_MODULE=config.settings.production DJANGO_ALLOWED_HOSTS=app.example.com \
 	DATABASE_URL=postgres://ci:ci@localhost:5432/ci DJANGO_SECRET_KEY=$$(openssl rand -hex 32)
 
@@ -42,7 +44,7 @@ check-images: ## Imágenes como en CI: build, usuario no root y prueba de humo H
 		-e DJANGO_SECRET_KEY -e DJANGO_ALLOWED_HOSTS=app.example.com -e DATABASE_URL=postgres://ci:ci@127.0.0.1:5432/ci
 	docker build --pull -t crm-frontend:ci frontend
 	test "$$(docker run --rm --entrypoint id crm-frontend:ci -u)" != "0"
-	sh infra/docker/smoke-image.sh crm-frontend:ci 3000 /o/ci
+	SMOKE_HEADER_PATTERN="$(CSP_PATTERN)" sh infra/docker/smoke-image.sh crm-frontend:ci 3000 /o/ci
 
 check-backend:  # `@`: la línea lleva credenciales locales (TEST_ENV); make no la imprime
 	$(COMPOSE) up -d --wait postgres garage
