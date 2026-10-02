@@ -332,7 +332,7 @@ def test_unauthenticated_is_401_and_non_member_is_404(api: Any) -> None:
         assert Client().get(target).status_code == 401  # sin sesión
     targets = (url(org="org-b"), url(org="no-existe"), detail(api.orgs["widget_B"], org="org-b"))
     replies = {send(api.client, "GET", target) for target in targets}
-    assert replies == {(404, b'{"code": "NOT_FOUND"}')}  # ana no es de B: indistinguible
+    assert replies == {(404, b'{"code":"NOT_FOUND"}')}  # ana no es de B: indistinguible
 
 
 def test_engine_denies_what_a_lax_resolver_lets_through(api: Any, settings: Any) -> None:
@@ -477,7 +477,7 @@ def test_platform_staff_gets_no_bypass_and_platform_routes_are_excluded_by_route
     client = Client()
     client.force_login(staff)
     for target in (url(), detail(api.mine), url("members/"), url("undeclared/")):
-        assert send(client, "GET", target) == (404, b'{"code": "NOT_FOUND"}')  # sin membresía
+        assert send(client, "GET", target) == (404, b'{"code":"NOT_FOUND"}')  # sin membresía
     membership = join(api.a, staff)
     for target in (url(), detail(api.mine), url("members/"), url("undeclared/")):
         assert client.get(target).status_code == 403  # con membresía y sin concesiones

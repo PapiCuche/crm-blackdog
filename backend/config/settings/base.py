@@ -26,6 +26,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "core.observability.middleware.RequestContextMiddleware",  # request/correlation id (F1-07)
+    "core.api.middleware.ApiEnvelopeMiddleware",  # errores y CSP de /api/ (ADR-014): por fuera
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -36,6 +37,9 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = "config.urls"
+# El backend solo sirve la API y las sondas: una ruta sin su barra final es un 404 del
+# contrato, nunca una redirección en HTML.
+APPEND_SLASH = False
 # Identidad (F2-01): usuario global con email canónico y Argon2id (ADR-003 §2). Un usuario
 # autenticado no accede a ningún tenant sin membresía (TENANCY_MEMBERSHIP_RESOLVER).
 AUTH_USER_MODEL = "accounts.User"
@@ -92,14 +96,16 @@ LOGGING = {
         "celery.app.trace": {"level": "WARNING"},  # "succeeded: <repr(resultado)>"
     },
 }
-# API (F1-08A): DRF solo JSON; sin autenticación de API todavía (F2-03A). Contrato OpenAPI con
-# drf-spectacular, versionado en backend/openapi/schema.yaml (fuente de verdad para orval).
+# API (F1-08A): DRF solo JSON. Contrato OpenAPI con drf-spectacular, versionado en
+# backend/openapi/schema.yaml (fuente de verdad para orval). Errores: ADR-014 §1 (F2-12).
 REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
     "DEFAULT_PARSER_CLASSES": ["rest_framework.parsers.JSONParser"],
+    "URL_FORMAT_OVERRIDE": None,  # solo JSON: `?format=` no existe
     "DEFAULT_AUTHENTICATION_CLASSES": [],
-    "UNAUTHENTICATED_USER": None,  # sin clases de autenticación hasta F2-03A
+    "UNAUTHENTICATED_USER": None,  # sin clases de autenticación hasta F2-13
+    "EXCEPTION_HANDLER": "core.api.errors.exception_handler",  # cuerpo de error único
     # F2-05B: denegación por defecto. Las vistas de plataforma declaran las suyas.
     "DEFAULT_PERMISSION_CLASSES": ["apps.access.permissions.HasPermission"],
     "DEFAULT_FILTER_BACKENDS": ["apps.access.permissions.ScopeFilter"],

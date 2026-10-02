@@ -131,7 +131,7 @@ class ContactDetail(generics.RetrieveUpdateAPIView):
         return Contact.objects.all()
 ```
 
-- Vista sin `required_permissions` o método sin declarar: 403. HEAD usa el permiso de GET. (DRF negocia el formato antes: pedir uno que la API no sirve da 404 o 406, OBS-F2-05A-5.)
+- Vista sin `required_permissions` o método sin declarar: 403. HEAD usa el permiso de GET. Pedir con `Accept` un formato que la API no sirve da 406 `NOT_ACCEPTABLE`.
 - `ScopeFilter` aplica `scoped()` al queryset de listados y de `get_object()`: se filtra en SQL. Solo actúa donde la vista llama a `filter_queryset()`: una vista que consulte por su cuenta debe pasar su queryset por `scoped()`.
 - Cada método usa su permiso y, sobre un objeto que ya existe, su alcance. Crear (POST) solo comprueba el permiso, y el filtro mira la fila antes de escribirla, no los valores que llegan (OBS-F2-05B-5). Un método de escritura responde con el objeto, así que poder escribirlo implica leer esa respuesta.
 - Un serializador de tenant nunca acepta del cliente la clave primaria ni `organization_id`.
@@ -139,16 +139,34 @@ class ContactDetail(generics.RetrieveUpdateAPIView):
 
 | Caso | Respuesta | Quién responde |
 |---|---|---|
-| Sin autenticación | 401 | middleware de tenant |
-| Organización inexistente o sin membresía activa | 404 | middleware de tenant |
-| Miembro sin el permiso, vista o método sin declarar | 403 | `HasPermission` |
-| Objeto fuera de alcance, de otra organización o inexistente | 404, idénticos entre sí | `ScopeFilter` |
+| Sin sesión | 401 `NOT_AUTHENTICATED` | middleware de tenant |
+| Organización inexistente o sin membresía activa | 404 `NOT_FOUND` | middleware de tenant |
+| Miembro sin el permiso, vista o método sin declarar | 403 `PERMISSION_DENIED` | `HasPermission` |
+| Objeto fuera de alcance, de otra organización o inexistente | 404 `NOT_FOUND`, con los mismos bytes que los del middleware | `ScopeFilter` |
 
 Las vistas de plataforma son las rutas fuera de `/api/v1/o/<slug>/`. Se excluyen por la ruta, nunca por el actor: declaran sus propias `permission_classes` (y `filter_backends` si son genéricas: sin tenant, `ScopeFilter` devuelve vacío) y se añaden a `PLATFORM` en `tests/test_access_api.py`. Ser staff de plataforma no abre ninguna ruta de tenant.
 
 Ese test recorre todo el URLconf y falla si una ruta de tenant no es una vista de DRF con `HasPermission`, un permiso del catálogo por cada método que implementa y, si es genérica, `ScopeFilter`, o si aparece una vista de DRF de plataforma que no está en `PLATFORM`. Mira lo que usa cada ruta (también `as_view(...)` y `@action(...)`). Exige las dos clases tal cual: una subclase o una composición (`A | B`) se rechazan y se revisan a mano. Rechaza también las vistas que redefinen `get_permissions`, `check_permissions`, `permission_denied`, `initial` o `dispatch`, las genéricas que redefinen `get_object` o `filter_queryset`, y las envueltas en un decorador (`cache_page`, por ejemplo). Una ruta fuera de `api/v1/o/` que pueda casar con una ruta de tenant (segmento dinámico antes del prefijo, o `re_path` sin `^`) también falla. Es una auditoría estática: no sustituye a la revisión de una vista con consultas o escrituras propias.
 
 `HasPermission` comprueba además cada objeto que pase por `check_object_permissions` y responde 404. Es una red de seguridad, no un sustituto de `scoped()`: su cuerpo puede diferir del de un objeto inexistente.
+
+## Contrato de errores de la API (F2-12, ADR-014 §1)
+
+**Un solo cuerpo de error:** `{"code": "…", "message"?: "…", "fields"?: {…}}`. El cliente decide solo por `code`.
+
+- `core.api.errors.exception_handler` (el `EXCEPTION_HANDLER` de DRF) lo produce para los errores de una vista. Los 401 y los 404 van sin `message`.
+- `VALIDATION_ERROR` lleva `fields`: cada campo, una lista de `{code, message}`; los errores generales, en `_`; un serializador anidado, un objeto; una lista, un objeto por índice de fila. El nombre `non_field_errors` de DRF no sale a ningún nivel.
+- Un servicio lanza un código de dominio con `core.api.errors.ApiError(code, status, message)`.
+- `core.api.middleware.ApiEnvelopeMiddleware` es el middleware más externo. Convierte al contrato todo error bajo `/api/` que no salga ya en JSON, venga de donde venga: una ruta sin resolver, un `Host` no permitido, una excepción en otro middleware. También con `DEBUG`. Conserva las cabeceras de la respuesta original (`Allow`, cookies). Un 500 es siempre `{"code":"INTERNAL_ERROR"}`: el detalle va al log.
+- Las respuestas de la API llevan `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`.
+- La API solo sirve JSON: `?format=` no existe (`URL_FORMAT_OVERRIDE`). `APPEND_SLASH` está desactivado: una ruta sin su barra final es un 404 del contrato, no una redirección.
+- En OpenAPI, el componente común es `core.api.schema.ERROR`: `@extend_schema(responses={200: …, **errors(401, 404)})`.
+
+**Una petición de tenant que acaba en error no deja nada escrito.** `TenantResolutionMiddleware` es dueño de la transacción de la petición y la deshace si la respuesta es 400 o superior, la haya producido una excepción de dominio, una validación o un fallo inesperado. Lo que deba sobrevivir a una petición fallida (por ejemplo, una futura auditoría de accesos denegados) tiene que escribirse fuera de ese `tenant_scope`.
+
+Un slug imposible bajo `/api/v1/o/` responde 404 sin llegar a ninguna vista. El resolvedor de tenant consulta la membresía exista o no la organización, para que el tiempo de respuesta del 404 no delate qué slugs existen.
+
+La sesión, el CSRF y las rutas de plataforma (ADR-014 §2 y §4) llegan con F2-13.
 
 ## Cambios de RBAC sin escalada (F2-05C, ADR-003 §5)
 
