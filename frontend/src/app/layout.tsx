@@ -1,7 +1,6 @@
 import "./globals.css";
 
 import { GeistMono } from "geist/font/mono";
-import { GeistSans } from "geist/font/sans";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { NextIntlClientProvider } from "next-intl";
@@ -10,6 +9,7 @@ import { connection } from "next/server";
 
 import { LOCALE } from "@/i18n/request";
 
+import { dmSans } from "./fonts";
 import { Providers } from "./providers";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -21,7 +21,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   // La CSP usa un nonce por petición (src/proxy.ts): ninguna página se prerenderiza en el build.
   await connection();
   return (
-    <html lang={LOCALE} className={`dark ${GeistSans.variable} ${GeistMono.variable}`}>
+    <html lang={LOCALE} className={`${dmSans.variable} ${GeistMono.variable}`}>
       <body>
         <NextIntlClientProvider>
           <Providers>{children}</Providers>

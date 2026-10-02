@@ -1,10 +1,10 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-/* Dark-first "Premium Operations OS": superficies oscuras, acento dorado Good Doggy con
-   moderación. Tokens listos para sustituirse por los del sistema de diseño (Figma). */
+/* Tema claro del Figma GOOD DOGGY (D-F2-7): tinta sobre papel y miel para lo activo y las
+   acciones del workspace. Las pantallas oficiales usan estos tokens semánticos. */
 @theme inline {
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -18,7 +18,8 @@
   --color-success: var(--success);
   --color-danger: var(--danger);
   --radius-lg: 0.75rem;
-  /* Demo visual (UI-01): tokens del Figma GOOD DOGGY, solo bajo /demo. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1); /* entradas y respuesta a una pulsación */
+  /* Demo visual (UI-01, congelada): sus propios tokens del Figma, solo bajo /demo. */
   --font-gd: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
   --color-gd-foreground: var(--gd-foreground);
   --color-gd-paper: var(--gd-paper);
@@ -29,18 +30,18 @@
 }
 
 :root {
-  color-scheme: dark;
-  --background: #0b0c0e;
-  --foreground: #ececee; /* contraste AA sobre todas las superficies */
-  --surface: #121317;
-  --surface-raised: #1a1c21;
-  --border: #2a2d34;
-  --muted: #a0a3ab; /* 7.4:1 sobre --background */
-  --accent: #d4a849; /* dorado Good Doggy: solo foco, estado activo y acciones primarias */
-  --accent-foreground: #0b0c0e;
-  --ring: #d4a849;
-  --success: #4ade80;
-  --danger: #f87171;
+  color-scheme: light;
+  --background: #f3f3f3; /* lienzo de la aplicación */
+  --foreground: #202020; /* tinta: 16:1 sobre papel y 14:1 sobre el lienzo */
+  --surface: #ffffff; /* papel: barra lateral, tarjetas y formularios */
+  --surface-raised: #ebebeb; /* hover: sutil (1,2:1 sobre papel); la selección usa otra señal */
+  --border: #dedede;
+  --muted: #5c5c5c; /* 6,7:1 sobre papel y 6:1 sobre el lienzo */
+  --accent: #ffdb5b; /* miel: elemento activo y acciones del workspace; nunca color de texto */
+  --accent-foreground: #202020; /* 11:1 sobre miel */
+  --ring: #202020;
+  --success: #1a7f37; /* 5,1:1 sobre papel y 4,6:1 sobre el lienzo; no sobre miel */
+  --danger: #b42318; /* 6,5:1 sobre papel */
   --gd-foreground: #202020;
   --gd-paper: #ffffff;
   --gd-canvas: #ffffff;
@@ -51,17 +52,42 @@
 
 @layer base {
   body {
-    @apply bg-background text-foreground font-sans antialiased;
+    @apply bg-background text-foreground font-sans text-[15px] antialiased;
   }
   :focus-visible {
     @apply outline-ring outline-2 outline-offset-2;
   }
 }
 
+/* Menú móvil del shell (<dialog>): entra desde su borde. Es ocasional, así que se anima; al
+   cerrarse desaparece sin esperar. `allow-discrete` deja animar el paso por `display`. */
+.shell-drawer {
+  transform: translateX(-100%);
+}
+.shell-drawer[open] {
+  transform: translateX(0);
+  transition:
+    transform 200ms var(--ease-out),
+    overlay 200ms allow-discrete,
+    display 200ms allow-discrete;
+  @starting-style {
+    transform: translateX(-100%);
+  }
+}
+.shell-drawer[open]::backdrop {
+  background-color: rgb(32 32 32 / 0.4);
+  opacity: 1;
+  transition: opacity 200ms var(--ease-out);
+  @starting-style {
+    opacity: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
-  *::after {
+  *::after,
+  ::backdrop {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
