@@ -151,6 +151,11 @@ def test_hostile_text_costs_linear_time_and_is_bounded(migrator: psycopg.Connect
     for huge in ("." * 40000, "a@" + "a." * 20000):
         with pytest.raises(ValueError, match="metadata supera"):
             record("auth.logout", actor_type=Actor.SYSTEM, metadata={"k": huge})
+    for costly in ("csrf" * 8000, "csrf-" * 6500, "a@[" * 10900, "session_id" * 3200):
+        try:  # justo por debajo del límite previo: el coste lo ponen las expresiones regulares
+            record("auth.logout", actor_type=Actor.SYSTEM, metadata={"k": costly})
+        except ValueError:
+            pass  # si tras redactar sigue siendo grande, se rechaza; lo que importa es el tiempo
     assert time.perf_counter() - started < 2  # con las expresiones anteriores: segundos por llamada
     agents = [row[0] for row in rows(migrator, "user_agent")]
     assert len(agents) == 4 and all(len(agent) <= 512 for agent in agents)
@@ -204,6 +209,11 @@ def test_platform_event_with_entity_and_normalized_address(
         assert rows(migrator, "host(ip)")[-1] == (stored,)
     record("auth.logout", actor_type=Actor.SYSTEM, identifier="   ")
     assert rows(migrator, "identifier_hash")[-1] == (None,)  # un identificador vacío no cuenta
+    odd: dict[Any, Any] = {"raw": b"abc", "roles": {"a"}, org: 1, "path": "C:\\u0000"}
+    record("auth.logout", actor_type=Actor.SYSTEM, metadata=odd)
+    assert json.loads(rows(migrator, "metadata::text")[-1][0]) == {
+        "raw": "[BINARY]", "roles": ["a"], str(org): 1, "path": "C:\\u0000"
+    }  # fmt: skip
 
 
 def test_record_rejects_a_tenant_scope_and_invalid_input(
@@ -227,6 +237,7 @@ def test_record_rejects_a_tenant_scope_and_invalid_input(
         {**logout, "metadata": {"blob": "x" * 5000}},
         {**logout, "metadata": {"n": float("nan")}},
         {**logout, "metadata": {"n": "a\x00b"}},
+        {**logout, "metadata": {"n": ["a", {"b": "c\x00"}]}},
         {**logout, "metadata": {EMAIL: 1, "x@y.z": 2}},  # dos claves no se funden en una
     )
     for kwargs in cases:

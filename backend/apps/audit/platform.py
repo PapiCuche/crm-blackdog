@@ -35,7 +35,7 @@ EMAIL_MASK = "[EMAIL]"
 _LOCAL = r"[^\s<>()\[\]{},;:\"=@]"
 EMAIL = re.compile(
     rf"(?i)(?:(?<!{_LOCAL}){_LOCAL}+?|\"[^\"\n]{{1,64}}\"|(?<=\[REDACTED\]))"
-    rf"(?:@|%40)(?:\[[^\]\s]*\]|[^\s<>()\[\]{{}},;:\"'@]+)"
+    rf"(?:@|%40)(?:\[[^\]\s]{{0,64}}\]|[^\s<>()\[\]{{}},;:\"'@]+)"
 )
 _HASH_SALT = "apps.audit.platform.identifier"
 _INSERT = (  # esquema explícito: una tabla temporal con el mismo nombre no captura la fila
@@ -63,6 +63,8 @@ def identifier_hash(identifier: str) -> str:
 def _mask(value: Any) -> Any:
     """Además del redactor compartido, este registro no guarda direcciones de email (§4)."""
     if isinstance(value, str):
+        if "\x00" in value:  # PostgreSQL no admite el carácter nulo en `jsonb`
+            raise ValueError("metadata contiene un carácter nulo")
         return EMAIL.sub(EMAIL_MASK, value)
     if isinstance(value, dict):
         masked = {_mask(key): _mask(item) for key, item in value.items()}
@@ -89,13 +91,12 @@ def _address(ip: str | None) -> str | None:
 def _metadata(metadata: Mapping[str, Any] | None) -> str:
     raw = dict(metadata or {})
     # Antes de redactar: acota el coste de las expresiones regulares sobre una entrada enorme.
-    if len(json.dumps(raw, cls=DjangoJSONEncoder, allow_nan=False)) > 8 * METADATA_MAX:
+    # `str()` y no JSON: el redactor aún no ha normalizado bytes, conjuntos ni claves no textuales.
+    if len(str(raw)) > 8 * METADATA_MAX:
         raise ValueError(f"metadata supera {METADATA_MAX} bytes")
     payload = json.dumps(_mask(redact(raw)), cls=DjangoJSONEncoder, allow_nan=False)
     if len(payload.encode()) > METADATA_MAX:
         raise ValueError(f"metadata supera {METADATA_MAX} bytes")
-    if "\\u0000" in payload:
-        raise ValueError("metadata contiene un carácter nulo")
     return payload
 
 

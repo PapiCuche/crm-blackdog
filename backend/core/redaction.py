@@ -14,12 +14,13 @@ MAX_DEPTH = 8
 _SECRET_SEGMENTS = frozenset(
     {"password", "passwords", "passwd", "pwd", "passphrase", "secret", "secrets", "token",
      "apikey", "authorization", "cookie", "cookies", "sessionid", "ciphertext", "credential",
-     "credentials", "dsn", "kek", "csrf", "csrftoken", "csrfmiddlewaretoken"}
+     "credentials", "dsn", "kek", "csrf", "csrftoken", "csrfmiddlewaretoken", "xcsrftoken",
+     "sessionkey", "sessiontoken"}
 )  # fmt: skip
 _SECRET_FRAGMENTS = ("api_key", "private_key", "access_key", "session_key", "crm_session")
 # Toda clave `*session_id` se trata como credencial, aunque termine en `_id`: para correlacionar
 # hay que usar otro nombre (p. ej., `conversation_id`).
-_SESSION_IDS = ("session_id",)
+_SESSION_IDS = ("session_id", "session_ids")
 _NOT_SECRET_SUFFIXES = ("_at", "_limit", "_count", "_id")  # fechas, límites, contadores y FKs
 _CONTENT_KEYS = frozenset({"body", "content", "text", "transcript", "caption"})
 _CONTENT_SUFFIXES = ("_body", "_content", "_transcript", "_text", "_preview", "_caption")
@@ -44,14 +45,11 @@ PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
         ),
         rf"\1={REDACTED}",
     ),
-    (  # cabecera Cookie / Set-Cookie completa dentro de un texto
-        re.compile(r"(?i)\b((?:set-)?cookie[\"']?\s*[:=]\s*[\"']?)[^\s\"';=]+=[^\r\n\"']*"),
-        rf"\1{REDACTED}",
-    ),
-    (  # session_key=…, sessionid: …, crm_session=…, X-CSRFToken: … dentro de un texto
+    (  # session_key=…, sessionid: …, crm_session=…, X-CSRFToken: … dentro de un texto. Nombres
+        # exactos y prefijo acotado: coste lineal, y `csrf_failure_count=3` no se toca.
         re.compile(
-            r"(?i)(?<![a-z0-9_.-])([a-z0-9_.-]*?(?:session[_-]?(?:id|key)|crm_session|"
-            r"csrf[a-z0-9_-]*)[\"']?\s*[=:]\s*[\"']?)[^&\s\"';,}]+"
+            r"(?i)(?<![a-z0-9_.-])([a-z0-9_.-]{0,40}?(?:session[_-]?(?:id|key)|crm_session|"
+            r"csrf(?:middleware)?[_-]?token)[\"']?\s*[=:]\s*[\"']?)[^&\s\"';,}]+"
         ),
         rf"\1{REDACTED}",
     ),
