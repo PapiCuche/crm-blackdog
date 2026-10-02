@@ -15,5 +15,13 @@
     "organization": "Organización",
     "workspaceTitle": "Espacio de trabajo",
     "workspaceEmpty": "Los módulos de la organización aparecerán aquí."
+  },
+  "errors": {
+    "notFoundTitle": "Página no encontrada",
+    "notFoundBody": "La dirección no existe o ya no está disponible.",
+    "backHome": "Volver al inicio",
+    "errorTitle": "Algo salió mal",
+    "errorBody": "No pudimos mostrar esta página. Puedes intentarlo de nuevo.",
+    "retry": "Reintentar"
   }
 }

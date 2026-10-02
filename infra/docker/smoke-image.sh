@@ -3,6 +3,8 @@
 # siempre, también si falla. La usan `make check` y CI (backend.yml, frontend.yml), así que
 # ambos prueban exactamente lo mismo.
 # Uso: smoke-image.sh <imagen> <puerto del contenedor> <ruta> [opciones de `docker run`…]
+# SMOKE_CHECK (opcional): comando que recibe la URL base del contenedor como último argumento
+# y debe terminar con 0 (p. ej., las cabeceras de seguridad del frontend).
 # El puerto del host lo elige Docker en 127.0.0.1 y el nombre es único: no colisiona con el
 # stack local. Los secretos se pasan por nombre (`-e VARIABLE`), nunca con su valor.
 set -eu
@@ -19,6 +21,10 @@ i=0
 while [ "$i" -lt 30 ]; do
   address="$(docker port "$name" "$port/tcp" 2>/dev/null | head -n 1)" || address=""
   if [ -n "$address" ] && curl -sf -o /dev/null "http://$address$path"; then
+    if [ -n "${SMOKE_CHECK:-}" ] && ! $SMOKE_CHECK "http://$address"; then
+      echo "smoke FAIL: $image no pasa la comprobación: $SMOKE_CHECK" >&2
+      exit 1
+    fi
     echo "smoke OK: $image $path"
     exit 0
   fi

@@ -70,3 +70,6 @@ jobs:
           docker build --pull -t crm-frontend:ci .
           test "$(docker run --rm --entrypoint id crm-frontend:ci -u)" != "0"
           sh ../infra/docker/smoke-image.sh crm-frontend:ci 3000 /o/ci
+        env:
+          # F2-07: cabeceras de seguridad de la imagen y nonce de la CSP en cada script del HTML.
+          SMOKE_CHECK: node scripts/check-security-headers.mjs

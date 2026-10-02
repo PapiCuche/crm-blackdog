@@ -126,7 +126,7 @@ El post oficial de Next.js del 2026-09-30 indica que 2 de las 9 vulnerabilidades
 - Acción: actualizar a la primera 16.3.x estable que las corrija. **SLA ≤ 72 h** desde su publicación, sujeto a CI y revisión.
 
 ### OBS-F1-09-1 — Frontend: CSP, cabeceras y origen del backend
-- **CSP:** pendiente. No entró en F1-10 (#12 no la incluye): Caddy no añade cabeceras. Se hará en un work item propio, con nonce para los scripts de Next, antes de servir pantallas con datos. Ya se envían `X-Frame-Options: DENY`, `nosniff` y `Referrer-Policy`.
+- **CSP:** ✅ resuelta en F2-07 (#44): política estricta con un nonce por petición, emitida por Next (`frontend/src/proxy.ts`); Caddy no añade cabeceras. Detalle en [frontend/README.md](../../frontend/README.md).
 - **Dependabot npm:** falta añadir el ecosistema npm sobre `frontend/` (junto con OBS-F1-02-1).
 - **CI `frontend checks`:** usa filtro `paths`, así que no puede ser un check requerido sin el mismo gate estable que el backend.
 - **`BACKEND_ORIGIN`:** se lee al hacer el `next build` (los rewrites quedan en el manifiesto). En producción el enrutado same-origin lo hace el proxy (Caddy, F1-10), no Next.

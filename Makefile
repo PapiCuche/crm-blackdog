@@ -42,7 +42,7 @@ check-images: ## Imágenes como en CI: build, usuario no root y prueba de humo H
 		-e DJANGO_SECRET_KEY -e DJANGO_ALLOWED_HOSTS=app.example.com -e DATABASE_URL=postgres://ci:ci@127.0.0.1:5432/ci
 	docker build --pull -t crm-frontend:ci frontend
 	test "$$(docker run --rm --entrypoint id crm-frontend:ci -u)" != "0"
-	sh infra/docker/smoke-image.sh crm-frontend:ci 3000 /o/ci
+	SMOKE_CHECK="node frontend/scripts/check-security-headers.mjs" sh infra/docker/smoke-image.sh crm-frontend:ci 3000 /o/ci
 
 check-backend:  # `@`: la línea lleva credenciales locales (TEST_ENV); make no la imprime
 	$(COMPOSE) up -d --wait postgres garage
