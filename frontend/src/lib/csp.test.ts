@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { buildCsp, newNonce } from "./csp";
 
@@ -60,6 +60,14 @@ describe("buildCsp", () => {
 });
 
 describe("newNonce", () => {
+  it("sale del generador criptográfico", () => {
+    const random = vi.spyOn(crypto, "getRandomValues");
+    newNonce();
+    expect(random).toHaveBeenCalledOnce();
+    expect(random.mock.calls[0]?.[0]).toHaveLength(16);
+    random.mockRestore();
+  });
+
   it("genera 128 bits en base64, distintos en cada llamada", () => {
     const nonces = new Set(Array.from({ length: 50 }, newNonce));
     expect(nonces.size).toBe(50);
