@@ -15,7 +15,7 @@ from apps.organizations.selectors import active_membership, organizations_for_us
 from config.settings import base
 from core.tenancy.context import ActorType, TenantContext, TenantContextError
 from core.tenancy.scope import tenant_scope, user_scope
-from tests.factories import TEST_PASSWORD, make_user
+from tests.factories import TEST_PASSWORD, make_user, sign_in
 
 pytestmark = pytest.mark.usefixtures("tenant_db")
 REAL = override_settings(
@@ -176,7 +176,7 @@ def test_http_member_reaches_only_their_tenant(
     user = make_user()
     join(orgs["A"], user)
     client = Client()
-    client.force_login(user)
+    sign_in(client, user)
     assert client.get("/api/v1/o/org-a/widgets/").json() == {"ids": [str(orgs["widget_A"])]}
     not_found = (404, {"code": "NOT_FOUND"})
     for url in ("/api/v1/o/org-b/widgets/", "/api/v1/o/no-existe/widgets/"):

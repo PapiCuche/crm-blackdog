@@ -10,4 +10,5 @@ urlpatterns = [
     # Rutas de plataforma (ADR-014 §4): sin tenant. Cada una figura en `PLATFORM` de la
     # auditoría del URLconf (tests/test_access_api.py).
     path("api/v1/auth/", include("apps.accounts.api.urls")),
+    path("api/v1/me/", include("apps.organizations.api.urls")),
 ]

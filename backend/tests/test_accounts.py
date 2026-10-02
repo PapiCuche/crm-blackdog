@@ -15,7 +15,7 @@ from django.test import Client, override_settings
 from apps.accounts.emails import canonical_email
 from apps.accounts.models import User
 from config.settings import base
-from tests.factories import TEST_PASSWORD, make_user
+from tests.factories import TEST_PASSWORD, make_user, sign_in
 
 pytestmark = pytest.mark.usefixtures("tenant_db")
 
@@ -198,7 +198,7 @@ def test_authenticated_user_without_membership_cannot_reach_tenant_routes(
     user = create("ana@example.com", TEST_PASSWORD)
     client = Client()
     assert client.get("/api/v1/o/org-a/widgets/").status_code == 401  # anónimo
-    client.force_login(user)
+    sign_in(client, user)
     response = client.get("/api/v1/o/org-a/widgets/")
     assert (response.status_code, response.json()) == (404, {"code": "NOT_FOUND"})
     assert client.get("/api/v1/o/no-existe/widgets/").status_code == 404  # indistinguible

@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+from celery.schedules import crontab
+
 from config import env
 
 BASE_DIR = Path(__file__).resolve().parents[2]
@@ -34,6 +36,7 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",  # request.user (F2-01)
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "apps.accounts.middleware.SessionLifetimeMiddleware",  # caducidad absoluta y por inactividad
     "core.api.middleware.ApiCsrfMiddleware",  # CSRF de /api/ antes de resolver el tenant
     "core.tenancy.middleware.TenantResolutionMiddleware",  # siempre tras la autenticación
 ]
@@ -59,7 +62,9 @@ SESSION_ENGINE = "django.contrib.sessions.backends.db"
 SESSION_COOKIE_NAME = "crm_session"
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = "Lax"
-SESSION_COOKIE_AGE = 12 * 60 * 60  # desde el inicio de sesión; la renovación llega con F2-03C
+SESSION_COOKIE_AGE = 12 * 60 * 60  # inactividad
+SESSION_ABSOLUTE_AGE = 7 * 24 * 60 * 60  # desde el inicio de sesión, haya o no actividad
+SESSION_REFRESH_INTERVAL = 5 * 60  # cada cuánto se renueva la caducidad por inactividad
 CSRF_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_HTTPONLY = False  # legible por JS: el cliente la copia en X-CSRFToken (ADR-003 §3)
 ASGI_APPLICATION = "config.asgi.application"
@@ -77,7 +82,15 @@ TENANCY_MEMBERSHIP_RESOLVER = "apps.organizations.selectors.active_membership"  
 # Celery (F1-10): broker Redis por entorno (compose: redis://redis:6379/0).
 CELERY_BROKER_URL = env.optional("CELERY_BROKER_URL", "")
 # Outbox (F1-06): el publisher corre cada segundo en beat.
-CELERY_BEAT_SCHEDULE = {"core.publish_outbox": {"task": "core.publish_outbox", "schedule": 1.0}}
+CELERY_BEAT_SCHEDULE = {
+    "core.publish_outbox": {"task": "core.publish_outbox", "schedule": 1.0},
+    # D-F2-2: una vez al día, a hora fija (UTC). Un intervalo de 24 horas se cuenta desde que
+    # beat arranca: si el contenedor se recrea a diario, la purga no se ejecutaría nunca.
+    "accounts.purge_expired_sessions": {
+        "task": "accounts.purge_expired_sessions",
+        "schedule": crontab(hour=3, minute=17),
+    },
+}
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 LANGUAGE_CODE = "es-pe"

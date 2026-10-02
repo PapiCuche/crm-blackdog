@@ -221,13 +221,29 @@ La auditoría del URLconf falla si:
 
 - **Una sola respuesta de rechazo.** Email desconocido, contraseña incorrecta y usuario desactivado responden 401 `INVALID_CREDENTIALS` con el mismo cuerpo. El motivo real solo queda en la auditoría de plataforma.
 - **Cookie.** `crm_session`: `HttpOnly`, `SameSite=Lax`, `Path=/`, sin `Domain`. En producción se llama `__Host-crm_session` y lleva `Secure`. Sesiones de Django en base de datos (D-F2-2); el login rota el identificador de sesión y el token CSRF.
-- **Caducidad.** 12 horas desde el inicio de sesión. La renovación por actividad, el límite absoluto, el cierre de sesión y la purga llegan con F2-03C.
+- **Caducidad.** 12 horas de inactividad y 7 días absolutos (ver «Ciclo de la sesión»).
 - **Auditoría de plataforma.** `auth.login.succeeded` (actor `USER`) y `auth.login.failed` (actor `ANONYMOUS`, huella del email presentado, la cuenta como entidad si existe y `metadata.reason`). Nunca la contraseña ni el email. Si el acceso correcto no se puede auditar, no se abre la sesión y la anterior del mismo navegador sigue valiendo. Un fallo al auditar un rechazo no cambia su respuesta: va al log y al reporte de errores, solo con el nombre de la acción.
 - **Rotación.** Todo login correcto emite un identificador de sesión nuevo, también el de un usuario que ya tenía sesión: la anterior deja de valer.
 - **Sin caché.** Toda respuesta bajo `/api/` lleva `Cache-Control: no-store`.
 - **Cuerpos.** `core.api.parsers.Utf8JSONParser` es el analizador por defecto: JSON y solo en UTF-8. Un `charset` como `zlib` o `bz2` responde 415 `UNSUPPORTED_MEDIA_TYPE`; nunca elige el códec con el que se lee el cuerpo.
 - **Todo 401** lleva `WWW-Authenticate: Session`, también `INVALID_CREDENTIALS`.
 - **Contrato.** Las rutas están en `openapi/schema.yaml` (esquema de seguridad `sessionCookie`) y en el cliente generado del frontend.
+
+## Ciclo de la sesión y organizaciones del usuario (F2-03C, ADR-003 §2, D-F2-2)
+
+| Ruta de plataforma | Clase | Qué hace |
+|---|---|---|
+| `POST /api/v1/auth/logout/` | `Authenticated` | Cierra la sesión: borra su fila y la cookie. 204. Exige CSRF |
+| `GET /api/v1/me/organizations/` | `Authenticated` | Organizaciones con membresía `ACTIVE` del usuario, no suspendidas, por nombre |
+
+- **Caducidad** (`apps.accounts.middleware.SessionLifetimeMiddleware`, antes de resolver el tenant):
+  - Inactividad: `SESSION_COOKIE_AGE` (12 h). Django solo renueva la caducidad al guardar la sesión, así que se guarda como mucho una vez cada `SESSION_REFRESH_INTERVAL` (5 min), no en cada petición. Se guarda antes de la vista: si la fila ya no existe (otra petición cerró la sesión), esta acaba en 401. Un fallo pasajero de la base de datos al guardar no cierra la sesión: esa petición responde 500 (OBS-F2-03C-2).
+  - Absoluta: `SESSION_ABSOLUTE_AGE` (7 días) desde el login, haya o no actividad. Una sesión sin marca de inicio se trata como vencida.
+  - Usuario desactivado o borrado: la sesión se destruye al detectarla (fila y cookie). Reactivar al usuario no la devuelve.
+- **Logout.** Primero cierra la sesión y después audita `auth.logout`: un fallo de auditoría nunca la mantiene abierta. La cookie anterior deja de valer.
+- **Mis organizaciones.** No abre `tenant_scope`: lee las membresías del propio usuario dentro de `user_scope` (ADR-002 §3.2). No devuelve roles ni permisos: eso es `GET /api/v1/o/{slug}/me/` (F2-11).
+- **Purga.** `accounts.purge_expired_sessions` (tarea de plataforma, una vez al día a hora fija en beat) borra las filas caducadas de `django_session`.
+- **En tests:** `tests.factories.sign_in(client, user)` en lugar de `client.force_login(user)`, que no pone la marca de inicio.
 
 ## Cambios de RBAC sin escalada (F2-05C, ADR-003 §5)
 

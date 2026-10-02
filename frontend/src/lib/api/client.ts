@@ -21,7 +21,7 @@ import type {
   UseQueryResult,
 } from "@tanstack/react-query";
 
-import type { Error, LoginRequest, Session } from "./model";
+import type { Error, LoginRequest, OrganizationSummary, Session } from "./model";
 
 import { apiFetch } from "../http";
 import type { ErrorType } from "../http";
@@ -251,6 +251,54 @@ export const useAuthLogin = <TError = ErrorType<Error>, TContext = unknown>(
   return useMutation(getAuthLoginMutationOptions(options), queryClient);
 };
 
+export const getAuthLogoutUrl = () => {
+  return `/api/v1/auth/logout/`;
+};
+
+export const authLogout = async (options?: Parameters<typeof apiFetch>[1]): Promise<void> => {
+  return apiFetch<void>(getAuthLogoutUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getAuthLogoutMutationKey = () => ["authLogout"] as const;
+
+export const getAuthLogoutMutationOptions = <
+  TError = ErrorType<Error>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<Awaited<ReturnType<typeof authLogout>>, TError, void, TContext>;
+  request?: SecondParameter<typeof apiFetch>;
+}): UseMutationOptions<Awaited<ReturnType<typeof authLogout>>, TError, void, TContext> => {
+  const mutationKey = getAuthLogoutMutationKey();
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<Awaited<ReturnType<typeof authLogout>>, void> = () => {
+    return authLogout(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AuthLogoutMutationResult = NonNullable<Awaited<ReturnType<typeof authLogout>>>;
+
+export type AuthLogoutMutationError = ErrorType<Error>;
+
+export const useAuthLogout = <TError = ErrorType<Error>, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<Awaited<ReturnType<typeof authLogout>>, TError, void, TContext>;
+    request?: SecondParameter<typeof apiFetch>;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<Awaited<ReturnType<typeof authLogout>>, TError, void, TContext> => {
+  return useMutation(getAuthLogoutMutationOptions(options), queryClient);
+};
+
 export const getAuthSessionUrl = () => {
   return `/api/v1/auth/session/`;
 };
@@ -352,6 +400,117 @@ export function useAuthSession<
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
   const queryOptions = getAuthSessionQueryOptions(options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export const getMeOrganizationsUrl = () => {
+  return `/api/v1/me/organizations/`;
+};
+
+/**
+ * Organizaciones del usuario: membresía activa y organización no suspendida. No abre
+ * un `tenant_scope`: lee con `user_scope`, que solo deja ver las membresías propias.
+ */
+export const meOrganizations = async (
+  options?: Parameters<typeof apiFetch>[1],
+): Promise<OrganizationSummary[]> => {
+  return apiFetch<OrganizationSummary[]>(getMeOrganizationsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getMeOrganizationsQueryKey = () => {
+  return [`/api/v1/me/organizations/`] as const;
+};
+
+export const getMeOrganizationsQueryOptions = <
+  TData = Awaited<ReturnType<typeof meOrganizations>>,
+  TError = ErrorType<Error>,
+>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof meOrganizations>>, TError, TData>>;
+  request?: SecondParameter<typeof apiFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getMeOrganizationsQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof meOrganizations>>> = ({ signal }) =>
+    meOrganizations({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof meOrganizations>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type MeOrganizationsQueryResult = NonNullable<Awaited<ReturnType<typeof meOrganizations>>>;
+export type MeOrganizationsQueryError = ErrorType<Error>;
+
+export function useMeOrganizations<
+  TData = Awaited<ReturnType<typeof meOrganizations>>,
+  TError = ErrorType<Error>,
+>(
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof meOrganizations>>, TError, TData>> &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof meOrganizations>>,
+          TError,
+          Awaited<ReturnType<typeof meOrganizations>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof apiFetch>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useMeOrganizations<
+  TData = Awaited<ReturnType<typeof meOrganizations>>,
+  TError = ErrorType<Error>,
+>(
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof meOrganizations>>, TError, TData>> &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof meOrganizations>>,
+          TError,
+          Awaited<ReturnType<typeof meOrganizations>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof apiFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useMeOrganizations<
+  TData = Awaited<ReturnType<typeof meOrganizations>>,
+  TError = ErrorType<Error>,
+>(
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof meOrganizations>>, TError, TData>>;
+    request?: SecondParameter<typeof apiFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+export function useMeOrganizations<
+  TData = Awaited<ReturnType<typeof meOrganizations>>,
+  TError = ErrorType<Error>,
+>(
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof meOrganizations>>, TError, TData>>;
+    request?: SecondParameter<typeof apiFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getMeOrganizationsQueryOptions(options);
 
   const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
     queryKey: DataTag<QueryKey, TData, TError>;
