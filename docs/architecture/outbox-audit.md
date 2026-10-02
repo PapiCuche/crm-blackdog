@@ -34,7 +34,7 @@ Ambas se escriben **en la transacción del `tenant_scope` activo** (`require_sco
 
 | Tema | Decisión |
 |---|---|
-| `audit_logs.organization_id` nullable (04 §N.1) | NOT NULL (ADR-001 §2, T4). La auditoría de plataforma queda pendiente (OBS-F1-06-1) |
+| `audit_logs.organization_id` nullable (04 §N.1) | NOT NULL (ADR-001 §2, T4). Los eventos sin tenant van a un sumidero propio, `platform_audit_logs` ([ADR-013](../adr/ADR-013-platform-audit.md)); **planificado** en F2-10 (#56), aún sin implementar |
 | `outbox_events` | Tenant-owned con RLS. El publisher descubre tenants con una función SECURITY DEFINER que devuelve solo IDs (ADR-002 §3.3) |
 | Particiones con beat diario (04 §O.2) | El runtime no tiene DDL: las crean la migración y el `post_migrate`, con un horizonte de 12 meses y sin partición DEFAULT (OBS-F1-06-2) |
 | PK de una tabla particionada | `(organization_id, occurred_at, id)` |

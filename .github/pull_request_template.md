@@ -31,6 +31,7 @@ Closes #
 - [ ] Sin secretos ni PII en código, logs o respuestas
 - [ ] Documentación / ADR actualizados si cambia una decisión
 - [ ] Dentro del scope del issue (sin adelantar otros work items)
+- [ ] Slice de producción (AGENTS.md §11): serie y work item de cierre indicados; sin datos ficticios en el producto; nada nuevo en `/demo`
 
 ## Riesgos y deuda técnica
 
@@ -38,7 +39,7 @@ Closes #
 
 ## Autoría
 
-- [ ] Generado o asistido por IA (indicar el agente). La aprobación final es humana; el autor no hace merge.
+- [ ] Generado o asistido por IA (indicar el agente). La aprobación final es humana y el autor no hace merge, salvo en el programa autónomo (ADR-015), donde el merge exige sus diez gates.
 
 ## Handoff para Reviewer
 

@@ -30,6 +30,14 @@ body:
       description: Qué resultado verificable produce este work item.
     validations:
       required: true
+  - type: input
+    id: series
+    attributes:
+      label: Serie
+      description: "Serie productiva a la que pertenece y work item que la cierra con comportamiento real en el CRM oficial (AGENTS.md §11). 'N/A — motivo' si no aplica."
+      placeholder: "Acceso al CRM oficial · cierra F2-08 (#45)"
+    validations:
+      required: true
   - type: textarea
     id: dependencies
     attributes:

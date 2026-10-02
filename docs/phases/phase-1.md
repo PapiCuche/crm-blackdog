@@ -86,6 +86,7 @@ ADR-004 §2 prevé un prefijo configurable **por organización**. `allocate(ctx,
 `audit_logs.organization_id` es NOT NULL (ADR-001 §2, T4), aunque docs/fase-0/04 §N.1 lo preveía nullable para eventos de plataforma.
 - La auditoría de plataforma (impersonación, comandos de plataforma, `TenantCommand`/`PlatformCommand`) necesita su propio diseño: política o rol, y una inversión de dependencia, porque `core` no importa `apps.audit`.
 - Los comandos siguen registrando el operador y el motivo en el log.
+- Decisión (2026-10-02): [ADR-013](../adr/ADR-013-platform-audit.md) define un sumidero de auditoría de plataforma separado; lo implementa F2-10 (#56). La impersonación y la inversión de dependencia para `core` siguen pendientes.
 
 ### OBS-F1-06-2 — Horizonte de particiones de auditoría
 Se crean el mes actual + 12, desde la migración y el `post_migrate` (el runtime no tiene DDL; se desvía del beat diario de 04 §O.2).
