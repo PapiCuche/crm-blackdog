@@ -17,6 +17,7 @@ from django.core.management import CommandError, call_command
 from django.test import Client
 from django.urls import URLResolver, get_resolver, path
 
+import config.urls
 from config.celery import app as celery_app
 from core.tenancy.celery import TenancyCheck
 from core.tenancy.commands import PlatformCommand, TenantCommand
@@ -40,7 +41,7 @@ def member(orgs: dict[str, UUID]) -> Iterator[UUID]:
     fakes.MEMBERS.clear()
 
 
-def tenant_routes() -> list[str]:
+def tenant_routes(patterns: list[Any] | None = None) -> list[str]:
     def walk(patterns: list[Any], prefix: str) -> Iterator[str]:
         for p in patterns:
             route = prefix + str(p.pattern)
@@ -49,7 +50,7 @@ def tenant_routes() -> list[str]:
             elif route.startswith("api/v1/o/"):
                 yield route
 
-    return list(walk(get_resolver().url_patterns, ""))
+    return list(walk(get_resolver().url_patterns if patterns is None else patterns, ""))
 
 
 def fill(route: str, slug: str, foreign_id: UUID) -> str:
@@ -64,12 +65,16 @@ def test_t7_every_tenant_route_hides_other_tenant(
 ) -> None:
     routes = tenant_routes()
     assert routes, "el harness necesita al menos una ruta de tenant"
+    # Las rutas reales del proyecto usan la membresía de la tabla: al miembro simulado de este
+    # arnés le responden el 404 común. Su aislamiento lo prueban sus tests con el stack real.
+    real = set(tenant_routes(config.urls.urlpatterns))
     client = Client(headers={"X-Test-User": str(member)})
     for route in routes:
         url = fill(route, "org-a", orgs["widget_B"])
         if "<" not in route.removeprefix("api/v1/o/<slug:org_slug>/"):
             response = client.get(url)  # listado: 200 sin filas de B
-            assert response.status_code == 200 and str(orgs["widget_B"]) not in response.text
+            assert response.status_code == (404 if route in real else 200), route
+            assert str(orgs["widget_B"]) not in response.text
             continue
         for method in ("get", "patch", "delete"):
             response = getattr(client, method)(url)
