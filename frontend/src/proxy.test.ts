@@ -1,20 +1,35 @@
 // @vitest-environment node
 import { NextRequest } from "next/server";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { buildCsp } from "@/lib/csp";
 
 import { config, proxy } from "./proxy";
 
 const CSP = "content-security-policy";
 const nonceOf = (csp: string | null) => /'nonce-([^']+)'/.exec(csp ?? "")?.[1];
 
+afterEach(() => vi.unstubAllEnvs());
+
 describe("proxy", () => {
-  it("emite la misma CSP hacia el navegador y hacia el render de Next", () => {
+  it("emite la política de producción hacia el navegador y hacia el render de Next", () => {
     const response = proxy(new NextRequest("http://localhost/o/acme"));
     const csp = response.headers.get(CSP);
-    expect(nonceOf(csp)).toBeTruthy();
+    expect(nonceOf(csp)).toMatch(/^[A-Za-z0-9+/]{22}==$/);
+    expect(csp).toBe(buildCsp(nonceOf(csp) ?? ""));
     // NextResponse.next({ request }) reenvía las cabeceras al render con este prefijo.
     expect(response.headers.get(`x-middleware-request-${CSP}`)).toBe(csp);
     expect(response.headers.get("x-middleware-override-headers")).toContain(CSP);
+  });
+
+  it("solo relaja la política con NODE_ENV=development", () => {
+    vi.stubEnv("NODE_ENV", "development");
+    const dev = proxy(new NextRequest("http://localhost/")).headers.get(CSP);
+    expect(dev).toBe(buildCsp(nonceOf(dev) ?? "", true));
+    vi.stubEnv("NODE_ENV", "production");
+    expect(proxy(new NextRequest("http://localhost/")).headers.get(CSP)).not.toContain(
+      "unsafe-eval",
+    );
   });
 
   it("usa un nonce nuevo en cada petición", () => {
@@ -31,12 +46,13 @@ describe("proxy", () => {
     expect(response.headers.get(CSP)).not.toContain("forjado");
   });
 
-  it("cubre los documentos y deja fuera la API, los WebSockets y los estáticos", () => {
+  it("cubre todo lo que responde Next y deja fuera solo la API y los WebSockets", () => {
     const matcher = new RegExp(`^${config.matcher[0]}$`);
-    for (const path of ["/", "/o/acme", "/demo/workspace/inbox", "/apix", "/wsx"]) {
-      expect(matcher.test(path), path).toBe(true);
-    }
-    for (const path of ["/api/v1/auth/login/", "/ws/o/acme/", "/_next/static/chunk.js"]) {
+    const covered = ["/", "/o/acme", "/demo/workspace/inbox", "/apix", "/wsx"];
+    // Los 404 de Next son HTML: también llevan la CSP.
+    covered.push("/favicon.ico", "/_next/staticx", "/_next/static/chunk.js", "/_next/image");
+    for (const path of covered) expect(matcher.test(path), path).toBe(true);
+    for (const path of ["/api/v1/auth/login/", "/api/", "/ws/o/acme/"]) {
       expect(matcher.test(path), path).toBe(false);
     }
   });

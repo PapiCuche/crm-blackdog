@@ -20,15 +20,22 @@ const nextConfig: NextConfig = {
   },
   async headers() {
     // Cabeceras fijas. La CSP lleva un nonce por petición y la emite src/proxy.ts (F2-07).
-    // HSTS: el navegador lo ignora sobre HTTP (stack local) y lo aplica tras el proxy con TLS.
     const base = [
       { key: "X-Frame-Options", value: "DENY" },
       { key: "X-Content-Type-Options", value: "nosniff" },
       { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-      { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains; preload" },
       { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
       { key: "Permissions-Policy", value: "camera=(), geolocation=(), microphone=(), payment=()" },
     ];
+    // HSTS solo en el build de producción, con los valores del backend (production.py): el
+    // navegador lo ignora sobre HTTP (stack local) y lo aplica tras el proxy con TLS. En
+    // `next dev` no se envía, para no fijar HTTPS en localhost.
+    if (process.env.NODE_ENV === "production") {
+      base.push({
+        key: "Strict-Transport-Security",
+        value: "max-age=31536000; includeSubDomains; preload",
+      });
+    }
     return [{ source: "/:path*", headers: base }];
   },
 };

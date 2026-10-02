@@ -36,10 +36,11 @@ Sin autenticación, RBAC ni pantallas de negocio todavía. Las pantallas reales 
 
 Next emite todas las cabeceras de seguridad del HTML; Caddy no añade ninguna.
 
-| Cabecera                                                                                                                                        | Dónde                                  | Valor            |
-| ----------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- | ---------------- |
-| `Content-Security-Policy`                                                                                                                       | `src/proxy.ts` (un nonce por petición) | `src/lib/csp.ts` |
-| `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `Strict-Transport-Security`, `Cross-Origin-Opener-Policy`, `Permissions-Policy` | `next.config.ts`                       | Fijas            |
+| Cabecera                                                                                                           | Dónde                                            | Valor                                     |
+| ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------ | ----------------------------------------- |
+| `Content-Security-Policy`                                                                                          | `src/proxy.ts` (un nonce por petición)           | `src/lib/csp.ts`                          |
+| `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, `Cross-Origin-Opener-Policy`, `Permissions-Policy` | `next.config.ts`                                 | Fijas                                     |
+| `Strict-Transport-Security`                                                                                        | `next.config.ts`, solo en el build de producción | Los valores del backend (`production.py`) |
 
 La política de producción:
 
@@ -54,11 +55,13 @@ object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'self'; frame-
 - **Excepción documentada:** `style-src-attr 'unsafe-inline'`. `next/image` y los estilos calculados (la altura de una barra) llegan como atributo `style` en el HTML del servidor. Un atributo `style` no ejecuta código y las etiquetas `<style>` siguen necesitando el nonce.
 - **Desarrollo (`next dev`):** se añaden `'unsafe-eval'` a los scripts (React lo usa para las trazas) y `'unsafe-inline'` a los estilos. El build de producción nunca los incluye.
 - **Sin `upgrade-insecure-requests`:** el stack local sirve HTTP y todas las fuentes son del propio origen. En producción el proxy con TLS redirige y HSTS fija HTTPS.
-- **Fuera de la CSP:** `/api`, `/ws` y `/_next/static`. La API responde JSON con sus propias cabeceras (Django).
+- **Alcance:** la CSP va en todo lo que responde Next, también en sus páginas 404 y en los estáticos. Solo quedan fuera `/api/` y `/ws/`, que sirve Django. Hoy las páginas de error de Django son HTML estático sin CSP; F2-12 (#59) pasa esos errores a JSON y añade una CSP cerrada a las respuestas de la API.
 
 **Cómo añadir un origen.** Solo si el producto lo necesita y con su motivo en el PR: añadirlo a la directiva más estrecha en `src/lib/csp.ts` (por ejemplo `img-src` para un CDN de imágenes), nunca a `default-src`, y actualizar `src/lib/csp.test.ts`. Un script de terceros recibe el nonce con `<Script nonce>`; no se añade su dominio a `script-src`.
 
-Comprobaciones: `src/lib/csp.test.ts`, `src/proxy.test.ts` y la prueba de humo de la imagen, que exige la cabecera (`SMOKE_HEADER_PATTERN` en `make check` y en CI).
+- **Páginas de error propias:** `src/app/not-found.tsx`, `error.tsx` y `global-error.tsx`. Las de serie de Next insertan un `<style>` sin nonce, que la política bloquea. Un módulo desconocido de la demo (`/demo/workspace/x`) responde 404 y muestra la página tras hidratar: al dejar de ser estática, su HTML inicial ya no trae el cuerpo del 404.
+
+Comprobaciones: `src/lib/csp.test.ts` (la política exacta), `src/proxy.test.ts` y `scripts/check-security-headers.mjs`. Este último lo lanza la prueba de humo de la imagen (`SMOKE_CHECK`, en `make check` y en CI) contra el contenedor en ejecución: exige las cabeceras fijas, la CSP exacta y el nonce de la petición en cada `<script>` y `<style>` del HTML, en rutas reales, en la demo y en dos 404. Si cambia la política, cambian `csp.ts` y `csp.test.ts`; el script la toma de `csp.ts`.
 
 ## Demo visual (UI-01)
 

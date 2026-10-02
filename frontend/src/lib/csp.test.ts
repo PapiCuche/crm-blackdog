@@ -12,6 +12,15 @@ function directives(csp: string): Record<string, string[]> {
 }
 
 describe("buildCsp", () => {
+  it("es exactamente la política documentada", () => {
+    expect(buildCsp("abc")).toBe(
+      "default-src 'self'; script-src 'self' 'nonce-abc' 'strict-dynamic'; " +
+        "style-src 'self' 'nonce-abc'; style-src-attr 'unsafe-inline'; " +
+        "img-src 'self' blob: data:; font-src 'self'; connect-src 'self'; object-src 'none'; " +
+        "frame-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+    );
+  });
+
   it("permite scripts solo con el nonce de la petición", () => {
     const policy = directives(buildCsp("abc"));
     expect(policy["script-src"]).toEqual(["'self'", "'nonce-abc'", "'strict-dynamic'"]);

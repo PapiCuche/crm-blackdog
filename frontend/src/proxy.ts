@@ -14,7 +14,8 @@ export function proxy(request: NextRequest): NextResponse {
 }
 
 export const config = {
-  // Todo lo que sirve Next como documento. Fuera: la API y los WebSockets (los sirve Django) y
-  // los archivos estáticos, que no llevan HTML.
-  matcher: ["/((?!api/|ws/|_next/static|_next/image|favicon.ico).*)"],
+  // Todo lo que responde Next, también sus 404 (que son HTML). Solo quedan fuera la API y los
+  // WebSockets, que sirve Django. No se excluyen los estáticos: una exclusión por prefijo deja
+  // sin CSP el 404 de rutas como /favicon.ico o /_next/staticx.
+  matcher: ["/((?!api/|ws/).*)"],
 };
