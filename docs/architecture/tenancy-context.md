@@ -85,6 +85,7 @@ Si no está vacío → error crítico + la conexión se cierra (`connection.clos
 Request /api/v1/o/{org_slug}/contacts/…
   ├─ SecurityMiddleware, SessionMiddleware, CsrfViewMiddleware, AuthenticationMiddleware
   ├─ RequestIdMiddleware (request_id, correlation_id)
+  ├─ ApiEnvelopeMiddleware (F2-12, ADR-014 §1): por fuera de todos; errores de /api/ con el contrato
   └─ TenantResolutionMiddleware
         1. ¿ruta tenant (prefijo /api/v1/o/)? si no → pasa sin contexto (rutas de auth/plataforma)
         2. user autenticado? si no → 401
@@ -97,7 +98,7 @@ Request /api/v1/o/{org_slug}/contacts/…
         7. with tenant_scope(request.tenant): response = get_response(request)
 ```
 
-- **Toda la vista** (autorización, serializers, servicios y serialización de la respuesta) se ejecuta dentro del `tenant_scope` → una transacción por petición en las rutas de tenant.
+- **Toda la vista** (autorización, serializers, servicios y serialización de la respuesta) se ejecuta dentro del `tenant_scope` → una transacción por petición en las rutas de tenant. Si la respuesta es 400 o superior, el middleware deshace esa transacción (F2-12): una petición fallida no deja nada escrito.
 - **Respuestas en streaming** (exportaciones grandes): prohibidas en las vistas de tenant; se generan con Celery y se descargan del storage con una URL firmada.
 - `user_scope(user)`: transacción corta con solo `app.user_id` fijado (sin `app.tenant_id`); la política SELECT de `organization_memberships` permite ver las propias membresías **solo porque no hay tenant activo**. Dentro de `tenant_scope` la misma política restringe al tenant, aunque `app.user_id` también esté fijado (ADR-002 §3.2). `user_scope` no permite escrituras en tablas tenant-owned. Se usa para resolver la membresía y listar "mis organizaciones".
 - Las rutas de plataforma (`/api/v1/auth/…`, `/api/v1/me/organizations`) no abren un `tenant_scope`; solo tocan tablas platform-owned o usan `user_scope`.

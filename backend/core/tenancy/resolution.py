@@ -15,6 +15,7 @@ from django.utils.module_loading import import_string
 from core.tenancy.context import ActorType, TenantContext
 
 ACCESSIBLE_STATUSES = frozenset({"ACTIVE", "TRIAL"})
+NO_ORGANIZATION = UUID(int=0)  # ninguna organización tiene este id (los reales son UUIDv7)
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,7 +47,10 @@ def resolve_tenant(
 ) -> TenantContext:
     org = organization_by_slug(slug)
     membership = import_string(settings.TENANCY_MEMBERSHIP_RESOLVER)
-    user_id = membership(user, org.id) if org is not None and user is not None else None
+    # Se consulta siempre, exista o no el slug: el tiempo de respuesta no delata qué
+    # organizaciones existen (OBS-F2-09-1).
+    organization_id = org.id if org is not None else NO_ORGANIZATION
+    user_id = membership(user, organization_id) if user is not None else None
     if org is None or user_id is None:
         raise TenantNotFound  # antes que el estado: un no miembro no aprende nada
     if org.status not in ACCESSIBLE_STATUSES:
