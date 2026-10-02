@@ -150,6 +150,18 @@ Ese test recorre todo el URLconf y falla si una ruta de tenant no es una vista d
 
 `HasPermission` comprueba además cada objeto que pase por `check_object_permissions` y responde 404. Es una red de seguridad, no un sustituto de `scoped()`: su cuerpo puede diferir del de un objeto inexistente.
 
+## Cambios de RBAC sin escalada (F2-05C, ADR-003 §5)
+
+`apps.access.services` tiene los únicos servicios que cambian el RBAC de una organización. Son internos: no hay API HTTP (E01-08).
+
+- `grant_permission(ctx, role_id=, code=, scope=)`, `assign_role(ctx, membership_id=, role_id=)` y `remove_role(ctx, membership_id=, role_id=)`. Reciben el `TenantContext`, no una foto de permisos.
+- Cada cambio corre en un savepoint: toma el bloqueo del rol Owner de la organización (`SELECT … FOR NO KEY UPDATE`), relee los permisos del actor, comprueba las reglas, escribe y audita. Si algo falla, incluida la auditoría, no queda nada escrito.
+- **Reglas:** hace falta `roles.manage` para conceder y `users.manage` para asignar o quitar. Nadie delega un permiso que no tiene ni con un alcance más amplio (`TEAM` y `BRANCH` no se contienen entre sí). Un permiso sensible solo lo delega quien tiene asignado el rol Owner, y además debe tenerlo. Asignar y quitar un rol exigen cubrir todas sus concesiones. Nadie se asigna ni se quita roles, ni concede permisos a un rol que tiene asignado.
+- **Siempre queda un Owner activo** (membresía `ACTIVE` y usuario activo). `ensure_owner_remains(ctx, without_membership_id=)` es la misma garantía para quien desactive una membresía (E01-07).
+- `is_owner_role` solo localiza el rol Owner para esas dos restricciones; por sí solo no concede nada. Nada decide por el código o el nombre de un rol, ni por `is_platform_staff`.
+- Una denegación lanza `AccessDenied` con su motivo (`membership`, `permission`, `escalation`, `sensitive`, `self`, `last_owner`); un id de otra organización, o quitar un rol que la membresía no tiene (también al repetir la llamada), `DoesNotExist`. Repetir una concesión o una asignación no hace nada.
+- Auditoría: `role.permission_granted`, `membership.role_assigned` y `membership.role_removed`, con el antes y el después.
+
 ## Identificadores y numeración (F1-05, ADR-004)
 
 - `core.ids.new_id()`: UUIDv7 de la stdlib (`uuid.uuid7()`); nunca se usa `uuid` directamente. `core.db.models.uuid7_primary_key()` añade `DEFAULT uuidv7()` (PostgreSQL 18) de respaldo para inserts SQL directos (hoy: `organizations.id`).

@@ -32,6 +32,10 @@ class Denied(StrEnum):
     MEMBERSHIP = "membership"
     PERMISSION = "permission"
     SCOPE = "scope"
+    ESCALATION = "escalation"  # concede lo que no tiene, o con más alcance (F2-05C)
+    SENSITIVE = "sensitive"  # permiso sensible: solo lo delega un Owner
+    SELF = "self"  # nadie modifica sus propios roles
+    LAST_OWNER = "last_owner"  # siempre queda un Owner activo
 
 
 class AccessDenied(PermissionDenied):
