@@ -26,6 +26,7 @@ TENANT_TABLES += ("files",)  # F1-08
 TENANT_TABLES += ("organization_memberships",)  # F2-02
 # F2-04: delante, porque referencian a las membresías y la limpieza borra en este orden.
 TENANT_TABLES = ("membership_roles", "role_permissions", "roles", *TENANT_TABLES)
+PLATFORM_AUDIT = "platform_audit_logs"  # F2-10: platform-owned, la limpia el migrador
 
 
 def migrator_settings() -> dict[str, Any]:
@@ -89,7 +90,13 @@ def tenant_db(
             yield
         finally:
             connection.close()
-            for table in (*TENANT_TABLES, "organizations", "django_session", "users"):
+            for table in (
+                *TENANT_TABLES,
+                "organizations",
+                "django_session",
+                "users",
+                PLATFORM_AUDIT,
+            ):
                 migrator.execute(f"DELETE FROM {table}")  # noqa: S608 — nombres fijos
 
 

@@ -6,6 +6,7 @@ tenga que ignorar; no hay allowlist).
 
 import copy
 import functools
+import time
 from typing import Any
 
 import pytest
@@ -84,3 +85,51 @@ def test_redact_does_not_mutate_and_handles_edge_values() -> None:
     assert data == original
     deep: dict[str, Any] = functools.reduce(lambda acc, _: {"k": acc}, range(12), {})
     assert "[TRUNCATED]" in repr(redact(deep))
+
+
+SESSION_KEYS = ["session_key", "session_id", "sessionId", "SESSION_KEY", "sessionid", "csrftoken",
+                "csrfmiddlewaretoken", "X-CSRFToken", "XCSRFToken", "csrf", "csrf_token",
+                "crm_session", "__Host-crm_session", "ai_session_id", "session_ids", "sessionkey",
+                "sessiontoken"]  # fmt: skip
+
+
+@pytest.mark.parametrize("key", SESSION_KEYS)
+def test_session_and_csrf_keys_are_secrets(key: str) -> None:
+    """F2-10: una sesión o un token CSRF valen como credencial. Toda clave `*session_id` se
+    redacta, aunque termine en `_id`: para correlacionar se usa otro nombre."""
+    assert redact({key: "valor"}) == {key: REDACTED}
+
+
+def test_session_and_csrf_values_inside_text_are_redacted_without_false_positives() -> None:
+    leaks = (
+        "Cookie: __Host-crm_session=LEAK1",
+        "Cookie: tema=oscuro; csrftoken=LEAK2",
+        "Set-Cookie: sessionid=LEAK3; Path=/",
+        "fallo con session_key=LEAK4",
+        "cabecera X-CSRFToken: LEAK5",
+        "{'sessionid': 'LEAK6'}",
+        "https://x.test/cb?crm_session=LEAK7&ok=1",
+    )
+    for text in leaks:
+        assert "LEAK" not in redact_text(text), text
+    kept = {"conversation_id": "c1", "session_count": 3, "session_type": "web", "accept": "json"}
+    assert redact(kept) == kept
+    for text in (
+        "input_tokens=120 session_count=3 reason=unknown_identifier",
+        "training session: adiestramiento básico",
+        "la sesión de Ana caducó",
+        "Mascota Cookie: raza=beagle, edad=3 años, dueña Ana",  # un nombre de perro frecuente
+        "Galletas Cookie: caja=12 unidades",
+        "csrf_failure_count=3 y CSRF_TRUSTED_ORIGINS=https://crm.example.com",
+    ):
+        assert redact_text(text) == text
+
+
+def test_redaction_cost_is_linear_on_hostile_text() -> None:
+    started = time.perf_counter()
+    hostile: tuple[str, ...] = ("." * 64000, "a" * 64000, "a." * 32000, "token" * 12000)
+    hostile += ("=" * 64000, "csrf" * 16000, "csrf-" * 13000, "session_id" * 6400)
+    hostile += ("cookie:" * 9000, "'token" * 10000, '"a' * 30000)
+    for text in hostile:
+        redact_text(text)
+    assert time.perf_counter() - started < 1  # antes: varios segundos con 16 000 puntos

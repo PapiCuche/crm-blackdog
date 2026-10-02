@@ -14,9 +14,13 @@ MAX_DEPTH = 8
 _SECRET_SEGMENTS = frozenset(
     {"password", "passwords", "passwd", "pwd", "passphrase", "secret", "secrets", "token",
      "apikey", "authorization", "cookie", "cookies", "sessionid", "ciphertext", "credential",
-     "credentials", "dsn", "kek"}
+     "credentials", "dsn", "kek", "csrf", "csrftoken", "csrfmiddlewaretoken", "xcsrftoken",
+     "sessionkey", "sessiontoken"}
 )  # fmt: skip
-_SECRET_FRAGMENTS = ("api_key", "private_key", "access_key")
+_SECRET_FRAGMENTS = ("api_key", "private_key", "access_key", "session_key", "crm_session")
+# Toda clave `*session_id` se trata como credencial, aunque termine en `_id`: para correlacionar
+# hay que usar otro nombre (p. ej., `conversation_id`).
+_SESSION_IDS = ("session_id", "session_ids")
 _NOT_SECRET_SUFFIXES = ("_at", "_limit", "_count", "_id")  # fechas, límites, contadores y FKs
 _CONTENT_KEYS = frozenset({"body", "content", "text", "transcript", "caption"})
 _CONTENT_SUFFIXES = ("_body", "_content", "_transcript", "_text", "_preview", "_caption")
@@ -34,10 +38,20 @@ PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"(?<=://)[^/\s:@]*:[^/\s@]+@"), f"{REDACTED}@"),  # [usuario]:clave@ en URLs
     (  # client_secret=, hub.verify_token=, DB_PASSWORD=… (input_tokens= no)
         re.compile(
-            r"(?i)(?<![a-z0-9])([a-z0-9_.-]*?(?:api[_-]?key|token|secret|passw(?:or)?d))"
+            # El lookbehind incluye `_.-`: la búsqueda no reintenta dentro de una misma palabra
+            # (sin él, una cadena larga de puntos cuesta tiempo cuadrático).
+            r"(?i)(?<![a-z0-9_.-])([a-z0-9_.-]*?(?:api[_-]?key|token|secret|passw(?:or)?d))"
             r"=[^&\s\"']+"
         ),
         rf"\1={REDACTED}",
+    ),
+    (  # session_key=…, sessionid: …, crm_session=…, X-CSRFToken: … dentro de un texto. Nombres
+        # exactos y prefijo acotado: coste lineal, y `csrf_failure_count=3` no se toca.
+        re.compile(
+            r"(?i)(?<![a-z0-9_.-])([a-z0-9_.-]{0,40}?(?:session[_-]?(?:id|key)|crm_session|"
+            r"csrf(?:middleware)?[_-]?token)[\"']?\s*[=:]\s*[\"']?)[^&\s\"';,}]+"
+        ),
+        rf"\1{REDACTED}",
     ),
     (  # repr/JSON de un dict dentro de un texto: 'password': 'x', "api_key": "y"
         re.compile(
@@ -55,6 +69,8 @@ def _normalize(key: str) -> str:
 
 def is_sensitive_key(key: str) -> bool:
     name = _normalize(key)
+    if name.endswith(_SESSION_IDS):
+        return True
     if name.endswith(_NOT_SECRET_SUFFIXES):
         return False
     segments = {s.rstrip("0123456789") for s in name.split("_")}  # password1, new_password2

@@ -174,6 +174,22 @@ Ese test recorre todo el URLconf y falla si una ruta de tenant no es una vista d
 
 `core.outbox.emit()` y `apps.audit.services.record()` escriben en la transacción del `tenant_scope` activo: un rollback no deja ni evento ni auditoría. `audit_logs` es append-only para `crm_app` y está particionada por mes, y el redactor (`core.redaction`) se aplica siempre. Diseño y decisiones: [docs/architecture/outbox-audit.md](../docs/architecture/outbox-audit.md).
 
+## Auditoría de plataforma (F2-10, ADR-013)
+
+`apps.audit.platform.record(action, *, actor_type, …)` registra los eventos que no pertenecen a ninguna organización (acceso, altas de plataforma) en `platform_audit_logs`.
+
+- **Solo inserción.** La tabla no tiene `organization_id` ni política de tenant. `crm_app` solo tiene `INSERT`: el runtime escribe y no puede leer, modificar ni borrar el registro. Por eso el servicio no usa `RETURNING`. La sentencia nombra `public.platform_audit_logs`: una tabla temporal con el mismo nombre no captura la fila.
+- **Sin tenant.** No recibe tenant y falla dentro de un `tenant_scope`: ahí corresponde `apps.audit.services.record`. Dentro de un `user_scope` sí funciona.
+- **Falla cerrado.** Escribe en la transacción del llamador, si la hay, dentro de un savepoint. Si la inserción falla, lanza el error y la transacción del llamador sigue utilizable; quien no lo captura la deshace entera.
+- **Qué no se guarda.** `identifier` (el email presentado en un acceso fallido) queda solo como huella HMAC-SHA-256 con una clave derivada de `DJANGO_SECRET_KEY`. `metadata` y `user_agent` pasan por el redactor y, además, por un filtro propio que sustituye por `[EMAIL]` cualquier cadena con forma de dirección, en cualquier alfabeto. Nunca se guarda el email, la contraseña ni una cookie.
+- **Validación.** `action` con el formato de siempre y como máximo 100 caracteres; un actor `USER` lleva `actor_id` y uno `ANONYMOUS` no; `metadata` de 4096 bytes como máximo; `ip` es una dirección válida o `None` (se guarda sin zona y sin forma IPv4-en-IPv6). Lo que no cumple lanza `ValueError` antes de tocar la base de datos. La tabla repite las reglas principales con `CHECK`.
+- **Particiones.** Mensuales, mes actual más doce, creadas por la migración y el `post_migrate`. Sin partición DEFAULT. En cada llamada, `platform_audit_ensure_partitions` vuelve a dejar los privilegios como deben estar en la tabla padre y en todas las particiones.
+- `request_id` y `correlation_id` salen del contexto de observabilidad.
+
+El redactor compartido (`core.redaction`) trata ahora como secretos las claves de sesión y de CSRF (`session_key`, `*session_id`, `csrftoken`, `csrfmiddlewaretoken`, `crm_session`…) y sus valores dentro de un texto (`session_key=…`, `X-CSRFToken: …`, `crm_session=…`). Los nombres son exactos: `csrf_failure_count=3` o un texto sobre una mascota llamada Cookie no se tocan. Una clave que termine en `session_id` se redacta siempre: para correlacionar hay que usar otro nombre.
+
+Todavía no hay lectura desde la aplicación: solo el rol propietario puede consultar la tabla. Revertir la migración borra el registro; se niega a hacerlo si la tabla tiene filas.
+
 ## Observabilidad (F1-07, ADR-011)
 
 Logs JSON en stdout (structlog + `logging` estándar, redactados con `core.redaction`) con `request_id`, `correlation_id` e IDs de tenant/actor. El `X-Request-ID` es siempre un UUIDv7 generado por la aplicación. La correlación pasa de HTTP a Celery por cabecera. Errores: `NoopReporter` sin `SENTRY_DSN`, `SentryReporter` endurecido con él. Diseño: [docs/architecture/observability.md](../docs/architecture/observability.md).
