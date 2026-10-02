@@ -5,3 +5,401 @@
  * Contrato de la API del backend. Fuente para el cliente TypeScript (orval).
  * OpenAPI spec version: 0.1.0
  */
+import { useMutation, useQuery } from "@tanstack/react-query";
+import type {
+  DataTag,
+  DefinedInitialDataOptions,
+  DefinedUseQueryResult,
+  MutationFunction,
+  QueryClient,
+  QueryFunction,
+  QueryKey,
+  UndefinedInitialDataOptions,
+  UseMutationOptions,
+  UseMutationResult,
+  UseQueryOptions,
+  UseQueryResult,
+} from "@tanstack/react-query";
+
+import type { Error, LoginRequest, Session } from "./model";
+
+const withQueryKey = <T extends object, K>(query: T, queryKey: K): T & { queryKey: K } => {
+  const result = { queryKey } as T & { queryKey: K };
+  for (const key of Object.keys(query)) {
+    // The explicit queryKey always wins, matching the previous
+    // `{ ...query, queryKey }` spread where it was set last.
+    if (key === "queryKey") continue;
+    Object.defineProperty(result, key, {
+      enumerable: true,
+      configurable: true,
+      get: () => (query as Record<string, unknown>)[key],
+    });
+  }
+  return result;
+};
+
+export type authCsrfResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type authCsrfResponseSuccess = authCsrfResponse204 & {
+  headers: Headers;
+};
+export type authCsrfResponse = authCsrfResponseSuccess;
+
+export const getAuthCsrfUrl = () => {
+  return `/api/v1/auth/csrf/`;
+};
+
+/**
+ * Entrega la cookie `csrftoken` antes del primer método no seguro.
+ */
+export const authCsrf = async (options?: RequestInit): Promise<authCsrfResponse> => {
+  const res = await fetch(getAuthCsrfUrl(), {
+    ...options,
+    method: "GET",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: authCsrfResponse["data"] = body ? JSON.parse(body) : undefined;
+  return { data, status: res.status, headers: res.headers } as authCsrfResponse;
+};
+
+export const getAuthCsrfQueryKey = () => {
+  return [`/api/v1/auth/csrf/`] as const;
+};
+
+export const getAuthCsrfQueryOptions = <
+  TData = Awaited<ReturnType<typeof authCsrf>>,
+  TError = unknown,
+>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof authCsrf>>, TError, TData>>;
+  fetch?: RequestInit;
+}) => {
+  const { query: queryOptions, fetch: fetchOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getAuthCsrfQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof authCsrf>>> = ({ signal }) =>
+    authCsrf({ signal, ...fetchOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof authCsrf>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type AuthCsrfQueryResult = NonNullable<Awaited<ReturnType<typeof authCsrf>>>;
+export type AuthCsrfQueryError = unknown;
+
+export function useAuthCsrf<TData = Awaited<ReturnType<typeof authCsrf>>, TError = unknown>(
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof authCsrf>>, TError, TData>> &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof authCsrf>>,
+          TError,
+          Awaited<ReturnType<typeof authCsrf>>
+        >,
+        "initialData"
+      >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useAuthCsrf<TData = Awaited<ReturnType<typeof authCsrf>>, TError = unknown>(
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof authCsrf>>, TError, TData>> &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof authCsrf>>,
+          TError,
+          Awaited<ReturnType<typeof authCsrf>>
+        >,
+        "initialData"
+      >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useAuthCsrf<TData = Awaited<ReturnType<typeof authCsrf>>, TError = unknown>(
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof authCsrf>>, TError, TData>>;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+export function useAuthCsrf<TData = Awaited<ReturnType<typeof authCsrf>>, TError = unknown>(
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof authCsrf>>, TError, TData>>;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getAuthCsrfQueryOptions(options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export type authLoginResponse200 = {
+  data: Session;
+  status: 200;
+};
+
+export type authLoginResponse400 = {
+  data: Error;
+  status: 400;
+};
+
+export type authLoginResponse401 = {
+  data: Error;
+  status: 401;
+};
+
+export type authLoginResponse403 = {
+  data: Error;
+  status: 403;
+};
+
+export type authLoginResponseSuccess = authLoginResponse200 & {
+  headers: Headers;
+};
+export type authLoginResponseError = (
+  authLoginResponse400 | authLoginResponse401 | authLoginResponse403
+) & {
+  headers: Headers;
+};
+
+export type authLoginResponse = authLoginResponseSuccess | authLoginResponseError;
+
+export const getAuthLoginUrl = () => {
+  return `/api/v1/auth/login/`;
+};
+
+/**
+ * Inicia sesión. `INVALID_CREDENTIALS` no distingue el motivo del rechazo.
+ */
+export const authLogin = async (
+  loginRequest: LoginRequest,
+  options?: RequestInit,
+): Promise<authLoginResponse> => {
+  const getHeaders = (
+    h?: NonNullable<RequestInit["headers"]>,
+  ): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(
+          h as Iterable<Iterable<string>>,
+          (entry) => Array.from(entry) as [string, string],
+        ),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+  const res = await fetch(getAuthLoginUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...getHeaders(options?.headers) },
+    body: JSON.stringify(loginRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: authLoginResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as authLoginResponse;
+};
+
+export const getAuthLoginMutationKey = () => ["authLogin"] as const;
+
+export const getAuthLoginMutationOptions = <TError = Error, TContext = unknown>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof authLogin>>,
+    TError,
+    AuthLoginMutationVariables,
+    TContext
+  >;
+  fetch?: RequestInit;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof authLogin>>,
+  TError,
+  AuthLoginMutationVariables,
+  TContext
+> => {
+  const mutationKey = getAuthLoginMutationKey();
+  const { mutation: mutationOptions, fetch: fetchOptions } = options
+    ? options.mutation && "mutationKey" in options.mutation && options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, fetch: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof authLogin>>,
+    AuthLoginMutationVariables
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return authLogin(data, fetchOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AuthLoginMutationResult = NonNullable<Awaited<ReturnType<typeof authLogin>>>;
+export type AuthLoginMutationBody = LoginRequest;
+export type AuthLoginMutationError = Error;
+export type AuthLoginMutationVariables = { data: LoginRequest };
+
+export const useAuthLogin = <TError = Error, TContext = unknown>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof authLogin>>,
+      TError,
+      AuthLoginMutationVariables,
+      TContext
+    >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseMutationResult<
+  Awaited<ReturnType<typeof authLogin>>,
+  TError,
+  AuthLoginMutationVariables,
+  TContext
+> => {
+  return useMutation(getAuthLoginMutationOptions(options), queryClient);
+};
+
+export type authSessionResponse200 = {
+  data: Session;
+  status: 200;
+};
+
+export type authSessionResponse401 = {
+  data: Error;
+  status: 401;
+};
+
+export type authSessionResponseSuccess = authSessionResponse200 & {
+  headers: Headers;
+};
+export type authSessionResponseError = authSessionResponse401 & {
+  headers: Headers;
+};
+
+export type authSessionResponse = authSessionResponseSuccess | authSessionResponseError;
+
+export const getAuthSessionUrl = () => {
+  return `/api/v1/auth/session/`;
+};
+
+/**
+ * La sesión actual. 401 `NOT_AUTHENTICATED` si no hay, caducó o su usuario no está
+ * activo.
+ */
+export const authSession = async (options?: RequestInit): Promise<authSessionResponse> => {
+  const res = await fetch(getAuthSessionUrl(), {
+    ...options,
+    method: "GET",
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: authSessionResponse["data"] = body ? JSON.parse(body) : {};
+  return { data, status: res.status, headers: res.headers } as authSessionResponse;
+};
+
+export const getAuthSessionQueryKey = () => {
+  return [`/api/v1/auth/session/`] as const;
+};
+
+export const getAuthSessionQueryOptions = <
+  TData = Awaited<ReturnType<typeof authSession>>,
+  TError = Error,
+>(options?: {
+  query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof authSession>>, TError, TData>>;
+  fetch?: RequestInit;
+}) => {
+  const { query: queryOptions, fetch: fetchOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getAuthSessionQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof authSession>>> = ({ signal }) =>
+    authSession({ signal, ...fetchOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof authSession>>,
+    TError,
+    TData
+  > & { queryKey: DataTag<QueryKey, TData, TError> };
+};
+
+export type AuthSessionQueryResult = NonNullable<Awaited<ReturnType<typeof authSession>>>;
+export type AuthSessionQueryError = Error;
+
+export function useAuthSession<TData = Awaited<ReturnType<typeof authSession>>, TError = Error>(
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof authSession>>, TError, TData>> &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof authSession>>,
+          TError,
+          Awaited<ReturnType<typeof authSession>>
+        >,
+        "initialData"
+      >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useAuthSession<TData = Awaited<ReturnType<typeof authSession>>, TError = Error>(
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof authSession>>, TError, TData>> &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof authSession>>,
+          TError,
+          Awaited<ReturnType<typeof authSession>>
+        >,
+        "initialData"
+      >;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useAuthSession<TData = Awaited<ReturnType<typeof authSession>>, TError = Error>(
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof authSession>>, TError, TData>>;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+export function useAuthSession<TData = Awaited<ReturnType<typeof authSession>>, TError = Error>(
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof authSession>>, TError, TData>>;
+    fetch?: RequestInit;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getAuthSessionQueryOptions(options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}

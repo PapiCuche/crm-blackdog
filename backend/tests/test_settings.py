@@ -33,6 +33,19 @@ def test_production_loads_with_valid_env(monkeypatch: pytest.MonkeyPatch) -> Non
     assert settings.DEBUG is False  # type: ignore[attr-defined]
     assert settings.SECURE_SSL_REDIRECT is True  # type: ignore[attr-defined]
     assert settings.DATABASES["default"]["HOST"] == "db"  # type: ignore[attr-defined]
+    # ADR-014 §2: la cookie de sesión de producción no se relaja.
+    assert settings.SESSION_COOKIE_NAME == "__Host-crm_session"  # type: ignore[attr-defined]
+    for flag in ("SESSION_COOKIE_SECURE", "SESSION_COOKIE_HTTPONLY", "CSRF_COOKIE_SECURE"):
+        assert getattr(settings, flag) is True
+    assert settings.SESSION_COOKIE_SAMESITE == settings.CSRF_COOKIE_SAMESITE == "Lax"  # type: ignore[attr-defined]
+    # `__Host-` exige Path=/ y ningún Domain; el cliente tiene que poder leer `csrftoken`.
+    assert getattr(settings, "SESSION_COOKIE_PATH", "/") == "/"
+    assert getattr(settings, "SESSION_COOKIE_DOMAIN", None) is None
+    assert settings.CSRF_COOKIE_HTTPONLY is False  # type: ignore[attr-defined]
+    assert getattr(settings, "CSRF_COOKIE_DOMAIN", None) is None
+    # D-F2-2: sesiones en base de datos (revocar es borrar una fila) y 12 horas.
+    assert settings.SESSION_ENGINE.endswith(".db")  # type: ignore[attr-defined]
+    assert settings.SESSION_COOKIE_AGE == 12 * 60 * 60  # type: ignore[attr-defined]
 
 
 @pytest.mark.parametrize(

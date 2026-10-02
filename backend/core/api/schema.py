@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from drf_spectacular.extensions import OpenApiAuthenticationExtension
 from drf_spectacular.utils import inline_serializer
 from rest_framework import serializers
 
@@ -16,6 +17,22 @@ ERROR = inline_serializer(
         ),
     },
 )
+
+
+class SessionScheme(OpenApiAuthenticationExtension):  # type: ignore[misc]
+    """La sesión de Django en el contrato: una cookie HttpOnly que el navegador envía solo."""
+
+    target_class = "core.api.authentication.SessionAuthentication"
+    name = "sessionCookie"
+
+    def get_security_definition(self, auto_schema: Any) -> dict[str, str]:
+        return {
+            "type": "apiKey",
+            "in": "cookie",
+            "name": "crm_session",
+            "description": "Cookie de sesión (`__Host-crm_session` en producción). Los métodos "
+            "no seguros llevan además la cabecera `X-CSRFToken`.",
+        }
 
 
 def errors(*statuses: int) -> dict[int, Any]:

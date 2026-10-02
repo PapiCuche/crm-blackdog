@@ -31,6 +31,7 @@ Cada work item es un issue con el alcance completo (Incluye / No incluye / crite
 | F2-12 | [#59](https://github.com/PapiCuche/crm-gooddoggy/issues/59) API error contract | `feature/f2-api-conventions` | #55 | backend |
 | F2-13 | [#64](https://github.com/PapiCuche/crm-gooddoggy/issues/64) API session authentication, CSRF and platform routes | `feature/f2-api-session-csrf` | #59 | backend |
 | F2-03B | [#61](https://github.com/PapiCuche/crm-gooddoggy/issues/61) Login attempt throttling | `feature/f2-login-throttle` | #40 | backend |
+| F2-03C | [#67](https://github.com/PapiCuche/crm-gooddoggy/issues/67) Session lifecycle and my organizations | `feature/f2-session-context` | #40 | backend + API |
 
 Mergeados: #37 … #39, #41, #42, #50 y #51. Lo que queda:
 
@@ -56,8 +57,8 @@ Objetivo: ≤ 400 líneas relevantes por PR. Más de 800 no se acepta ([ADR-009]
 
 Candidatos conocidos a división:
 
-- **F2-03A:** si el bloqueo progresivo de intentos no cabe, pasa a un F2-03B.
 - **F2-06:** dividido el 2026-10-02. Con las correcciones de la revisión adversarial medía 836 líneas relevantes: F2-06 (#43) se queda con el servicio de alta y sus fronteras, y F2-06B (#68) lleva el comando que lo expone al operador.
+- **F2-03A:** dividido el 2026-10-02. El bloqueo progresivo pasó a F2-03B (#61). La implementación completa medía 849 líneas relevantes, así que F2-03A (#40) se queda con el token CSRF, el login y la sesión actual, y F2-03C (#67) lleva el cierre de sesión, la caducidad por inactividad y absoluta, las organizaciones del usuario y la purga.
 - **F2-05:** dividido antes de implementar (2026-10-01). El diseño estimó unas 1.290 líneas para el alcance original de #42. Quedan F2-05A (#42, motor de autorización), F2-05B (#50, integración con DRF) y F2-05C (#51, anti-escalada y último Owner). B y C dependen solo de A y no entre sí. La caché de permisos sigue fuera.
 
 ## Historias E01 fuera de este bloque
@@ -97,7 +98,7 @@ Un ADR `Accepted` no se modifica: si una decisión lo contradice o amplía, se p
 - **Motivos:** es simple y durable; PostgreSQL ya lo comparten todas las instancias; revocar es borrar una fila; no añade dependencias (D-F2-4) ni una segunda invalidación en Redis. ADR-003 §2 permite pasar a caché Redis con respaldo en BD más adelante, sin ADR nuevo, si las lecturas de sesión llegan a ser un coste medido.
 - **Tabla:** `django_session` es platform-owned, sin RLS de tenant. F2-03A verifica los privilegios de `crm_app` sobre ella y no usa el rol migrador en el runtime.
 - **Cookie:** `HttpOnly`, `SameSite=Lax`, `Path=/`, sin `Domain`. En producción, `Secure` y nombre `__Host-crm_session`. En local sobre HTTP, nombre `crm_session`: el prefijo `__Host-` solo es válido con HTTPS ([ADR-014](../adr/ADR-014-api-errors-and-authentication.md) §2). Producción no se relaja.
-- **Caducidad:** 12 horas de inactividad y 7 días absolutos. Las filas caducadas se purgan con una tarea de plataforma. Django solo renueva la caducidad al guardar la sesión: F2-03A implementa la inactividad con un guardado con umbral (no una escritura por petición) y el límite absoluto con una marca de inicio de sesión, comprobada antes de resolver el tenant. Una petición en curso cuya sesión se borra acaba en 401 `NOT_AUTHENTICATED`.
+- **Caducidad:** 12 horas de inactividad y 7 días absolutos. Las filas caducadas se purgan con una tarea de plataforma. Django solo renueva la caducidad al guardar la sesión: F2-03A (#40) solo fija 12 horas desde el inicio de sesión (`SESSION_COOKIE_AGE`); F2-03C (#67) implementa la inactividad con un guardado con umbral (no una escritura por petición) y el límite absoluto con una marca de inicio de sesión, comprobada antes de resolver el tenant. Una petición en curso cuya sesión se borra acaba en 401 `NOT_AUTHENTICATED`.
 - **Fuera de F2-03A:** el vínculo usuario-sesión para cerrar las demás sesiones y listar las activas (E01-07, E01-11). En base de datos se resuelve con una columna o tabla propia.
 
 Otras decisiones cerradas el 2026-10-02 en [ADR-014](../adr/ADR-014-api-errors-and-authentication.md), que implementan F2-12 (#59) y F2-13 (#64): cuerpo de error único (OBS-F2-05A-5), CSRF en todo método no seguro y clase de autenticación (OBS-F2-05B-1), semántica de 401, 403 y 404, y separación entre rutas de plataforma y de tenant. La política de contraseñas vigente (OBS-F2-01-3) no cambia.
@@ -172,6 +173,29 @@ Un error al cerrar la transacción puede llegar con el `COMMIT` ya hecho (respue
 Una cuenta que ya existe debe estar activa y tener contraseña utilizable. Una cuenta `is_platform_staff` se acepta como cualquier otra: su acceso al tenant viene de la membresía y del rol, no de la marca. ADR-001 (D1) dice que el personal de plataforma no es miembro de las organizaciones.
 - Decisión de PO pendiente: rechazar esas cuentas en el alta o admitirlas. Fijarla con un test cuando se tome.
 - Una desactivación global del usuario (OBS-F2-05C-2) debe contar también con un alta que aún no ha confirmado.
+### OBS-F2-03A-1 — La IP auditada depende de los proxies de confianza
+El login guarda en la auditoría la IP que resuelve el servidor ASGI (`REMOTE_ADDR`); nunca lee una cabecera. `uvicorn --proxy-headers` solo confía en `X-Forwarded-For` si la conexión viene de `FORWARDED_ALLOW_IPS` (por defecto `127.0.0.1`). En el stack de compose el backend recibe las peticiones de Caddy desde otra dirección, así que hoy la IP auditada es la del proxy.
+- F2-03B (#61) lo resuelve: limita los intentos por IP y necesita la del cliente. Configurar `FORWARDED_ALLOW_IPS` con la dirección del proxy, nunca `*` en un backend alcanzable desde fuera.
+
+### OBS-F2-03A-2 — La sesión de un usuario desactivado se ignora, no se destruye
+Con el usuario desactivado o borrado, su sesión deja de autenticar (401 `NOT_AUTHENTICATED`, también en rutas de tenant), pero la fila de `django_session` y la cookie siguen ahí: si el usuario se reactiva antes de que caduque, la misma cookie vuelve a valer. ADR-003 §2 pide que desactivar revoque las sesiones.
+- F2-03C (#67) la destruye al detectarla, en el mismo middleware que aplica la caducidad. El cierre de todas las sesiones de un usuario al desactivarlo necesita el vínculo usuario-sesión (E01-07, E01-11).
+
+### OBS-F2-03A-3 — El límite de tamaño del cuerpo es el de Django
+`DATA_UPLOAD_MAX_MEMORY_SIZE` (2,5 MB) acota el cuerpo de una petición a la API; el proxy no fija otro. El analizador solo acepta UTF-8, así que el cuerpo leído nunca es mayor que el recibido.
+- Revisar el límite, y uno en el proxy, con el primer endpoint que reciba cuerpos grandes (adjuntos: Fase 5).
+
+### OBS-F2-03A-5 — Dos peticiones que acaban en un 500 fuera del contrato
+No leen el cuerpo con un códec del cliente ni amplifican memoria; solo salen como un 500 sin el formato de la API, y vienen de Django, no de este proyecto.
+- Un parámetro RFC 2231 en la cabecera (`Content-Type: application/json; charset*=nope''%41`) hace fallar a Django al construir la petición, antes de cualquier middleware, en cualquier ruta.
+- Un `POST` a `/health/live` o `/health/ready` con `application/x-www-form-urlencoded; charset=zlib` y una cookie `csrftoken`: el control de CSRF de Django lee el formulario y lo rechaza con un error que sus manejadores vuelven a encontrar. Esas rutas no se publican (el proxy responde 404).
+- El arreglo es de borde (proxy o envoltorio ASGI), no de las vistas: revisar al preparar el despliegue.
+
+### OBS-F2-03A-4 — `auth.login.succeeded` se confirma antes de entregar la sesión
+El servicio confirma en una transacción la fila de sesión rotada (aún sin usuario), `last_login`, el borrado de la sesión anterior y la fila de auditoría. Los datos de autenticación los escribe después `SessionMiddleware`, al responder, junto con la cookie. Si esa escritura o la respuesta fallan (400 `BAD_REQUEST` o 500), queda un `auth.login.succeeded` sin sesión utilizable y, en un re-login, la sesión anterior ya borrada. Lo contrario no ocurre: no hay sesión autenticada sin su fila de auditoría (ADR-013 §5).
+- Guardar la sesión dentro de la transacción no lo cierra: la cookie se entrega igualmente después del `COMMIT` y solo quedaría una fila autenticada huérfana.
+- La fila se reconcilia por `request_id` con el log de la petición fallida.
+
 ### OBS-F2-13-1 — Lo que la auditoría del URLconf sigue sin ver
 Es estática. No detecta una vista que redefina `initialize_request` (los viewsets de DRF lo hacen de serie), un decorador que no use `functools.wraps`, ni una caché puesta por otra vía que un decorador del manejador. Una respuesta de tenant sigue sin poder cachearse por URL (OBS-F2-05B-6).
 - Revisar a mano en cada PR que añada una vista con caché o con autenticación propia.

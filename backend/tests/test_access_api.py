@@ -52,7 +52,9 @@ from tests.test_memberships import ctx, join
 pytestmark = [pytest.mark.usefixtures("tenant_db"), pytest.mark.urls(__name__)]
 MANAGE = "widgets.manage"  # segundo permiso de prueba con alcance
 TENANT = "api/v1/o/<slug:org_slug>/"
-PLATFORM = frozenset({"api/schema/"})  # rutas de plataforma del proyecto: otra frontera
+PLATFORM = frozenset(  # rutas de plataforma del proyecto: otra frontera (ADR-014 §4)
+    {"api/schema/"} | {f"api/v1/auth/{name}/" for name in ("csrf", "login", "session")}
+)
 PREFIX = "api/v1/o/"  # las rutas de tenant, como `TENANT_PATH` en el middleware
 API = "api/"  # todo lo que hay debajo es contrato: o es de tenant o figura en `PLATFORM`
 DYNAMIC = re.compile(r"^.*\||.?[?*{]|[<(\[\\.+]")  # donde una ruta deja de ser texto literal

@@ -5,9 +5,8 @@
  * Contrato de la API del backend. Fuente para el cliente TypeScript (orval).
  * OpenAPI spec version: 0.1.0
  */
+import type { User } from "./user";
 
-export * from "./error";
-export * from "./errorFields";
-export * from "./loginRequest";
-export * from "./session";
-export * from "./user";
+export interface Session {
+  user: User;
+}
