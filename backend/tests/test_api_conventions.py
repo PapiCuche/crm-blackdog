@@ -5,14 +5,14 @@ from uuid import uuid4
 
 import pytest
 from django.db import connection
-from django.http import Http404, HttpResponseNotAllowed
+from django.http import Http404, HttpResponse, HttpResponseNotAllowed, StreamingHttpResponse
 from django.test import Client
 from django.test.utils import CaptureQueriesContext
-from django.urls import path
+from django.urls import path, re_path
 from drf_spectacular.generators import SchemaGenerator
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
-from rest_framework import generics, serializers
+from rest_framework import exceptions, generics, serializers
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -101,8 +101,42 @@ class Writes(APIView):
         return Response({"id": str(widget.pk)}, status=201)
 
 
+class Odd(Notes):
+    """Respuestas y errores poco comunes: cada uno debe salir con el contrato."""
+
+    CASES: dict[str, Exception] = {
+        "conflict": exceptions.APIException("ocupado"),
+        "anonymous": exceptions.NotAuthenticated(),
+        "leaf": serializers.ValidationError({"email": "mal"}),
+        "both": serializers.ValidationError({"non_field_errors": ["g"], "_": ["u"]}),
+        "nocode": serializers.ValidationError({"f": [exceptions.ErrorDetail("sin código")]}),
+    }
+    reached: list[str] = []
+
+    def get(self, request: Any, case: str = "", **kwargs: Any) -> Response:
+        self.reached.append(case)
+        if case == "bare":
+            return Response(status=409)  # sin cuerpo: DRF no le pone Content-Type
+        error = self.CASES[case]
+        if case == "conflict":
+            error.status_code = 409  # type: ignore[attr-defined]
+        raise error
+
+
 def not_allowed(request: Any) -> HttpResponseNotAllowed:
     return HttpResponseNotAllowed(["GET"])  # una respuesta de Django, en HTML
+
+
+def html(request: Any, kind: str) -> Any:
+    if kind == "stream":
+        response: Any = StreamingHttpResponse(iter(["<h1>", "error", "</h1>"]), status=500)
+    else:  # otro juego de caracteres y cabeceras del cuerpo original
+        response = HttpResponse("mal", status=400, content_type="text/html; charset=utf-16")
+        response.headers["Content-Encoding"] = "gzip"
+        response.headers["ETag"] = '"abc"'
+    response.headers["X-Keep"] = "1"
+    response.set_cookie("visto", "1")
+    return response
 
 
 urlpatterns = [
@@ -112,6 +146,10 @@ urlpatterns = [
     path("api/v1/notes/", Notes.as_view()),
     path("api/v1/orders/", Orders.as_view()),
     path("api/v1/plain/", not_allowed),
+    path("api/v1/html/<str:kind>/", html),
+    path("api/v1/odd/<str:case>/", Odd.as_view()),
+    # Una ruta de tenant más laxa que el middleware: acepta slugs que este no resuelve.
+    re_path(r"^api/v1/o/(?P<org_slug>[^/]+)/lax/$", Odd.as_view(), {"case": "bare"}),
 ]
 
 
@@ -275,3 +313,39 @@ def test_membership_is_looked_up_whether_or_not_the_organization_exists(api: Any
     missing, foreign = work("no-existe"), work("org-b")
     assert missing == foreign  # mismo trabajo: el tiempo no delata qué slugs existen
     assert any("organization_memberships" in sql for sql in missing)
+
+
+def test_unusual_errors_also_follow_the_contract(api: Any) -> None:
+    def odd(case: str) -> Any:
+        return api.client.get(f"/api/v1/odd/{case}/")
+
+    for case in ("bare", "conflict"):  # un 4xx sin código propio no es un error del servidor
+        assert reply(odd(case)) == (409, b'{"code":"ERROR"}')
+    anonymous = odd("anonymous")  # sin sesión es 401, tenga o no la vista autenticación
+    assert reply(anonymous) == (401, b'{"code":"NOT_AUTHENTICATED"}')
+    assert anonymous.headers["WWW-Authenticate"] == "Session"
+    assert odd("leaf").json()["fields"] == {"email": [{"code": "invalid", "message": "mal"}]}
+    both = odd("both").json()["fields"]
+    assert [error["message"] for error in both["_"]] == ["g", "u"]  # se unen, no se pisan
+    assert odd("nocode").json()["fields"] == {"f": [{"code": "invalid", "message": "sin código"}]}
+
+
+def test_a_slug_the_middleware_cannot_resolve_never_reaches_a_view(api: Any) -> None:
+    Odd.reached.clear()
+    for slug in ("a.b", "con%20espacio", "%C3%B1and%C3%BA"):
+        assert reply(api.client.get(f"/api/v1/o/{slug}/lax/")) == NOT_FOUND
+    assert Odd.reached == []  # la ruta la aceptaría; el middleware responde antes
+
+
+def test_html_errors_are_rewritten_with_clean_headers(api: Any) -> None:
+    client = Client(raise_request_exception=False)
+    for kind, status, code in (("stream", 500, "INTERNAL_ERROR"), ("utf16", 400, "BAD_REQUEST")):
+        response = client.get(f"/api/v1/html/{kind}/")
+        assert reply(response) == (status, f'{{"code":"{code}"}}'.encode())  # UTF-8, no UTF-16
+        assert response.headers["Content-Type"] == "application/json"
+        assert response.headers["Content-Length"] == str(len(response.content))
+        assert response.headers["X-Keep"] == "1" and response.cookies["visto"].value == "1"
+        for stale in ("Content-Encoding", "ETag"):
+            assert stale not in response.headers
+    assert reply(client.get("/api")) == NOT_FOUND  # `/api` a secas también es de la API
+    assert client.get("/api").headers["Content-Security-Policy"] == API_CSP

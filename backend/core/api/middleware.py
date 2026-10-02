@@ -9,11 +9,13 @@ es un documento.
 import json
 from collections.abc import Callable
 
-from django.http import HttpRequest, HttpResponseBase
+from django.http import HttpRequest, HttpResponse, HttpResponseBase
 
 from core.api.errors import body, code_for, error_response
 
 API_PREFIX = "/api/"
+# Cabeceras que describen el cuerpo original: no valen para el cuerpo del contrato.
+STALE = ("Content-Encoding", "Content-Disposition", "Content-Language", "ETag", "Last-Modified")
 API_CSP = "default-src 'none'; frame-ancestors 'none'"
 GetResponse = Callable[[HttpRequest], HttpResponseBase]
 
@@ -24,16 +26,31 @@ class ApiEnvelopeMiddleware:
 
     def __call__(self, request: HttpRequest) -> HttpResponseBase:
         response = self.get_response(request)
-        if not request.path_info.startswith(API_PREFIX):
+        path = request.path_info
+        if path != API_PREFIX.rstrip("/") and not path.startswith(API_PREFIX):
             return response
         content_type = response.headers.get("Content-Type", "")
         if response.status_code >= 400 and "json" not in content_type:
-            code = code_for(response.status_code)
-            if response.streaming or not hasattr(response, "content"):
-                response = error_response(code, response.status_code)
-            else:  # en el sitio: se conservan las cabeceras y cookies ya puestas
-                response.content = json.dumps(body(code), separators=(",", ":"))
-                response.headers["Content-Type"] = "application/json"
-                response.headers["Content-Length"] = str(len(response.content))
+            response = self._contract(response)
         response.headers["Content-Security-Policy"] = API_CSP
+        return response
+
+    @staticmethod
+    def _contract(original: HttpResponseBase) -> HttpResponseBase:
+        """El mismo estado con el cuerpo del contrato, conservando cabeceras y cookies."""
+        code = code_for(original.status_code)
+        if original.streaming or not isinstance(original, HttpResponse):
+            response: HttpResponse = error_response(code, original.status_code)
+            for name, value in original.headers.items():
+                if name.lower() not in ("content-type", "content-length"):
+                    response.headers[name] = value
+            response.cookies = original.cookies
+            original.close()  # p. ej., el archivo abierto de un FileResponse
+        else:  # en el sitio
+            response = original
+            response.headers["Content-Type"] = "application/json"
+            response.content = json.dumps(body(code), separators=(",", ":")).encode()
+        for name in STALE:
+            response.headers.pop(name, None)
+        response.headers["Content-Length"] = str(len(response.content))
         return response

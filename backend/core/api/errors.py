@@ -11,6 +11,8 @@ from django.http import Http404, JsonResponse
 from rest_framework import exceptions
 from rest_framework.response import Response
 
+from core.api import AUTH_SCHEME
+
 NOT_FOUND = "NOT_FOUND"
 NOT_AUTHENTICATED = "NOT_AUTHENTICATED"
 PERMISSION_DENIED = "PERMISSION_DENIED"
@@ -83,9 +85,9 @@ def _errors(detail: Any) -> Any:
         return out
     if isinstance(detail, list | tuple):
         if all(isinstance(item, exceptions.ErrorDetail) for item in detail):
-            return [{"code": item.code, "message": str(item)} for item in detail]
+            return [{"code": item.code or "invalid", "message": str(item)} for item in detail]
         return {str(index): _errors(item) for index, item in enumerate(detail) if item}
-    return [{"code": getattr(detail, "code", "invalid"), "message": str(detail)}]
+    return [{"code": getattr(detail, "code", None) or "invalid", "message": str(detail)}]
 
 
 def _fields(detail: Any) -> dict[str, Any]:
@@ -104,6 +106,10 @@ def exception_handler(exc: Exception, context: dict[str, Any]) -> Response | Non
     if not isinstance(exc, exceptions.APIException):
         return None
     headers: dict[str, str] = {}
+    if isinstance(exc, exceptions.NotAuthenticated | exceptions.AuthenticationFailed):
+        # Sin sesión es siempre 401 (ADR-014 §3). DRF lo baja a 403 si la vista no tiene una
+        # clase de autenticación con `authenticate_header`.
+        exc.status_code, exc.auth_header = 401, AUTH_SCHEME
     if getattr(exc, "auth_header", None):
         headers["WWW-Authenticate"] = exc.auth_header
     if getattr(exc, "wait", None):

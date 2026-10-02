@@ -160,7 +160,7 @@ Ese test recorre todo el URLconf y falla si una ruta de tenant no es una vista d
 - `core.api.middleware.ApiEnvelopeMiddleware` es el middleware más externo. Convierte al contrato todo error bajo `/api/` que no salga ya en JSON, venga de donde venga: una ruta sin resolver, un `Host` no permitido, una excepción en otro middleware. También con `DEBUG`. Conserva las cabeceras de la respuesta original (`Allow`, cookies). Un 500 es siempre `{"code":"INTERNAL_ERROR"}`: el detalle va al log.
 - Las respuestas de la API llevan `Content-Security-Policy: default-src 'none'; frame-ancestors 'none'`.
 - La API solo sirve JSON: `?format=` no existe (`URL_FORMAT_OVERRIDE`). `APPEND_SLASH` está desactivado: una ruta sin su barra final es un 404 del contrato, no una redirección.
-- En OpenAPI, el componente común es `core.api.schema.ERROR`: `@extend_schema(responses={200: …, **errors(401, 404)})`.
+- En OpenAPI, el componente común es `core.api.schema.ERROR`: `@extend_schema(responses={200: …, **errors(401, 404)})`. Aparece en `openapi/schema.yaml` con el primer endpoint que lo use (F2-03A): drf-spectacular no publica componentes sin referencias.
 
 **Una petición de tenant que acaba en error no deja nada escrito.** `TenantResolutionMiddleware` es dueño de la transacción de la petición y la deshace si la respuesta es 400 o superior, la haya producido una excepción de dominio, una validación o un fallo inesperado. Lo que deba sobrevivir a una petición fallida (por ejemplo, una futura auditoría de accesos denegados) tiene que escribirse fuera de ese `tenant_scope`.
 
