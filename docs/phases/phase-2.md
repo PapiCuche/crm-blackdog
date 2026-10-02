@@ -79,6 +79,13 @@ Ninguna se resuelve en este documento. Un ADR `Accepted` no se modifica: si una 
 | D-F2-6 | **Secretos TOTP.** Cifrado, KEK y rotación; nunca en claro. | Sin diseño | E01-03 |
 | D-F2-7 | **Lenguaje visual del shell real.** `/o/[orgSlug]` usa hoy el tema oscuro; el Figma GOOD DOGGY es la referencia para las pantallas nuevas. | Se concreta en F2-08 | F2-08 (#45) |
 
+Decisiones de producto cerradas por el mantenedor el 2026-10-02, para F2-05C (#51):
+
+| ID | Pregunta | Decisión |
+|---|---|---|
+| PO-1 | Al quitar un rol a otra membresía, ¿el actor debe tener todas las concesiones de ese rol, con alcance igual o superior? | **Sí.** Quitar un rol exige lo mismo que asignarlo |
+| PO-2 | ¿"Nadie modifica sus propios roles" impide también cambiar las concesiones de un rol que el actor tiene asignado? | **Sí.** Cuenta como modificarse a uno mismo |
+
 Observaciones de la Fase 1 que afectan a esta fase: OBS-F1-03-1 (reversibilidad de `CompositeTenantFK`, antes de F2-02), OBS-F1-04-1 (FK de tenant en la primera tabla de negocio, F2-02), OBS-F1-09-1 (CSP, F2-07) y OBS-F1-09-2 (fixes de Next.js pendientes upstream).
 
 ## Principios para cada slice
@@ -106,6 +113,18 @@ El bloque inicial F2-00 … F2-08 no cierra la fase: MFA y la gestión de roles 
 ## Observaciones vivas (de revisiones)
 
 Se registran como `OBS-F2-<nn>-<n>`.
+
+### OBS-F2-05C-1 — Ningún Owner puede ampliar el rol Owner
+Por PO-2, quien tiene un rol no cambia sus concesiones, y todo Owner tiene el rol Owner. Un permiso sensible solo lo delega un Owner. Resultado: ningún Owner puede usar `grant_permission` para añadir concesiones al rol Owner, y nadie puede añadirle un permiso sensible. No hay excepción para el Owner ni para el staff de plataforma. Agrava OBS-F2-04-1: cada work item que amplíe el catálogo debe llevar esos permisos al rol Owner de las organizaciones existentes por otra vía (migración de datos o un paso de plataforma), y decidirlo antes de añadir el primero.
+
+### OBS-F2-05C-2 — La garantía de Owner activo tiene dos huecos fuera de este módulo
+`remove_role` la aplica. Desactivar una membresía (E01-07, en `apps.organizations`) debe llamar a `ensure_owner_remains` en el mismo `tenant_scope` y antes de escribir; hoy nada lo hace porque esa operación no existe. Desactivar un usuario global (`users.is_active`) no se puede comprobar desde un tenant: quien lo implemente debe revisar todas sus organizaciones.
+
+### OBS-F2-05C-3 — Los servicios aún no tienen quien los llame
+No hay API HTTP (E01-08) ni bootstrap (F2-06). Tampoco existen revocar una concesión, cambiar su alcance, ni crear, renombrar o borrar roles: conceder un permiso ya concedido con otro alcance lanza `ValueError`. El step-up MFA para permisos sensibles llega con MFA (E01-03). Las denegaciones no se auditan (OBS-F2-05A-4). Un rol que conserve una concesión de un código retirado del catálogo no se puede asignar ni quitar con estos servicios: falla cerrado, y retirar un permiso sigue necesitando su migración de datos (OBS-F2-04-4).
+
+### OBS-F2-05C-4 — Todos los cambios de RBAC de una organización van en serie
+Comparten el bloqueo del rol Owner. Un cambio que escribe lo mantiene hasta el COMMIT de la petición; una denegación lo libera al deshacer su savepoint. `ensure_owner_remains` no abre savepoint: su bloqueo dura hasta el final del `tenant_scope`, también si deniega, porque quien la llama debe escribir bajo ese mismo bloqueo. Es deliberado: son operaciones poco frecuentes y así la relectura de permisos y el recuento de Owners no tienen carreras. Una organización sin rol Owner no admite ningún cambio.
 
 ### OBS-F2-05B-1 — Las vistas de DRF no pasan por la protección CSRF de Django
 `APIView.as_view()` marca la vista como `csrf_exempt`; DRF solo comprueba CSRF dentro de `SessionAuthentication`, y el proyecto no tiene clases de autenticación hasta F2-03A. Hoy no hay endpoints reales. Antes del primer endpoint que escriba, F2-03A debe aportar una clase de autenticación que exija CSRF. Al añadirla, DRF solo responderá 401 en lugar de 403 a una petición sin autenticar si `authenticate_header()` de la primera clase de `authentication_classes` devuelve un valor; `SessionAuthentication` hereda el de `BaseAuthentication`, que devuelve `None`, y sigue respondiendo 403, con otro `detail`.
