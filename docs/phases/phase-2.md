@@ -80,7 +80,7 @@ Un ADR `Accepted` no se modifica: si una decisión lo contradice o amplía, se p
 
 | ID | Decisión | Estado actual | Bloquea |
 |---|---|---|---|
-| D-F2-1 | **Auditoría de plataforma.** ✅ Resuelta el 2026-10-02 en [ADR-013](../adr/ADR-013-platform-audit.md): un sumidero propio (`platform_audit_logs`), sin `organization_id`, solo de inserción para `crm_app`. `audit_logs` no cambia. No se usa un `organization_id` ficticio, una organización arbitraria, un rol con BYPASSRLS ni el log de aplicación. | Resuelta. Lo implementa F2-10 (#56) | — |
+| D-F2-1 | **Auditoría de plataforma.** ✅ Resuelta el 2026-10-02 en [ADR-013](../adr/ADR-013-platform-audit.md): un sumidero propio (`platform_audit_logs`), sin `organization_id`, solo de inserción para `crm_app`. `audit_logs` no cambia. No se usa un `organization_id` ficticio, una organización arbitraria, un rol con BYPASSRLS ni el log de aplicación. | Resuelta. Implementada en F2-10 (#56) | — |
 | D-F2-2 | **Almacén de sesiones.** ✅ Resuelta el 2026-10-02: **sesiones de Django en base de datos** (`django.contrib.sessions.backends.db`), la primera opción de [ADR-003](../adr/ADR-003-auth-session.md) §2. Detalle abajo. | Resuelta. Lo implementa F2-03A (#40) | — |
 | D-F2-3 | **Email case-insensitive.** ✅ Resuelta en F2-01 (#38): canonicalización explícita en la aplicación (`apps.accounts.emails`) más `UNIQUE (email)` y `CHECK (email = lower(email))` en la BD. No se usa `citext`, previsto en [02-modelo-de-datos.md](../fase-0/02-modelo-de-datos.md) §E.2: evita una extensión y deja el comportamiento explícito. La parte local debe ser ASCII; un dominio internacionalizado se guarda en forma IDNA. Sin reglas por proveedor. Detalle en [backend/README.md](../../backend/README.md). | Resuelta | — |
 | D-F2-4 | **Dependencias nuevas** (bloqueo progresivo, TOTP). No se añaden sin su fila en [ADR-012](../adr/ADR-012-engineering-runtime-baseline.md). | `argon2-cffi` ya está fijado; el resto no | F2-03A / F2-03B, E01-03 |
@@ -132,6 +132,18 @@ El bloque inicial F2-00 … F2-12 no cierra la fase: MFA y la gestión de roles 
 ## Observaciones vivas (de revisiones)
 
 Se registran como `OBS-F2-<nn>-<n>`.
+
+### OBS-F2-10-1 — Los privilegios de las tablas de auditoría no viajan en un volcado lógico
+`crm_app` solo tiene `INSERT` en `platform_audit_logs`, y no tiene `UPDATE` ni `DELETE` en `audit_logs`, porque cada migración revoca lo que conceden los privilegios por defecto de `01-roles.sh`. `pg_dump` no guarda esa revocación: al restaurar un volcado lógico sobre una base que ya tiene esos privilegios por defecto, el runtime recupera todos. Una restauración física (PITR, snapshot) no cambia nada.
+- `platform_audit_logs` se repara sola en cada `post_migrate`. `audit_logs` no, y nada lo comprueba al desplegar: issue [#62](https://github.com/PapiCuche/crm-gooddoggy/issues/62), antes de producción.
+
+### OBS-F2-10-2 — Lo que la tabla de auditoría de plataforma no impide
+Los `CHECK` de `platform_audit_logs` cubren la forma de la acción, el tamaño de `metadata` y que un `ANONYMOUS` no lleve `actor_id`. No impiden que un runtime comprometido inserte un `occurred_at` distinto de ahora, dentro de las particiones existentes. `audit_logs` no tiene ninguno de esos `CHECK` y su servicio inserta sin calificar el esquema.
+- Mismo issue [#62](https://github.com/PapiCuche/crm-gooddoggy/issues/62).
+
+### OBS-F2-10-3 — Toda clave `*session_id` se redacta
+Desde F2-10 el redactor compartido trata como credencial cualquier clave que termine en `session_id`, también en la auditoría de un tenant, en los logs y en el reporte de errores. La FK `ai_runs.session_id` prevista en [02-modelo-de-datos.md](../fase-0/02-modelo-de-datos.md) se redactaría.
+- Al llegar el módulo de IA: otro nombre de columna o una excepción explícita con su test.
 
 ### OBS-F2-09-1 — El tiempo de respuesta distingue una organización que existe
 El 404 de una ruta de tenant es idéntico en estado y cuerpo para "no existe" y "no eres miembro". El trabajo no lo es: `resolve_tenant` solo abre `user_scope` y consulta la membresía cuando la organización existe. Un usuario con sesión podría medir esa diferencia y saber qué slugs existen.
@@ -236,7 +248,7 @@ El validador de Django rechaza partes locales con caracteres no ASCII (direccion
 ### OBS-F2-01-4 — El redactor no trata el email como dato sensible
 `core.redaction` redacta secretos (contraseñas, tokens, credenciales), pero no la clave `email`. F2-01 no registra emails: `User.__str__` devuelve el identificador, no la dirección.
 - Decidir antes de F2-03A si los eventos de acceso registran el email, un hash o solo el `user_id`.
-- ✅ Resuelta en [ADR-013](../adr/ADR-013-platform-audit.md) §4 para los eventos de acceso: `user_id` del actor autenticado, y en los intentos fallidos una huella HMAC del identificador más la cuenta afectada como entidad. Nunca el email en claro. El redactor compartido sigue sin tratar el email como secreto (la auditoría de un tenant registra cambios de email); el escritor de plataforma añade su propio filtro, que implementa F2-10.
+- ✅ Resuelta en [ADR-013](../adr/ADR-013-platform-audit.md) §4 para los eventos de acceso: `user_id` del actor autenticado, y en los intentos fallidos una huella HMAC del identificador más la cuenta afectada como entidad. Nunca el email en claro. El redactor compartido sigue sin tratar el email como secreto (la auditoría de un tenant registra cambios de email); el escritor de plataforma añade su propio filtro (F2-10, #56).
 
 ### OBS-F2-01-3 — Longitud mínima de contraseña
 ADR-003 §2 exige validar contraseñas comunes o filtradas, pero no fija una longitud. F2-01 usa 12 caracteres. La comprobación contra contraseñas filtradas (servicio externo) no está implementada.

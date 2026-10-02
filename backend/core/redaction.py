@@ -16,8 +16,10 @@ _SECRET_SEGMENTS = frozenset(
      "apikey", "authorization", "cookie", "cookies", "sessionid", "ciphertext", "credential",
      "credentials", "dsn", "kek", "csrf", "csrftoken", "csrfmiddlewaretoken"}
 )  # fmt: skip
-_SECRET_FRAGMENTS = ("api_key", "private_key", "access_key", "session_key")
-_SESSION_IDS = ("session_id",)  # credencial, aunque termine en `_id`
+_SECRET_FRAGMENTS = ("api_key", "private_key", "access_key", "session_key", "crm_session")
+# Toda clave `*session_id` se trata como credencial, aunque termine en `_id`: para correlacionar
+# hay que usar otro nombre (p. ej., `conversation_id`).
+_SESSION_IDS = ("session_id",)
 _NOT_SECRET_SUFFIXES = ("_at", "_limit", "_count", "_id")  # fechas, límites, contadores y FKs
 _CONTENT_KEYS = frozenset({"body", "content", "text", "transcript", "caption"})
 _CONTENT_SUFFIXES = ("_body", "_content", "_transcript", "_text", "_preview", "_caption")
@@ -35,10 +37,23 @@ PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"(?<=://)[^/\s:@]*:[^/\s@]+@"), f"{REDACTED}@"),  # [usuario]:clave@ en URLs
     (  # client_secret=, hub.verify_token=, DB_PASSWORD=… (input_tokens= no)
         re.compile(
-            r"(?i)(?<![a-z0-9])([a-z0-9_.-]*?(?:api[_-]?key|token|secret|passw(?:or)?d))"
+            # El lookbehind incluye `_.-`: la búsqueda no reintenta dentro de una misma palabra
+            # (sin él, una cadena larga de puntos cuesta tiempo cuadrático).
+            r"(?i)(?<![a-z0-9_.-])([a-z0-9_.-]*?(?:api[_-]?key|token|secret|passw(?:or)?d))"
             r"=[^&\s\"']+"
         ),
         rf"\1={REDACTED}",
+    ),
+    (  # cabecera Cookie / Set-Cookie completa dentro de un texto
+        re.compile(r"(?i)\b((?:set-)?cookie[\"']?\s*[:=]\s*[\"']?)[^\s\"';=]+=[^\r\n\"']*"),
+        rf"\1{REDACTED}",
+    ),
+    (  # session_key=…, sessionid: …, crm_session=…, X-CSRFToken: … dentro de un texto
+        re.compile(
+            r"(?i)(?<![a-z0-9_.-])([a-z0-9_.-]*?(?:session[_-]?(?:id|key)|crm_session|"
+            r"csrf[a-z0-9_-]*)[\"']?\s*[=:]\s*[\"']?)[^&\s\"';,}]+"
+        ),
+        rf"\1{REDACTED}",
     ),
     (  # repr/JSON de un dict dentro de un texto: 'password': 'x', "api_key": "y"
         re.compile(
