@@ -174,6 +174,19 @@ Ese test recorre todo el URLconf y falla si una ruta de tenant no es una vista d
 
 `core.outbox.emit()` y `apps.audit.services.record()` escriben en la transacción del `tenant_scope` activo: un rollback no deja ni evento ni auditoría. `audit_logs` es append-only para `crm_app` y está particionada por mes, y el redactor (`core.redaction`) se aplica siempre. Diseño y decisiones: [docs/architecture/outbox-audit.md](../docs/architecture/outbox-audit.md).
 
+## Auditoría de plataforma (F2-10, ADR-013)
+
+`apps.audit.platform.record(action, *, actor_type, …)` registra los eventos que no pertenecen a ninguna organización (acceso, altas de plataforma) en `platform_audit_logs`.
+
+- La tabla no tiene `organization_id` ni política de tenant. `crm_app` solo tiene `INSERT`: el runtime escribe y no puede leer, modificar ni borrar el registro. Por eso el servicio no usa `RETURNING`.
+- No recibe tenant y falla dentro de un `tenant_scope`: ahí corresponde `apps.audit.services.record`. Dentro de un `user_scope` sí funciona.
+- Escribe en la transacción del llamador, si la hay, y propaga el error: lo auditado no ocurre sin su registro.
+- `identifier` (el email presentado en un acceso fallido) se guarda solo como huella HMAC-SHA-256 con una clave derivada de `DJANGO_SECRET_KEY`. Nunca se guarda el email, la contraseña ni una cookie. `metadata` y `user_agent` pasan por el redactor.
+- `ip` debe ser una dirección válida o `None`: quien llama resuelve la IP del cliente. `request_id` y `correlation_id` salen del contexto de observabilidad.
+- Particiones mensuales, mes actual más doce, creadas por la migración y el `post_migrate`. Sin partición DEFAULT.
+
+Todavía no hay lectura desde la aplicación: solo el rol propietario puede consultar la tabla.
+
 ## Observabilidad (F1-07, ADR-011)
 
 Logs JSON en stdout (structlog + `logging` estándar, redactados con `core.redaction`) con `request_id`, `correlation_id` e IDs de tenant/actor. El `X-Request-ID` es siempre un UUIDv7 generado por la aplicación. La correlación pasa de HTTP a Celery por cabecera. Errores: `NoopReporter` sin `SENTRY_DSN`, `SentryReporter` endurecido con él. Diseño: [docs/architecture/observability.md](../docs/architecture/observability.md).

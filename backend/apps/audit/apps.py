@@ -7,12 +7,16 @@ from django.db.models.signals import post_migrate
 PARTITION_MONTHS = 12  # horizonte: mes actual + 12; sin partición DEFAULT (falla cerrado)
 
 
+FUNCTIONS = ("audit_ensure_partitions", "platform_audit_ensure_partitions")  # ADR-011, ADR-013
+
+
 def ensure_partitions(sender: Any, using: str = "default", **kwargs: Any) -> None:
     """Tras cada `migrate` (job de migraciones, crm_migrator): crea las particiones que falten."""
     with connections[using].cursor() as cursor:
-        cursor.execute("SELECT to_regprocedure('public.audit_ensure_partitions(integer)')")
-        if cursor.fetchone()[0] is not None:
-            cursor.execute("SELECT public.audit_ensure_partitions(%s)", [PARTITION_MONTHS])
+        for function in FUNCTIONS:
+            cursor.execute("SELECT to_regprocedure(%s)", [f"public.{function}(integer)"])
+            if cursor.fetchone()[0] is not None:
+                cursor.execute(f"SELECT public.{function}(%s)", [PARTITION_MONTHS])
 
 
 class AuditConfig(AppConfig):
