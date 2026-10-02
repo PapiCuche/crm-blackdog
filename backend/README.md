@@ -94,6 +94,17 @@ Variables de producción: `DJANGO_SECRET_KEY`, `DJANGO_ALLOWED_HOSTS`, `DATABASE
 - **Resolvedor:** `TENANCY_MEMBERSHIP_RESOLVER = "apps.organizations.selectors.active_membership"`. Usuario activo con membresía `ACTIVE` → tenant resuelto. Cualquier otro caso (sin membresía, membresía no activa, usuario inactivo, staff de plataforma sin membresía) → el mismo 404 que una organización inexistente.
 - **Selectores** (`apps.organizations.selectors`): `active_membership` y `organizations_for_user`. El manager `OrganizationMembership.for_user` solo se usa dentro de `user_scope`; con tenant activo se usa `objects`.
 
+## Alta de una organización (F2-06, E01-04)
+
+`apps.provisioning.services.bootstrap_organization` crea la organización, la membresía de su Owner inicial, los cuatro roles plantilla y la asignación del rol Owner. Es una operación de plataforma: la lanza un operador, no un usuario del CRM. El comando que la expone llega con F2-06B.
+
+- **Atómica.** Todo va en una sola transacción, la del `tenant_scope` de la organización nueva. Si un paso falla no queda organización, membresía, roles ni usuario.
+- **Owner.** Con contraseña, una cuenta nueva que cumple la política vigente. Sin contraseña, una cuenta que ya existe, activa y con contraseña utilizable; nunca se le cambia.
+- **Slug.** Minúsculas, dígitos y guiones, de 1 a 63 caracteres, sin empezar ni acabar en guion. Un slug en uso se rechaza.
+- **Auditoría.** Dentro del tenant: `membership.role_assigned` y `organization.created`, con el operador y el motivo (hasta 200 caracteres). En la auditoría de plataforma (ADR-013 §5): una fila `organization.bootstrap.started` antes de empezar y una `organization.bootstrapped` con el resultado, que se decide por lo que quedó confirmado en la base. Si no se puede escribir la primera, el alta no empieza.
+- **Fronteras.** Cada módulo de L2 expone su parte del alta en un `bootstrap.py` (`accounts`, `organizations`, `access`). Solo `apps.provisioning` puede importarlos y no toca sus modelos: dos contratos de import-linter lo comprueban.
+- **No es una vía para asignar roles.** `apps.access.bootstrap.install_initial_owner` solo actúa sin actor, sobre una organización sin roles cuya única membresía es la indicada, activa y de un usuario activo. Los cambios posteriores pasan por `assign_role` y `remove_role`, con sus reglas (F2-05C).
+
 ## Roles y permisos: modelo (F2-04, ADR-003 §5)
 
 Esta sección cubre el **modelo** RBAC de `apps.access`; el cálculo de permisos efectivos y su verificación están en el motor (sección siguiente, F2-05A).

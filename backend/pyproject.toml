@@ -94,9 +94,27 @@ source_modules = ["core"]
 forbidden_modules = ["config", "apps"]
 
 [[tool.importlinter.contracts]]
-name = "Capas (module-dependencies §1): organizations | access | accounts (L2) > audit | files (L1) > core (L0)"
+name = "Capas (module-dependencies §1): provisioning > organizations | access | accounts (L2) > audit | files (L1) > core (L0)"
 type = "layers"
-layers = ["apps.organizations | apps.access | apps.accounts", "apps.audit | apps.files", "core"]
+layers = [
+    "apps.provisioning",  # orquesta el alta: el único que une los tres módulos de L2 (F2-06)
+    "apps.organizations | apps.access | apps.accounts",
+    "apps.audit | apps.files",
+    "core",
+]
+
+[[tool.importlinter.contracts]]
+name = "Fronteras de alta: solo provisioning importa los bootstrap.py de L2 (F2-06)"
+type = "protected"
+protected_modules = ["apps.access.bootstrap", "apps.accounts.bootstrap", "apps.organizations.bootstrap"]
+allowed_importers = ["apps.provisioning"]
+
+[[tool.importlinter.contracts]]
+name = "provisioning no toca los modelos de otros módulos (module-dependencies §3)"
+type = "forbidden"
+source_modules = ["apps.provisioning"]
+forbidden_modules = ["apps.access.models", "apps.accounts.models", "apps.organizations.models"]
+allow_indirect_imports = true
 
 [[tool.importlinter.contracts]]
 name = "sentry_sdk solo dentro de core.observability (module-dependencies §5)"

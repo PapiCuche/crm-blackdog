@@ -22,6 +22,7 @@ INSTALLED_APPS = [
     "apps.access",
     "apps.audit",
     "apps.files",
+    "apps.provisioning",
 ]
 
 MIDDLEWARE = [

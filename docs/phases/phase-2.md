@@ -22,6 +22,7 @@ Cada work item es un issue con el alcance completo (Incluye / No incluye / crite
 | F2-05B | [#50](https://github.com/PapiCuche/crm-gooddoggy/issues/50) RBAC: DRF integration | `feature/f2-rbac-drf` | #42 | backend |
 | F2-05C | [#51](https://github.com/PapiCuche/crm-gooddoggy/issues/51) RBAC: anti-escalation and last Owner | `feature/f2-rbac-anti-escalation` | #42 | backend |
 | F2-06 | [#43](https://github.com/PapiCuche/crm-gooddoggy/issues/43) Organization bootstrap | `feature/f2-org-bootstrap` | #41, #56 | backend |
+| F2-06B | [#68](https://github.com/PapiCuche/crm-gooddoggy/issues/68) Organization bootstrap command | `feature/f2-org-bootstrap-command` | #43 | backend |
 | F2-07 | [#44](https://github.com/PapiCuche/crm-gooddoggy/issues/44) Frontend security / CSP | `feature/f2-frontend-csp` | #37 | frontend |
 | F2-08 | [#45](https://github.com/PapiCuche/crm-gooddoggy/issues/45) Frontend access integration | `feature/f2-frontend-access` | #40, #43, #44, #57 | frontend |
 | F2-09 | [#55](https://github.com/PapiCuche/crm-gooddoggy/issues/55) Production delivery rule and access decisions | `docs/f2-production-rule-decisions` | — | docs |
@@ -56,6 +57,7 @@ Objetivo: ≤ 400 líneas relevantes por PR. Más de 800 no se acepta ([ADR-009]
 Candidatos conocidos a división:
 
 - **F2-03A:** si el bloqueo progresivo de intentos no cabe, pasa a un F2-03B.
+- **F2-06:** dividido el 2026-10-02. Con las correcciones de la revisión adversarial medía 836 líneas relevantes: F2-06 (#43) se queda con el servicio de alta y sus fronteras, y F2-06B (#68) lleva el comando que lo expone al operador.
 - **F2-05:** dividido antes de implementar (2026-10-01). El diseño estimó unas 1.290 líneas para el alcance original de #42. Quedan F2-05A (#42, motor de autorización), F2-05B (#50, integración con DRF) y F2-05C (#51, anti-escalada y último Owner). B y C dependen solo de A y no entre sí. La caché de permisos sigue fuera.
 
 ## Historias E01 fuera de este bloque
@@ -135,6 +137,26 @@ El bloque inicial F2-00 … F2-13 no cierra la fase: MFA y la gestión de roles 
 
 Se registran como `OBS-F2-<nn>-<n>`.
 
+### OBS-F2-06-2 — Sin `organization_settings`
+El alta crea solo la fila de `organizations` (slug, nombre, estado `ACTIVE`). Nada de la Fase 2 lee todavía zona horaria, moneda ni otros ajustes, así que no se crea una tabla vacía.
+- Llega con el primer slice que use un ajuste de la organización.
+
+### OBS-F2-06-4 — La frontera de alta se cierra por estado y por quién la importa
+`install_initial_owner` y `create_organization` no reciben un actor con permisos: el actor `SYSTEM` es el de cualquier contexto que no viene de HTTP, así que no prueba nada. Lo que las acota es el estado que exigen (organización sin roles y sin otra membresía; membresía activa de un usuario activo) y un contrato de import-linter: solo `apps.provisioning` importa los `bootstrap.py`.
+- Queda fuera: una organización sembrada sin pasar por el alta, con un único miembro y sin roles, admitiría `install_initial_owner` si alguien llegara a importarlo. El alta es la única vía que crea organizaciones.
+- Dos llamadas simultáneas a `install_initial_owner` sobre la misma organización las serializan los índices únicos de `roles`: la que pierde recibe `IntegrityError`. En el alta no ocurre, porque la organización aún no está confirmada.
+
+### OBS-F2-06-5 — La fila de resultado se decide por lo confirmado
+Un error al cerrar la transacción puede llegar con el `COMMIT` ya hecho (respuesta perdida). Si el cuerpo del alta terminó, se comprueba si la organización, cuyo id es nuevo, existe: si existe, `organization.bootstrapped` se registra como `SUCCESS` con `commit_error`, el error va al log con su traza y el alta devuelve su resultado; si no, `FAILED`. Precisa la fila "resultado" de ADR-013 §5: no dice `FAILED` de un alta que la comprobación encuentra hecha.
+- Límite: si el servidor termina el `COMMIT` después de esa comprobación, la fila dice `FAILED` y la organización existe. La auditoría del tenant (`organization.created`) permite reconstruirlo.
+- Si no se puede escribir la fila de resultado, queda solo la de intención (el modo degradado de ADR-013 §5). En un alta fallida se propaga el error original, no el de la auditoría; en un alta confirmada, el de la auditoría.
+- Una interrupción del proceso (`KeyboardInterrupt`) no pasa por la reconciliación: puede dejar solo la fila de intención, con la organización creada o sin ella.
+- El alta exige no estar dentro de una transacción (`in_atomic_block`). Con `autocommit` desactivado esa comprobación no ve la transacción implícita; el proyecto no lo desactiva en ningún sitio, y `tenant_scope` tiene el mismo límite.
+
+### OBS-F2-06-6 — Qué cuenta existente puede ser Owner inicial
+Una cuenta que ya existe debe estar activa y tener contraseña utilizable. Una cuenta `is_platform_staff` se acepta como cualquier otra: su acceso al tenant viene de la membresía y del rol, no de la marca. ADR-001 (D1) dice que el personal de plataforma no es miembro de las organizaciones.
+- Decisión de PO pendiente: rechazar esas cuentas en el alta o admitirlas. Fijarla con un test cuando se tome.
+- Una desactivación global del usuario (OBS-F2-05C-2) debe contar también con un alta que aún no ha confirmado.
 ### OBS-F2-13-1 — Lo que la auditoría del URLconf sigue sin ver
 Es estática. No detecta una vista que redefina `initialize_request` (los viewsets de DRF lo hacen de serie), un decorador que no use `functools.wraps`, ni una caché puesta por otra vía que un decorador del manejador. Una respuesta de tenant sigue sin poder cachearse por URL (OBS-F2-05B-6).
 - Revisar a mano en cada PR que añada una vista con caché o con autenticación propia.
@@ -241,6 +263,8 @@ La matriz de [03 §H](../fase-0/03-tenancy-rbac-inbox-ia.md) no tiene filas para
 Los roles no llevan `deleted_at` (convención [SD]): no hay flujo de borrado hasta E01-08. Un rol tiene un solo alcance por permiso; combinar `TEAM` y `BRANCH` sobre el mismo permiso requiere dos roles, y los permisos efectivos (F2-05A) unen los alcances de todos los roles.
 
 ### OBS-F2-04-7 — Capas para el bootstrap
+✅ Resuelta en F2-06 (#43): `apps.provisioning` es el punto de orquestación, una capa por encima de `organizations`, `access` y `accounts` en el contrato de import-linter. La regla del último Owner sigue en `access`.
+
 `apps.organizations` y `apps.access` son módulos hermanos que no se importan entre sí. El bootstrap (F2-06) y la regla "siempre un Owner activo" (F2-05C, #51) necesitan un punto de orquestación por encima de ambos.
 
 ### OBS-F2-02-1 — F2-03A no debe empezar con D-F2-1 y D-F2-2 abiertas
