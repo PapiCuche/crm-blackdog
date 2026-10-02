@@ -14,9 +14,10 @@ MAX_DEPTH = 8
 _SECRET_SEGMENTS = frozenset(
     {"password", "passwords", "passwd", "pwd", "passphrase", "secret", "secrets", "token",
      "apikey", "authorization", "cookie", "cookies", "sessionid", "ciphertext", "credential",
-     "credentials", "dsn", "kek"}
+     "credentials", "dsn", "kek", "csrf", "csrftoken", "csrfmiddlewaretoken"}
 )  # fmt: skip
-_SECRET_FRAGMENTS = ("api_key", "private_key", "access_key")
+_SECRET_FRAGMENTS = ("api_key", "private_key", "access_key", "session_key")
+_SESSION_IDS = ("session_id",)  # credencial, aunque termine en `_id`
 _NOT_SECRET_SUFFIXES = ("_at", "_limit", "_count", "_id")  # fechas, límites, contadores y FKs
 _CONTENT_KEYS = frozenset({"body", "content", "text", "transcript", "caption"})
 _CONTENT_SUFFIXES = ("_body", "_content", "_transcript", "_text", "_preview", "_caption")
@@ -55,6 +56,8 @@ def _normalize(key: str) -> str:
 
 def is_sensitive_key(key: str) -> bool:
     name = _normalize(key)
+    if name.endswith(_SESSION_IDS):
+        return True
     if name.endswith(_NOT_SECRET_SUFFIXES):
         return False
     segments = {s.rstrip("0123456789") for s in name.split("_")}  # password1, new_password2

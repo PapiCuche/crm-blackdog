@@ -8,6 +8,7 @@ auditado no ocurre sin su registro.
 
 import ipaddress
 import json
+import re
 from collections.abc import Mapping
 from enum import StrEnum
 from typing import Any
@@ -25,6 +26,9 @@ from core.redaction import redact, redact_text
 from core.tenancy.context import require_no_tenant
 
 USER_AGENT_MAX = 512
+METADATA_MAX = 4096  # bytes del JSON: los metadatos son de quien llama, nunca texto del cliente
+EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+")
+EMAIL_MASK = "[EMAIL]"
 _HASH_SALT = "apps.audit.platform.identifier"
 _INSERT = (
     "INSERT INTO platform_audit_logs (id, occurred_at, actor_type, actor_id, identifier_hash, "
@@ -45,6 +49,17 @@ def identifier_hash(identifier: str) -> str:
     solo la BD y cambia si rota `SECRET_KEY` (ADR-013 §4). El identificador nunca se guarda."""
     normalized = identifier.strip().lower()
     return salted_hmac(_HASH_SALT, normalized, algorithm="sha256").hexdigest()
+
+
+def _mask(value: Any) -> Any:
+    """Además del redactor compartido, este registro no guarda direcciones de email (§4)."""
+    if isinstance(value, str):
+        return EMAIL.sub(EMAIL_MASK, value)
+    if isinstance(value, dict):
+        return {_mask(k): _mask(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_mask(item) for item in value]
+    return value
 
 
 def record(
@@ -70,6 +85,9 @@ def record(
     if actor_type is Actor.ANONYMOUS and actor_id is not None:
         raise ValueError("un actor ANONYMOUS no lleva actor_id")
     address = str(ipaddress.ip_address(ip)) if ip else None
+    payload = json.dumps(_mask(redact(dict(metadata or {}))), cls=DjangoJSONEncoder)
+    if len(payload.encode()) > METADATA_MAX:
+        raise ValueError(f"metadata supera {METADATA_MAX} bytes")
     audit_id = new_id()
     with connections["default"].cursor() as cursor:
         cursor.execute(
@@ -82,9 +100,9 @@ def record(
                 action,
                 entity.type if entity else None,
                 entity.id if entity else None,
-                json.dumps(redact(dict(metadata or {})), cls=DjangoJSONEncoder),
+                payload,
                 address,
-                redact_text(user_agent)[:USER_AGENT_MAX] if user_agent else None,
+                _mask(redact_text(user_agent))[:USER_AGENT_MAX] if user_agent else None,
                 current_request_id(),
                 current_correlation_id(),
                 Result(result),

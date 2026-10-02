@@ -44,10 +44,19 @@ def test_failed_login_keeps_a_hash_and_never_the_identifier(
             "auth.login.failed",
             actor_type=Actor.ANONYMOUS,
             identifier=EMAIL,
-            metadata={"reason": "unknown_identifier", "password": "hunter2", "note": SECRET},
+            metadata={
+                "reason": "unknown_identifier",
+                "password": "hunter2",
+                "note": SECRET,
+                "detail": f"intento de {EMAIL} desde otra red",
+                "session_key": "abc123sessionkey",
+                "session_id": "abc123sessionid",
+                "csrftoken": "tok-csrf-1",
+                "X-CSRFToken": "tok-csrf-2",
+            },
             result=Result.FAILED,
             ip="203.0.113.7",
-            user_agent="Mozilla/5.0 " + "x" * 600,
+            user_agent=f"Mozilla/5.0 ({EMAIL}) " + "x" * 600,
         )
     (row,) = rows(migrator)
     assert row[:6] == ("ANONYMOUS", None, identifier_hash(EMAIL), "auth.login.failed", None, None)
@@ -55,12 +64,17 @@ def test_failed_login_keeps_a_hash_and_never_the_identifier(
         "reason": "unknown_identifier",
         "password": "[REDACTED]",
         "note": "[REDACTED]",
+        "detail": "intento de [EMAIL] desde otra red",
+        "session_key": "[REDACTED]",
+        "session_id": "[REDACTED]",
+        "csrftoken": "[REDACTED]",
+        "X-CSRFToken": "[REDACTED]",
     }
-    assert row[7] == "203.0.113.7" and len(row[8]) == 512
+    assert row[7] == "203.0.113.7" and len(row[8]) == 512 and "[EMAIL]" in row[8]
     assert row[9:] == ("req-1", "corr-1", "FAILED")
     whole = migrator.execute("SELECT t::text FROM platform_audit_logs t").fetchone()
     assert whole is not None and str(audit_id) in whole[0]
-    for forbidden in (EMAIL, EMAIL.lower(), "example.com", "hunter2", SECRET):
+    for forbidden in (EMAIL, EMAIL.lower(), "example.com", "hunter2", SECRET, "abc123", "tok-csrf"):
         assert forbidden not in whole[0]
 
 
@@ -70,6 +84,23 @@ def test_identifier_hash_is_keyed_and_normalized(settings: Any) -> None:
     assert digest != identifier_hash("otra@example.com")
     settings.SECRET_KEY = "otra-clave-" + "k" * 40
     assert identifier_hash(EMAIL) != digest  # sin la clave no se puede recalcular
+
+
+def test_failed_login_names_the_targeted_account_as_entity(
+    migrator: psycopg.Connection[Any],
+) -> None:
+    account = uuid4()  # la cuenta atacada no es el actor: nadie se ha autenticado (ADR-013 §4)
+    record(
+        "auth.login.failed",
+        actor_type=Actor.ANONYMOUS,
+        identifier=EMAIL,
+        entity=Entity("user", account),
+        result=Result.FAILED,
+    )
+    (row,) = rows(migrator)
+    assert row[:6] == (
+        "ANONYMOUS", None, identifier_hash(EMAIL), "auth.login.failed", "user", account
+    )  # fmt: skip
 
 
 def test_user_event_with_entity_and_ipv6(migrator: psycopg.Connection[Any]) -> None:
@@ -114,6 +145,7 @@ def test_record_rejects_a_tenant_scope_and_invalid_input(
         {"action": "auth.logout", "actor_type": Actor.SYSTEM, "ip": "10.0.0.1, 10.0.0.2"},
         {"action": "auth.logout", "actor_type": Actor.SYSTEM, "entity": Entity("Organization")},
         {"action": "auth.logout", "actor_type": Actor.SYSTEM, "result": "MAYBE"},
+        {"action": "auth.logout", "actor_type": Actor.SYSTEM, "metadata": {"blob": "x" * 5000}},
     )
     for kwargs in cases:
         with pytest.raises(ValueError):
