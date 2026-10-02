@@ -1,6 +1,9 @@
 """F2-12 y F2-13 (ADR-014): cuerpo de error único, CSRF en todo `/api/`, 401/403 y rutas de
 plataforma."""
 
+import importlib
+import logging
+from types import SimpleNamespace
 from typing import Any
 from uuid import uuid4
 
@@ -19,6 +22,7 @@ from rest_framework.views import APIView
 
 from apps.audit.services import Entity, record
 from core import outbox
+from core.api.authentication import SessionAuthentication
 from core.api.errors import ApiError
 from core.api.middleware import API_CSP
 from core.api.permissions import Authenticated, Public
@@ -409,6 +413,26 @@ def test_unsafe_methods_need_a_csrf_token_with_or_without_session(api: Any) -> N
     )
 
 
+def test_only_a_trusted_origin_passes_and_a_rejection_is_logged(
+    api: Any, settings: Any, caplog: pytest.LogCaptureFixture
+) -> None:
+    settings.CSRF_TRUSTED_ORIGINS = ["http://localhost:3000"]  # `next dev` cambia el Host
+    settings.ALLOWED_HOSTS = ["127.0.0.1"]
+    local = importlib.import_module("config.settings.local")
+    assert "http://localhost:3000" in local.CSRF_TRUSTED_ORIGINS
+    client = Client(enforce_csrf_checks=True, headers={"host": "127.0.0.1:8000"})
+    client.force_login(api.ana)
+    token, note = with_token(client), {"title": "ok", "size": 1}
+    trusted = post(client, "/api/v1/notes/", note, {"Origin": "http://localhost:3000", **token})
+    assert trusted.status_code == 201
+    caplog.set_level(logging.WARNING, logger="django.security.csrf")
+    origin = "http://localhost:3001/" + "x" * 3000
+    assert reply(post(client, "/api/v1/notes/", note, {"Origin": origin, **token})) == CSRF_FAILED
+    (logged,) = [r.getMessage() for r in caplog.records if r.name == "django.security.csrf"]
+    assert "/api/v1/notes/" in logged and "localhost:3001" in logged and len(logged) < 300
+    assert TOKEN not in logged
+
+
 def test_the_csrf_token_travels_only_in_the_header_and_the_body_is_not_read(api: Any) -> None:
     client = Client(enforce_csrf_checks=True)
     client.force_login(api.ana)
@@ -430,12 +454,27 @@ def test_the_csrf_token_travels_only_in_the_header_and_the_body_is_not_read(api:
 
 
 def test_a_drf_view_outside_the_api_prefix_refuses_unsafe_methods(api: Any) -> None:
-    client = Client(enforce_csrf_checks=True)
+    anonymous, client = Client(enforce_csrf_checks=True), Client(enforce_csrf_checks=True)
     client.force_login(api.ana)
     assert client.get("/outside/notes/").status_code == 200
-    for headers in (None, with_token(client)):  # ni con token: fuera de /api/ no hay control
-        response = post(client, "/outside/notes/", {"title": "ok", "size": 1}, headers)
-        assert response.status_code == 403 and response.json() == {"code": "CSRF_FAILED"}
+    for sender in (anonymous, client):  # con sesión o sin ella
+        for headers in (None, with_token(sender)):  # ni con token: fuera de /api/ no hay control
+            response = post(sender, "/outside/notes/", {"title": "ok", "size": 1}, headers)
+            assert response.status_code == 403 and response.json() == {"code": "CSRF_FAILED"}
+
+
+def test_platform_classes_and_the_session_class_fail_closed_on_their_own() -> None:
+    """Sin el middleware delante: cada pieza deniega por sí misma (defensa en profundidad)."""
+    inside = SimpleNamespace(path_info="/api/v1/o/acme/x/", successful_authenticator=object())
+    assert not Public().has_permission(inside, None)
+    assert not Authenticated().has_permission(inside, None)
+    outside = SimpleNamespace(path_info="/api/v1/auth/session/", successful_authenticator=object())
+    assert Authenticated().has_permission(outside, None)
+    user = SimpleNamespace(is_authenticated=True, is_active=False)
+    request = SimpleNamespace(_request=SimpleNamespace(method="GET", user=user))
+    assert SessionAuthentication().authenticate(request) is None
+    user.is_active = True
+    assert SessionAuthentication().authenticate(request) == (user, None)
 
 
 def test_no_session_is_401_and_platform_classes_never_authorize_a_tenant(api: Any) -> None:

@@ -24,6 +24,7 @@ from django.urls import URLResolver, path, re_path
 from django.urls.resolvers import RegexPattern
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
+from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import generics, serializers, viewsets
 from rest_framework.exceptions import NotFound
 from rest_framework.permissions import AllowAny
@@ -157,6 +158,11 @@ class CachedHandler(Members):
         return Response({"ok": True})
 
 
+@extend_schema_view(get=extend_schema(summary="Widgets"))
+class Documented(WidgetList):
+    """`extend_schema_view` envuelve `get`, heredado, solo para anotar el contrato."""
+
+
 class OwnAuthentication(Members):
     def perform_authentication(self, request: Any) -> None:
         """No autentica."""
@@ -171,6 +177,7 @@ secure = [
     path(TENANT + "widgets/<uuid:pk>/", WidgetDetail.as_view()),
     path(TENANT + "widgets/<uuid:pk>/described/", Described.as_view()),
     path(TENANT + "members/", Members.as_view()),
+    path(TENANT + "documented/", Documented.as_view()),
     path("api/platform/open/", Open.as_view()),
     path("api/v1/auth/session/", Members.as_view(permission_classes=[Authenticated])),
 ]
@@ -179,6 +186,7 @@ SECURE_PLATFORM = frozenset({"api/platform/open/", "api/v1/auth/session/"})
 LISTED = frozenset(
     {"api/platform/any/", "api/platform/both/", "api/platform/noauth/", "api/v1/auth/plain/"}
     | {"api/platform/dup/", "platform/outside/"}
+    | {"api/platform/cached/", "api/platform/cached-handler/", "api/platform/own-auth/"}
 )
 TENANT_RE = r"^api/v1/o/(?P<org_slug>[-\w]+)/"
 FLAWED: list[tuple[Any, str]] = [  # ruta y motivo que debe dar la auditoría
@@ -198,7 +206,17 @@ FLAWED: list[tuple[Any, str]] = [  # ruta y motivo que debe dar la auditoría
     (path(TENANT + "kw-bare/", Members.as_view(permission_classes=HasPermission)), "sin Has"),
     (path(TENANT + "kw-list/", Members.as_view(required_permissions={"GET": [VIEW]})), "catálogo"),
     (path(TENANT + "kw-unfiltered/", WidgetList.as_view(filter_backends=[])), "sin ScopeFilter"),
-    (path(TENANT + "kw-hook/", Members.as_view(get_permissions=list)), "redefine get_permissions"),
+    *(  # cada gancho de DRF por separado: ninguno se redefine, tampoco por ruta
+        (path(TENANT + f"kw-{hook}/", Members.as_view(**{hook: list})), f"redefine {hook}")
+        for hook in (  # escritos aquí, no leídos de GUARDS: quitar uno de la lista se nota
+            "get_permissions",
+            "get_authenticators",
+            "get_authenticate_header",
+            "handle_exception",
+            "check_object_permissions",
+            "initial",
+        )
+    ),
     (path(TENANT + "kw-lookup/", WidgetDetail.as_view(get_object=dict)), "redefine get_object"),
     # Ganchos de DRF redefinidos y decoradores alrededor de `as_view()`:
     (path(TENANT + "own-permissions/", OwnPermissions.as_view()), "redefine get_permissions"),
@@ -231,6 +249,16 @@ FLAWED: list[tuple[Any, str]] = [  # ruta y motivo que debe dar la auditoría
     (path(TENANT + "cached-handler/", CachedHandler.as_view()), "manejador decorado"),
     (path(TENANT + "kw-noauth/", Members.as_view(authentication_classes=[])), "autenticación"),
     (path(TENANT + "own-auth/", OwnAuthentication.as_view()), "redefine perform_authentication"),
+    # Las mismas reglas valen para una ruta de plataforma listada.
+    (path("api/platform/cached/", cache_page(300)(Open.as_view())), "decorador"),
+    (
+        path("api/platform/cached-handler/", CachedHandler.as_view(permission_classes=[Public])),
+        "manejador decorado",
+    ),
+    (
+        path("api/platform/own-auth/", OwnAuthentication.as_view(permission_classes=[Public])),
+        "redefine perform_authentication",
+    ),
     # Rutas que pueden casar con `TENANT_PATH` sin empezar por el prefijo literal:
     (path("api/<str:version>/o/<slug:org_slug>/dynamic/", Open.as_view()), "ruta dinámica"),
     (re_path(r"^apis?/v1/o/(?P<org_slug>[-\w]+)/optional/$", Open.as_view()), "ruta dinámica"),
@@ -292,14 +320,8 @@ def insecure(patterns: Any, platform: frozenset[str]) -> dict[str, str]:
             found[route] = "no es una vista de DRF"
         elif not uses(effective(callback, "permission_classes"), HasPermission):
             found[route] = "sin HasPermission"
-        elif effective(callback, "authentication_classes") != APIView.authentication_classes:
-            found[route] = "cambia la autenticación"
-        elif redefined := [h for h in GUARDS if effective(callback, h) is not getattr(APIView, h)]:
-            found[route] = "redefine " + ", ".join(redefined)
-        elif wrapped(callback):
-            found[route] = "vista envuelta en un decorador"
-        elif decorated := sorted(n for n in handlers(callback) if hasattr(n[1], "__wrapped__")):
-            found[route] = f"manejador decorado: {[name for name, _ in decorated]}"
+        elif reason := view_flaw(callback):
+            found[route] = reason
         elif not isinstance(declared, Mapping):
             found[route] = "sin required_permissions"
         elif missing := implemented(callback) - set(declared):
@@ -325,11 +347,32 @@ def platform_flaw(callback: Any, drf: bool) -> str | None:
         return "no es una vista de DRF"
     if effective(callback, "permission_classes") not in ([Public], [Authenticated]):
         return "sin una clase de plataforma (Public o Authenticated)"
+    return view_flaw(callback)
+
+
+def view_flaw(callback: Any) -> str | None:
+    """Lo que ninguna vista de la API puede hacer, sea de tenant o de plataforma."""
     if effective(callback, "authentication_classes") != APIView.authentication_classes:
         return "cambia la autenticación"
     if redefined := [h for h in GUARDS if effective(callback, h) is not getattr(APIView, h)]:
         return "redefine " + ", ".join(redefined)
-    return "vista envuelta en un decorador" if wrapped(callback) else None
+    if wrapped(callback):
+        return "vista envuelta en un decorador"
+    decorated = [name for name, fn in handlers(callback) if hasattr(documented(fn), "__wrapped__")]
+    return f"manejador decorado: {decorated}" if decorated else None
+
+
+def documented(fn: Any) -> Any:
+    """`extend_schema_view` envuelve un manejador heredado solo para anotar su contrato: se mira
+    el original. Cualquier otro envoltorio responde después del permiso y antes del filtro."""
+    code = getattr(fn, "__code__", None)
+    if (
+        code is None
+        or code.co_name != "wrapped_method"
+        or "drf_spectacular" not in code.co_filename
+    ):
+        return fn
+    return fn.__wrapped__
 
 
 def effective(callback: Any, name: str) -> Any:

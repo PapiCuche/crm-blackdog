@@ -1,7 +1,8 @@
 """Autenticación por sesión para DRF (ADR-014 §2).
 
 La sesión la resuelve Django (`AuthenticationMiddleware`). Esta clase entrega el usuario a la
-vista y, con `authenticate_header`, hace que la falta de sesión sea un 401 y no un 403.
+vista. `authenticate_header` nombra el esquema; que la falta de sesión sea un 401 y no un 403
+lo garantiza el manejador de errores (`core.api.errors`), no esta cabecera.
 
 El CSRF lo comprueba `ApiCsrfMiddleware` para todo `/api/`. Aquí se exige su marca: una vista
 de DRF montada fuera de `/api/` rechaza los métodos no seguros en lugar de quedar sin control.

@@ -116,6 +116,7 @@ class ApiCsrfMiddleware:
         if request.path_info.startswith(API_PREFIX) and request.method not in SAFE_METHODS:
             reason = self.csrf.process_view(request, _any_view, (), {})
             if reason:  # si pasa, Django marca `request.csrf_processing_done`
-                logger.warning("CSRF rechazado (%s): %s", reason, request.path)
+                # El motivo cita el Origin o el Referer del cliente: se acota antes del log.
+                logger.warning("CSRF rechazado (%s): %s", str(reason)[:200], request.path[:200])
                 return error_response(CSRF_FAILED, 403)
         return self.get_response(request)

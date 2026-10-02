@@ -138,6 +138,9 @@ Se registran como `OBS-F2-<nn>-<n>`.
 ### OBS-F2-13-1 — Lo que la auditoría del URLconf sigue sin ver
 Es estática. No detecta una vista que redefina `initialize_request` (los viewsets de DRF lo hacen de serie), un decorador que no use `functools.wraps`, ni una caché puesta por otra vía que un decorador del manejador. Una respuesta de tenant sigue sin poder cachearse por URL (OBS-F2-05B-6).
 - Revisar a mano en cada PR que añada una vista con caché o con autenticación propia.
+- Las mismas reglas (autenticación, ganchos de DRF, decoradores de la vista y de sus manejadores) valen para las rutas de tenant y para las de plataforma listadas.
+- Único envoltorio admitido en un manejador: el de `extend_schema_view` de drf-spectacular, que solo anota el contrato. La auditoría lo reconoce por su origen y mira el manejador original.
+- El motivo de un rechazo de CSRF va al log `django.security.csrf` acotado a 200 caracteres: cita el `Origin` o el `Referer` que envía el cliente.
 
 ### OBS-F2-13-2 — El control de CSRF usa funciones internas de Django
 Para aceptar el token solo en la cabecera, sin leer el cuerpo, `core.api.middleware` reescribe `_check_token` con `_get_secret`, `_check_token_format` y `_does_token_match`, que no son API pública de Django 5.2.
