@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { ApiError } from "@/lib/http";
 
-import { Providers, shouldRetry } from "./providers";
+import { Providers, sessionEnded, shouldRetry } from "./providers";
 
 describe("política de reintentos", () => {
   it("no repite una respuesta 4xx y reintenta una vez lo demás", () => {
@@ -30,5 +30,27 @@ describe("política de reintentos", () => {
     );
     expect(options.queries?.retry).toBe(shouldRetry);
     expect(options.mutations?.retry).toBe(false);
+  });
+});
+
+describe("sesión terminada", () => {
+  const at = (pathname: string, search = "") => ({ pathname, search });
+
+  it("un 401 lleva al login con vuelta a donde estaba", () => {
+    const expired = new ApiError(401, "NOT_AUTHENTICATED");
+    expect(sessionEnded(expired, at("/o/acme/clientes", "?vista=2"))).toBe(
+      "/login?next=%2Fo%2Facme%2Fclientes%3Fvista%3D2",
+    );
+    expect(sessionEnded(expired, at("/login", "?next=%2Fo"))).toBeNull(); // ya está ahí
+  });
+
+  it("ningún otro error saca de la pantalla", () => {
+    for (const error of [
+      new ApiError(403, "PERMISSION_DENIED"),
+      new ApiError(0, "NETWORK_ERROR"),
+    ]) {
+      expect(sessionEnded(error, at("/o"))).toBeNull();
+    }
+    expect(sessionEnded(new Error("x"), at("/o"))).toBeNull();
   });
 });

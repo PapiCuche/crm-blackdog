@@ -24,8 +24,9 @@ Cada work item es un issue con el alcance completo (Incluye / No incluye / crite
 | F2-06 | [#43](https://github.com/PapiCuche/crm-gooddoggy/issues/43) Organization bootstrap | `feature/f2-org-bootstrap` | #41, #56 | backend |
 | F2-06B | [#68](https://github.com/PapiCuche/crm-gooddoggy/issues/68) Organization bootstrap command | `feature/f2-org-bootstrap-command` | #43 | backend |
 | F2-07 | [#44](https://github.com/PapiCuche/crm-gooddoggy/issues/44) Frontend security / CSP | `feature/f2-frontend-csp` | #37 | frontend |
-| F2-08 | [#45](https://github.com/PapiCuche/crm-gooddoggy/issues/45) Frontend access integration | `feature/f2-frontend-access` | #40, #43, #44, #57, #67, #68, #70 | frontend |
+| F2-08 | [#45](https://github.com/PapiCuche/crm-gooddoggy/issues/45) Frontend access integration | `feature/f2-frontend-access` | #40, #43, #44, #57, #67, #68, #70, #74 | frontend |
 | F2-08A | [#70](https://github.com/PapiCuche/crm-gooddoggy/issues/70) Official design foundation and API client | `feature/f2-frontend-foundation` | #44 | frontend |
+| F2-08B | [#74](https://github.com/PapiCuche/crm-gooddoggy/issues/74) Login and organization selection screens | `feature/f2-frontend-login` | #40, #67, #70 | frontend |
 | F2-09 | [#55](https://github.com/PapiCuche/crm-gooddoggy/issues/55) Production delivery rule and access decisions | `docs/f2-production-rule-decisions` | — | docs |
 | F2-10 | [#56](https://github.com/PapiCuche/crm-gooddoggy/issues/56) Platform audit sink | `feature/f2-platform-audit` | #55 | backend |
 | F2-11 | [#57](https://github.com/PapiCuche/crm-gooddoggy/issues/57) Self context endpoint | `feature/f2-self-context` | #40 | backend + API |
@@ -59,6 +60,7 @@ Objetivo: ≤ 400 líneas relevantes por PR. Más de 800 no se acepta ([ADR-009]
 
 Candidatos conocidos a división:
 
+- **F2-08:** dividido el 2026-10-02 en tres. F2-08A (#70) lleva el lenguaje visual y el cliente de API; F2-08B (#74), las pantallas de login y de selección de organización; F2-08 (#45) se queda con la guardia de `/o/[orgSlug]`, la navegación por permisos y el cierre de sesión, y sigue cerrando la serie.
 - **F2-06:** dividido el 2026-10-02. Con las correcciones de la revisión adversarial medía 836 líneas relevantes: F2-06 (#43) se queda con el servicio de alta y sus fronteras, y F2-06B (#68) lleva el comando que lo expone al operador.
 - **F2-03A:** dividido el 2026-10-02. El bloqueo progresivo pasó a F2-03B (#61), y de este se separó después F2-03D (#76): la dirección del cliente detrás del proxy, que es infraestructura. La implementación completa medía 849 líneas relevantes, así que F2-03A (#40) se queda con el token CSRF, el login y la sesión actual, y F2-03C (#67) lleva el cierre de sesión, la caducidad por inactividad y absoluta, las organizaciones del usuario y la purga.
 - **F2-05:** dividido antes de implementar (2026-10-01). El diseño estimó unas 1.290 líneas para el alcance original de #42. Quedan F2-05A (#42, motor de autorización), F2-05B (#50, integración con DRF) y F2-05C (#51, anti-escalada y último Owner). B y C dependen solo de A y no entre sí. La caché de permisos sigue fuera.

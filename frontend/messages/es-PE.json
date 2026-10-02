@@ -41,5 +41,30 @@
       "ORG_SUSPENDED": "Esta organización está suspendida.",
       "INTERNAL_ERROR": "Algo salió mal de nuestro lado. Inténtalo de nuevo en unos minutos."
     }
+  },
+  "auth": {
+    "pageTitle": "Entrar",
+    "eyebrow": "Good Doggy / Acceso",
+    "title": "Tu espacio te espera.",
+    "intro": "Entra con el correo y la contraseña de tu cuenta.",
+    "email": "Correo",
+    "password": "Contraseña",
+    "emailRequired": "Escribe tu correo.",
+    "passwordRequired": "Escribe tu contraseña.",
+    "submit": "Entrar",
+    "submitting": "Entrando…",
+    "stalled": "El servidor tarda demasiado en responder. Inténtalo de nuevo.",
+    "rateLimited": "Demasiados intentos. Podrás volver a probar en {minutes, plural, one {# minuto} other {# minutos}}.",
+    "help": "¿No puedes entrar? Pide ayuda a quien administra tu organización."
+  },
+  "organizations": {
+    "pageTitle": "Organizaciones",
+    "eyebrow": "Good Doggy / Organizaciones",
+    "title": "Elige dónde trabajar.",
+    "intro": "Estas son las organizaciones a las que perteneces.",
+    "loading": "Cargando tus organizaciones…",
+    "count": "{count, plural, one {# organización} other {# organizaciones}}.",
+    "emptyTitle": "Aún no perteneces a ninguna organización.",
+    "emptyBody": "Pide a quien administra la tuya que te invite con este correo."
   }
 }
