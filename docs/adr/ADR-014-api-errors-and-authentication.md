@@ -32,6 +32,7 @@ Toda respuesta de error de la API es un objeto JSON con esta forma:
 |---|---|---|
 | 400 | `VALIDATION_ERROR` | El cuerpo no cumple el contrato |
 | 400 | `PARSE_ERROR` | JSON mal formado |
+| 400 | `BAD_REQUEST` | Petición que Django rechaza antes de llegar a una vista |
 | 401 | `NOT_AUTHENTICATED` | No hay sesión válida |
 | 401 | `INVALID_CREDENTIALS` | Solo en el login: credenciales rechazadas |
 | 403 | `CSRF_FAILED` | Método no seguro sin token CSRF válido |
@@ -47,7 +48,7 @@ Toda respuesta de error de la API es un objeto JSON con esta forma:
 Dos piezas producen este cuerpo, con un mismo serializador:
 
 - un manejador de excepciones único de DRF, para los errores que nacen dentro de una vista;
-- un middleware para las rutas `/api/`, que convierte al contrato cualquier respuesta de error que Django genere fuera de una vista: una ruta sin resolver, una excepción en un middleware, o los 400 y 403 de Django (por ejemplo `SessionInterrupted` o un cuerpo demasiado grande). No depende de `DEBUG`.
+- un middleware para las rutas `/api/`, que convierte al contrato cualquier respuesta de error que Django genere fuera de una vista: una ruta sin resolver, una excepción en un middleware, o los 400 y 403 de Django (por ejemplo un cuerpo demasiado grande). No depende de `DEBUG`.
 
 El middleware de tenant ya emite `{"code": …}`. "Idéntico" significa el mismo código de estado y el mismo documento JSON. Un servicio puede añadir códigos de dominio (por ejemplo `LAST_OWNER`) siguiendo la misma forma; cada uno se documenta en el contrato OpenAPI.
 
@@ -63,8 +64,8 @@ El middleware de tenant ya emite `{"code": …}`. "Idéntico" significa el mismo
 
 ### 3. Semántica de 401, 403 y 404
 
-- **401 `NOT_AUTHENTICATED`:** no hay sesión, caducó o fue revocada. Se comprueba **antes** que cualquier otra cosa en una ruta de tenant: sin sesión no se puede saber si una organización existe.
-- **403:** hay sesión, pero la petición no se permite. `CSRF_FAILED` es la excepción que también aplica sin sesión.
+- **401 `NOT_AUTHENTICATED`:** no hay sesión, caducó o fue revocada. En una ruta de tenant se comprueba **antes de resolver la organización**: sin sesión no se puede saber si una organización existe.
+- **403:** hay sesión, pero la petición no se permite. `CSRF_FAILED` es la excepción que también aplica sin sesión: en un método no seguro el token CSRF se comprueba primero, así que sin token la respuesta es 403 `CSRF_FAILED` haya o no sesión, y con token válido y sin sesión es 401. Ninguna de las dos revela nada de una organización.
 - **404 `NOT_FOUND`:** en una ruta de tenant, el cuerpo es **exactamente** `{"code": "NOT_FOUND"}`, sin `message`, y es idéntico para una organización que no existe, una organización sin membresía activa del usuario, un objeto inexistente, un objeto de otra organización y un objeto fuera del alcance del usuario (ADR-001 §5.6).
 - **Login:** el mismo 401 `INVALID_CREDENTIALS`, con el mismo cuerpo, para un email desconocido, una contraseña incorrecta y un usuario desactivado. El motivo real solo queda en la auditoría de plataforma (ADR-013). El límite de intentos (429 `RATE_LIMITED`) se cuenta por IP y por identificador presentado, exista o no la cuenta, y se evalúa antes de comprobar las credenciales: el 429 tampoco distingue un email desconocido de uno real.
 

@@ -140,6 +140,6 @@ El mantenedor puede autorizar un programa de entrega continua. **Está activo so
 
 Mientras esté activo, el agente elige el siguiente work item, crea los issues que falten, ajusta dependencias y estados, y hace squash merge de sus propios PRs, **solo** si se cumplen los diez gates de ADR-015 §2: alcance completo, tests focales, revisión adversarial independiente, cero `FIX NOW`, validación completa, CI verde en el HEAD exacto, sin conversaciones abiertas, diff final revisado, sin trabajo fuera de alcance que bloquee y sin bloqueos de seguridad.
 
-- Merge con `gh pr merge <N> --squash --match-head-commit <sha>`. El auto-merge de GitHub sigue prohibido. Antes del merge, un comentario en el PR deja el SHA y el estado de los gates.
-- Siguen prohibidos: forzar `main`, reescribir historia, desactivar checks, BYPASSRLS, exponer secretos y borrar datos de producción. El programa nunca aplica `large-pr-approved`: un cambio de más de 800 líneas se divide.
+- Merge con `gh pr merge <N> --squash --match-head-commit <sha>`. El auto-merge de GitHub sigue prohibido. Después del merge, un comentario en el PR deja el SHA mergeado y el estado de los gates.
+- Siguen prohibidos: forzar `main`, reescribir historia, modificar la protección de ramas, desactivar checks, BYPASSRLS, exponer secretos y borrar datos de producción. El programa nunca aplica `large-pr-approved`: un cambio de más de 800 líneas se divide.
 - Lo que cambia respecto al flujo normal: §2 (el programa pone los estados de los issues), §4 (ante una duda de alcance elige la opción más conservadora y la documenta, en lugar de esperar respuesta), §6, §7, §9 y §10 (merge y revisión). Todo lo demás, y todo fuera del programa, rige sin excepción.

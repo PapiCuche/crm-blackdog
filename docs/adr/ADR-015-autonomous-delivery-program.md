@@ -63,7 +63,7 @@ Con varios issues en `status:ready`, el programa elige por este orden: camino cr
 
 ### 6. Trazabilidad
 
-Cada PR conserva el handoff de AGENTS.md §9, con la revisión adversarial resumida: hallazgos, clasificación y correcciones. Antes del merge, el programa deja en el PR un **comentario** con el SHA mergeado y el estado de los diez gates. El cuerpo del PR no se edita después del merge: volvería a lanzar `PR governance (trusted)` sobre un issue ya cerrado.
+Cada PR conserva el handoff de AGENTS.md §9, con la revisión adversarial resumida: hallazgos, clasificación y correcciones. Después del merge, el programa deja en el PR un **comentario** con el SHA mergeado y el estado de los diez gates. El cuerpo del PR no se edita después del merge: volvería a lanzar `PR governance (trusted)` sobre un issue ya cerrado.
 
 ## Alternatives considered
 
