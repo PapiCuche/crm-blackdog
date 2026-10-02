@@ -100,6 +100,9 @@ REST_FRAMEWORK = {
     "DEFAULT_PARSER_CLASSES": ["rest_framework.parsers.JSONParser"],
     "DEFAULT_AUTHENTICATION_CLASSES": [],
     "UNAUTHENTICATED_USER": None,  # sin clases de autenticación hasta F2-03A
+    # F2-05B: denegación por defecto. Las vistas de plataforma declaran las suyas.
+    "DEFAULT_PERMISSION_CLASSES": ["apps.access.permissions.HasPermission"],
+    "DEFAULT_FILTER_BACKENDS": ["apps.access.permissions.ScopeFilter"],
 }
 SPECTACULAR_SETTINGS = {
     "TITLE": "Good Doggy CRM API",
