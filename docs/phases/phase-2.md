@@ -93,7 +93,7 @@ Un ADR `Accepted` no se modifica: si una decisión lo contradice o amplía, se p
 - **Motivos:** es simple y durable; PostgreSQL ya lo comparten todas las instancias; revocar es borrar una fila; no añade dependencias (D-F2-4) ni una segunda invalidación en Redis. ADR-003 §2 permite pasar a caché Redis con respaldo en BD más adelante, sin ADR nuevo, si las lecturas de sesión llegan a ser un coste medido.
 - **Tabla:** `django_session` es platform-owned, sin RLS de tenant. F2-03A verifica los privilegios de `crm_app` sobre ella y no usa el rol migrador en el runtime.
 - **Cookie:** `HttpOnly`, `SameSite=Lax`, `Path=/`, sin `Domain`. En producción, `Secure` y nombre `__Host-crm_session`. En local sobre HTTP, nombre `crm_session`: el prefijo `__Host-` solo es válido con HTTPS ([ADR-014](../adr/ADR-014-api-errors-and-authentication.md) §2). Producción no se relaja.
-- **Caducidad:** 12 horas de inactividad y 7 días absolutos. Las filas caducadas se purgan con una tarea de plataforma.
+- **Caducidad:** 12 horas de inactividad y 7 días absolutos. Las filas caducadas se purgan con una tarea de plataforma. Django solo renueva la caducidad al guardar la sesión: F2-03A implementa la inactividad con un guardado con umbral (no una escritura por petición) y el límite absoluto con una marca de inicio de sesión, comprobada antes de resolver el tenant. Una petición en curso cuya sesión se borra acaba en 401 `NOT_AUTHENTICATED`.
 - **Fuera de F2-03A:** el vínculo usuario-sesión para cerrar las demás sesiones y listar las activas (E01-07, E01-11). En base de datos se resuelve con una columna o tabla propia.
 
 Otras decisiones cerradas el 2026-10-02 en [ADR-014](../adr/ADR-014-api-errors-and-authentication.md), que implementa F2-12 (#59): cuerpo de error único (OBS-F2-05A-5), CSRF en todo método no seguro y clase de autenticación (OBS-F2-05B-1), semántica de 401, 403 y 404, y separación entre rutas de plataforma y de tenant. La política de contraseñas vigente (OBS-F2-01-3) no cambia.
@@ -127,11 +127,19 @@ Del roadmap §S.1, además del DoD general:
 - Tests T14 y T15 de `organization_memberships`.
 - Auditoría de login y de roles.
 
-El bloque inicial F2-00 … F2-08 no cierra la fase: MFA y la gestión de roles llegan con las historias E01 pendientes.
+El bloque inicial F2-00 … F2-12 no cierra la fase: MFA y la gestión de roles llegan con las historias E01 pendientes.
 
 ## Observaciones vivas (de revisiones)
 
 Se registran como `OBS-F2-<nn>-<n>`.
+
+### OBS-F2-09-1 — El tiempo de respuesta distingue una organización que existe
+El 404 de una ruta de tenant es idéntico en estado y cuerpo para "no existe" y "no eres miembro". El trabajo no lo es: `resolve_tenant` solo abre `user_scope` y consulta la membresía cuando la organización existe. Un usuario con sesión podría medir esa diferencia y saber qué slugs existen.
+- F2-12 (#59) hace la consulta de membresía siempre, exista o no la organización.
+
+### OBS-F2-09-2 — El límite de intentos de acceso necesita su propio almacén
+`platform_audit_logs` es solo de inserción para `crm_app` (ADR-013): el límite de intentos no puede contar los fallos leyendo la auditoría. Necesita un almacén compartido entre instancias (una tabla platform-owned o una caché compartida), contado por IP y por identificador presentado, exista o no la cuenta (ADR-014 §3).
+- Decidir en F2-03A o F2-03B, con D-F2-4.
 
 ### OBS-F2-05C-1 — Ningún Owner puede ampliar el rol Owner
 Por PO-2, quien tiene un rol no cambia sus concesiones, y todo Owner tiene el rol Owner. Un permiso sensible solo lo delega un Owner. Resultado: ningún Owner puede usar `grant_permission` para añadir concesiones al rol Owner, y nadie puede añadirle un permiso sensible. No hay excepción para el Owner ni para el staff de plataforma. Agrava OBS-F2-04-1: cada work item que amplíe el catálogo debe llevar esos permisos al rol Owner de las organizaciones existentes por otra vía (migración de datos o un paso de plataforma), y decidirlo antes de añadir el primero.
@@ -146,7 +154,7 @@ No hay API HTTP (E01-08) ni bootstrap (F2-06). Tampoco existen revocar una conce
 Comparten el bloqueo del rol Owner. Un cambio que escribe lo mantiene hasta el COMMIT de la petición; una denegación lo libera al deshacer su savepoint. `ensure_owner_remains` no abre savepoint: su bloqueo dura hasta el final del `tenant_scope`, también si deniega, porque quien la llama debe escribir bajo ese mismo bloqueo. Es deliberado: son operaciones poco frecuentes y así la relectura de permisos y el recuento de Owners no tienen carreras. Una organización sin rol Owner no admite ningún cambio.
 
 ### OBS-F2-05B-1 — Las vistas de DRF no pasan por la protección CSRF de Django
-**Decisión:** [ADR-014](../adr/ADR-014-api-errors-and-authentication.md) §2–3; la implementa F2-12 (#59). `APIView.as_view()` marca la vista como `csrf_exempt`; DRF solo comprueba CSRF dentro de `SessionAuthentication`, y el proyecto no tiene clases de autenticación hasta F2-03A. Hoy no hay endpoints reales. Antes del primer endpoint que escriba, F2-03A debe aportar una clase de autenticación que exija CSRF. Al añadirla, DRF solo responderá 401 en lugar de 403 a una petición sin autenticar si `authenticate_header()` de la primera clase de `authentication_classes` devuelve un valor; `SessionAuthentication` hereda el de `BaseAuthentication`, que devuelve `None`, y sigue respondiendo 403, con otro `detail`.
+**Decisión:** [ADR-014](../adr/ADR-014-api-errors-and-authentication.md) §2–3; la implementa F2-12 (#59). `APIView.as_view()` marca la vista como `csrf_exempt`; DRF solo comprueba CSRF dentro de `SessionAuthentication`, y el proyecto no tiene clases de autenticación hasta F2-12. Hoy no hay endpoints reales. Antes del primer endpoint que escriba, F2-12 aporta el control de CSRF para todo `/api/`. Al añadirla, DRF solo responderá 401 en lugar de 403 a una petición sin autenticar si `authenticate_header()` de la primera clase de `authentication_classes` devuelve un valor; `SessionAuthentication` hereda el de `BaseAuthentication`, que devuelve `None`, y sigue respondiendo 403, con otro `detail`.
 
 ### OBS-F2-05B-2 — `ScopeFilter` solo actúa en vistas genéricas
 DRF aplica los filtros en `GenericAPIView`, y solo donde la vista llama a `filter_queryset()` (el listado y el `get_object()` de serie). Una vista que consulte por su cuenta debe pasar su queryset por `scoped()` (por ejemplo `get_object_or_404(scoped(...), pk=…)`). La auditoría del URLconf es estática: rechaza las vistas genéricas que redefinen `get_object` o `filter_queryset`, las que redefinen los ganchos de permiso de DRF y las que usan una subclase de `HasPermission` o de `ScopeFilter`, pero no puede revisar una consulta escrita a mano ni el orden en que un handler propio escribe. `HasPermission.has_object_permission` queda como red de seguridad para quien llame a `check_object_permissions`: responde 404, pero con un cuerpo que puede diferir del de un objeto inexistente, así que no equivale a filtrar con `scoped()`. Un serializador de tenant nunca acepta del cliente la clave primaria ni `organization_id`: la clave primaria es única entre organizaciones, y un `id` escribible convierte esa unicidad en un oráculo de existencia y deja que un PATCH inserte una fila. Los modelos reales usan `uuid7_primary_key()` (`editable=False`), que DRF expone como solo lectura.
