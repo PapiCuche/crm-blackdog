@@ -320,7 +320,7 @@ Todavía no hay lectura desde la aplicación: solo el rol propietario puede cons
 
 ## Observabilidad (F1-07, ADR-011)
 
-Logs JSON en stdout (structlog + `logging` estándar, redactados con `core.redaction`) con `request_id`, `correlation_id` e IDs de tenant/actor. El `X-Request-ID` es siempre un UUIDv7 generado por la aplicación. La correlación pasa de HTTP a Celery por cabecera. Errores: `NoopReporter` sin `SENTRY_DSN`, `SentryReporter` endurecido con él. Diseño: [docs/architecture/observability.md](../docs/architecture/observability.md).
+Logs JSON en stdout (structlog + `logging` estándar, redactados con `core.redaction`) con `request_id`, `correlation_id` e IDs de tenant/actor. El `X-Request-ID` es siempre un UUIDv7 generado por la aplicación. La correlación pasa de HTTP a Celery por cabecera. El log de acceso de uvicorn está apagado (lleva la dirección del cliente y la query string; el redactor solo taparía los patrones de secreto): el log de peticiones es `http.request.completed`. Errores: `NoopReporter` sin `SENTRY_DSN`, `SentryReporter` endurecido con él. Diseño: [docs/architecture/observability.md](../docs/architecture/observability.md).
 
 ## Object storage y HTTP saliente (F1-08)
 
