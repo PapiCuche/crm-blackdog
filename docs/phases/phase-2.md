@@ -31,8 +31,9 @@ Cada work item es un issue con el alcance completo (Incluye / No incluye / crite
 | F2-11 | [#57](https://github.com/PapiCuche/crm-gooddoggy/issues/57) Self context endpoint | `feature/f2-self-context` | #40 | backend + API |
 | F2-12 | [#59](https://github.com/PapiCuche/crm-gooddoggy/issues/59) API error contract | `feature/f2-api-conventions` | #55 | backend |
 | F2-13 | [#64](https://github.com/PapiCuche/crm-gooddoggy/issues/64) API session authentication, CSRF and platform routes | `feature/f2-api-session-csrf` | #59 | backend |
-| F2-03B | [#61](https://github.com/PapiCuche/crm-gooddoggy/issues/61) Login attempt throttling | `feature/f2-login-throttle` | #40 | backend |
+| F2-03B | [#61](https://github.com/PapiCuche/crm-gooddoggy/issues/61) Login attempt throttling | `feature/f2-login-throttle` | #40, #76 | backend |
 | F2-03C | [#67](https://github.com/PapiCuche/crm-gooddoggy/issues/67) Session lifecycle and my organizations | `feature/f2-session-context` | #40 | backend + API |
+| F2-03D | [#76](https://github.com/PapiCuche/crm-gooddoggy/issues/76) Trusted proxy and client address | `feature/f2-trusted-proxy` | #40 | backend + infra |
 
 Mergeados: #37 … #39, #41, #42, #50 y #51. Lo que queda:
 
@@ -59,7 +60,7 @@ Objetivo: ≤ 400 líneas relevantes por PR. Más de 800 no se acepta ([ADR-009]
 Candidatos conocidos a división:
 
 - **F2-06:** dividido el 2026-10-02. Con las correcciones de la revisión adversarial medía 836 líneas relevantes: F2-06 (#43) se queda con el servicio de alta y sus fronteras, y F2-06B (#68) lleva el comando que lo expone al operador.
-- **F2-03A:** dividido el 2026-10-02. El bloqueo progresivo pasó a F2-03B (#61). La implementación completa medía 849 líneas relevantes, así que F2-03A (#40) se queda con el token CSRF, el login y la sesión actual, y F2-03C (#67) lleva el cierre de sesión, la caducidad por inactividad y absoluta, las organizaciones del usuario y la purga.
+- **F2-03A:** dividido el 2026-10-02. El bloqueo progresivo pasó a F2-03B (#61), y de este se separó después F2-03D (#76): la dirección del cliente detrás del proxy, que es infraestructura. La implementación completa medía 849 líneas relevantes, así que F2-03A (#40) se queda con el token CSRF, el login y la sesión actual, y F2-03C (#67) lleva el cierre de sesión, la caducidad por inactividad y absoluta, las organizaciones del usuario y la purga.
 - **F2-05:** dividido antes de implementar (2026-10-01). El diseño estimó unas 1.290 líneas para el alcance original de #42. Quedan F2-05A (#42, motor de autorización), F2-05B (#50, integración con DRF) y F2-05C (#51, anti-escalada y último Owner). B y C dependen solo de A y no entre sí. La caché de permisos sigue fuera.
 
 ## Historias E01 fuera de este bloque
@@ -176,7 +177,8 @@ Una cuenta que ya existe debe estar activa y tener contraseña utilizable. Una c
 - Una desactivación global del usuario (OBS-F2-05C-2) debe contar también con un alta que aún no ha confirmado.
 ### OBS-F2-03A-1 — La IP auditada depende de los proxies de confianza
 El login guarda en la auditoría la IP que resuelve el servidor ASGI (`REMOTE_ADDR`); nunca lee una cabecera. `uvicorn --proxy-headers` solo confía en `X-Forwarded-For` si la conexión viene de `FORWARDED_ALLOW_IPS` (por defecto `127.0.0.1`). En el stack de compose el backend recibe las peticiones de Caddy desde otra dirección, así que hoy la IP auditada es la del proxy.
-- F2-03B (#61) lo resuelve: limita los intentos por IP y necesita la del cliente. Configurar `FORWARDED_ALLOW_IPS` con la dirección del proxy, nunca `*` en un backend alcanzable desde fuera.
+- ✅ Resuelta en F2-03D (#76): en compose el proxy tiene una dirección fija y `FORWARDED_ALLOW_IPS` la nombra; en producción la variable es obligatoria y no admite `*`. Lo anterior describe el estado previo.
+- Queda fuera: con un balanceador delante de Caddy hacen falta `trusted_proxies` en Caddy y la red del balanceador en `FORWARDED_ALLOW_IPS`; el repositorio valida el formato del valor, no que describa la topología real.
 
 ### OBS-F2-11-1 — `IsMember`: una ruta de tenant sin permiso del catálogo
 `GET /api/v1/o/{slug}/me/` lo lee cualquier miembro activo, también sin roles: no existe un permiso para "leer mi propio contexto" y exigir uno dejaría sin interfaz a quien tenga un rol propio sin él. La vista declara `IsMember` en lugar de `HasPermission`.

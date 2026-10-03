@@ -42,9 +42,9 @@ DATABASE_MIGRATOR_URL=postgres://crm_migrator:…@localhost:5432/crm uv run pyte
 | `config.settings.base` | Común | `DJANGO_SECRET_KEY` y `DATABASE_URL` obligatorias (el proceso no arranca sin ellas) |
 | `config.settings.local` | Desarrollo | `DEBUG=True`, valores locales por defecto (nunca producción) |
 | `config.settings.test` | pytest | BD desde `DATABASE_URL` |
-| `config.settings.production` | Producción | `DEBUG=False` forzado; falla si `DJANGO_ALLOWED_HOSTS` está vacío, si la clave es insegura (< 50 caracteres o `django-insecure…`) o si el entorno contiene `DATABASE_MIGRATOR_URL`/`CRM_MIGRATOR_PASSWORD` (ADR-002 §1.1; el error nombra la variable, nunca su valor). Tras validar los hosts añade `127.0.0.1`, `localhost` y `[::1]` para las sondas locales. HSTS, cookies seguras, redirección SSL (excepto `/health/`) |
+| `config.settings.production` | Producción | `DEBUG=False` forzado; falla si `DJANGO_ALLOWED_HOSTS` está vacío, si `FORWARDED_ALLOW_IPS` falta o es `*` (ver «Dirección del cliente»), si la clave es insegura (< 50 caracteres o `django-insecure…`) o si el entorno contiene `DATABASE_MIGRATOR_URL`/`CRM_MIGRATOR_PASSWORD` (ADR-002 §1.1; el error nombra la variable, nunca su valor). Tras validar los hosts añade `127.0.0.1`, `localhost` y `[::1]` para las sondas locales. HSTS, cookies seguras, redirección SSL (excepto `/health/`) |
 
-Variables de producción: `DJANGO_SECRET_KEY`, `DJANGO_ALLOWED_HOSTS`, `DATABASE_URL`, `DJANGO_CSRF_TRUSTED_ORIGINS` (opcional), `DJANGO_LOG_LEVEL` (opcional). En F1-03 `DATABASE_URL` pasa a ser exclusivamente el rol `crm_app` (ADR-002 §1.1).
+Variables de producción: `DJANGO_SECRET_KEY`, `DJANGO_ALLOWED_HOSTS`, `FORWARDED_ALLOW_IPS`, `DATABASE_URL`, `DJANGO_CSRF_TRUSTED_ORIGINS` (opcional), `DJANGO_LOG_LEVEL` (opcional). En F1-03 `DATABASE_URL` pasa a ser exclusivamente el rol `crm_app` (ADR-002 §1.1).
 
 ## Roles de BD y tenancy (F1-03, ADR-002)
 
@@ -229,6 +229,17 @@ La auditoría del URLconf falla si:
 - **Todo 401** lleva `WWW-Authenticate: Session`, también `INVALID_CREDENTIALS`.
 - **Contrato.** Las rutas están en `openapi/schema.yaml` (esquema de seguridad `sessionCookie`) y en el cliente generado del frontend.
 
+## Dirección del cliente y proxy de confianza (F2-03D, ADR-003 §1, ADR-013 §4)
+
+La dirección del cliente es la que resuelve el servidor ASGI (`REMOTE_ADDR`). El código nunca lee `X-Forwarded-For`: lo hace `uvicorn --proxy-headers`, y solo cuando la conexión llega de una dirección de `FORWARDED_ALLOW_IPS`. De esa dirección dependen la auditoría de plataforma y el límite de intentos de acceso (F2-03B).
+
+- **Stack de compose:** Caddy tiene una dirección fija (`STACK_PROXY_IP`, por defecto `172.31.250.2`) en la subred del stack, fuera del rango que Docker reparte, y es la única de la que el backend acepta la cabecera. Caddy descarta el `X-Forwarded-For` que envíe el cliente y pone la dirección de quien se conecta a él.
+- **Producción:** `FORWARDED_ALLOW_IPS` es obligatoria en todos los servicios del backend (comparten la configuración). Admite direcciones IP y redes en notación CIDR sin bits de host (`10.0.3.2`, `10.0.5.0/24`), separadas por comas. No arranca con `*`, con una red más ancha que `/8` (IPv4) o `/16` (IPv6), con un nombre de host ni con cualquier otro texto: uvicorn lo ignoraría sin avisar. Tampoco con `UVICORN_FORWARDED_ALLOW_IPS` en el entorno, que uvicorn antepone.
+- **Varios saltos:** el backend debe confiar en todos los proxies que añaden su dirección a la cabecera. uvicorn la recorre de derecha a izquierda y se queda con la primera dirección en la que no confía. Con un balanceador o una CDN delante de Caddy hacen falta las dos cosas: `trusted_proxies` en Caddy con la red del balanceador (si no, Caddy sustituye la cabecera) y esa misma red en `FORWARDED_ALLOW_IPS` junto a la dirección de Caddy (`10.0.3.2,10.0.5.0/24`). Una red de confianza solo debe contener proxies.
+- **Cómo se nota un valor incorrecto:** en un despliegue con clientes de direcciones distintas, todos los accesos de `platform_audit_logs` tienen la misma `ip`: la del primer salto sin declarar. Con el límite de intentos activo, los fallos de todos los usuarios cuentan como una sola dirección.
+- **En el stack local** todos los accesos desde el propio equipo llevan la misma dirección, la puerta de enlace de la red de Docker (por defecto `172.31.250.128`): es lo normal. Nunca debe ser `STACK_PROXY_IP`.
+- **Nunca `*`:** uvicorn tomaría la primera dirección de la cabecera, que escribe el cliente.
+
 ## Ciclo de la sesión y organizaciones del usuario (F2-03C, ADR-003 §2, D-F2-2)
 
 | Ruta de plataforma | Clase | Qué hace |
@@ -338,4 +349,4 @@ Ambos: solo `GET`/`HEAD`, `Cache-Control: no-cache`.
 docker build -t crm-backend backend/
 ```
 
-Imagen `python:3.14.7-slim` multi-stage, dependencias de `uv.lock` (`--frozen`, sin dev), usuario no root `10001`, `HEALTHCHECK` sobre `/health/live`, servidor `uvicorn` con `--proxy-headers` (IPs de confianza vía `FORWARDED_ALLOW_IPS`).
+Imagen `python:3.14.7-slim` multi-stage, dependencias de `uv.lock` (`--frozen`, sin dev), usuario no root `10001`, `HEALTHCHECK` sobre `/health/live`, servidor `uvicorn` con `--proxy-headers` (proxies de confianza en `FORWARDED_ALLOW_IPS`, obligatoria: ver «Dirección del cliente y proxy de confianza»).

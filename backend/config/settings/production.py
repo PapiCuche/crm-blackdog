@@ -1,5 +1,6 @@
 """Producción. Sin valores por defecto inseguros: falla al arrancar si falta algo crítico."""
 
+import ipaddress
 import os
 from urllib.parse import urlsplit
 
@@ -40,6 +41,30 @@ if _storage.geturl() and (_storage.scheme != "https" or _storage.username or _st
 # así una DJANGO_ALLOWED_HOSTS vacía sigue fallando y el operador no necesita conocer la sonda.
 LOOPBACK_HOSTS = ("127.0.0.1", "localhost", "[::1]")
 ALLOWED_HOSTS = list(dict.fromkeys([*ALLOWED_HOSTS, *LOOPBACK_HOSTS]))
+
+# La dirección del cliente (auditoría de plataforma, límite de intentos) es la que resuelve
+# uvicorn, que solo acepta `X-Forwarded-For` de estas direcciones o redes. Sin declararlas,
+# todos los clientes tendrían la del proxy; con `*` o una red que lo abarque todo, cada cliente
+# elegiría la suya. uvicorn ignora en silencio lo que no es una IP o una red: aquí no arranca.
+FORWARDED_ALLOW_IPS = env.csv_list("FORWARDED_ALLOW_IPS")
+_WIDEST = {4: 8, 6: 16}  # prefijo mínimo: una red de proxies nunca es media Internet
+
+
+def _is_proxy(item: str) -> bool:
+    try:
+        network = ipaddress.ip_network(item)  # estricto, como uvicorn: `10.0.0.2/24` no vale
+    except ValueError:
+        return False
+    return network.prefixlen >= _WIDEST[network.version]
+
+
+if not FORWARDED_ALLOW_IPS or not all(map(_is_proxy, FORWARDED_ALLOW_IPS)):
+    raise ImproperlyConfigured(
+        "FORWARDED_ALLOW_IPS es obligatorio en production: direcciones o redes de los proxies"
+        " (10.0.3.2, 10.0.5.0/24), nunca * ni una red que lo abarque todo"
+    )
+if "UVICORN_FORWARDED_ALLOW_IPS" in os.environ:  # uvicorn la prefiere a la que se validó
+    raise ImproperlyConfigured("UVICORN_FORWARDED_ALLOW_IPS no se admite: usar FORWARDED_ALLOW_IPS")
 
 # Detrás del reverse proxy (ADR-003): el proxy termina TLS y envía X-Forwarded-Proto.
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")

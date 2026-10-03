@@ -19,6 +19,9 @@ x-runtime: &runtime
     DJANGO_SETTINGS_MODULE: config.settings.local
     DJANGO_ALLOWED_HOSTS: backend
     ENFORCE_RUNTIME_DB_ROLE: "true"
+    # uvicorn solo acepta `X-Forwarded-For` de esta dirección: la de Caddy, fija en la red del
+    # stack. Así la IP del cliente llega al backend (auditoría y límite de intentos de acceso).
+    FORWARDED_ALLOW_IPS: ${STACK_PROXY_IP:-172.31.250.2}
     DATABASE_URL: postgres://crm_app:${CRM_APP_PASSWORD:?definir en infra/env/.env}@postgres:5432/${CRM_DB_NAME:-crm}
     CELERY_BROKER_URL: redis://redis:6379/0
     STORAGE_BACKEND: s3
@@ -141,6 +144,9 @@ services:
       - "127.0.0.1:${PROXY_HOST_PORT:-8080}:80"
     volumes:
       - ./proxy/Caddyfile:/etc/caddy/Caddyfile:ro
+    networks:
+      default:
+        ipv4_address: ${STACK_PROXY_IP:-172.31.250.2}
     depends_on:
       frontend:
         condition: service_healthy
@@ -152,6 +158,14 @@ services:
     ports:
       - "127.0.0.1:${MAILPIT_UI_HOST_PORT:-8025}:8025"
       - "127.0.0.1:${MAILPIT_SMTP_HOST_PORT:-1025}:1025"
+
+# Subred propia: el proxy tiene una dirección fija fuera del rango que Docker reparte.
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: ${STACK_SUBNET:-172.31.250.0/24}
+          ip_range: ${STACK_IP_RANGE:-172.31.250.128/25}
 
 volumes:
   pgdata:
