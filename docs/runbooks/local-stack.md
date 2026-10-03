@@ -45,7 +45,7 @@ Aplicación: **http://localhost:8080**, same-origin:
 ## 3. Verificación
 
 ```bash
-curl -s http://localhost:8080/ | grep -o Operativo       # salud del backend vista por el frontend
+curl -s http://localhost:8080/status | grep -o Operativo # salud del backend vista por el frontend
 curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8080/api/schema/   # 200: contrato OpenAPI
 make check                                               # las verificaciones de CI (ver Makefile)
 ```

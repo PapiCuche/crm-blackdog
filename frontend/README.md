@@ -23,15 +23,16 @@ BACKEND_ORIGIN=http://127.0.0.1:8000 pnpm dev   # /api y /ws → Django (same-or
 
 ## Estructura
 
-- `src/app/`: `/` muestra el estado del backend (consultado desde el servidor); `/o/[orgSlug]` es la ruta de tenant con el App Shell; `/demo` es la demo visual (ver abajo).
+- `src/app/`: `/login` y `/o` son el acceso (ver «Acceso»); `/o/[orgSlug]` es la ruta de tenant con el App Shell; `/` lleva a `/o`; `/status` muestra el estado del backend (consultado desde el servidor); `/demo` es la demo visual (ver abajo).
 - `src/components/app-shell/`: barra lateral, barra superior y workspace, con el lenguaje del Figma GOOD DOGGY. En pantallas pequeñas la barra lateral va en un menú (`<dialog>` nativo, con su botón de cerrar), que se abre con JavaScript: sin él, o antes de hidratar, la navegación no es alcanzable por debajo de `lg`. WCAG AA, `prefers-reduced-motion`.
+- `src/components/auth/`: formulario de acceso y lista de organizaciones.
 - `src/components/ui/`: componentes shadcn/ui y primitivas de formulario (`TextField`).
 - `src/lib/api/`: cliente generado por orval. **Nunca** tipos de API a mano: si cambia el contrato, regenerar el schema del backend y después ejecutar `pnpm api:generate`.
 - `src/lib/http.ts`: el único `fetch` hacia la API (ver «Cliente de API»).
 - `src/components/demo/`: landing y workspace de la demo visual, con sus datos ficticios.
 - `messages/es-PE.json`: catálogo i18n.
 
-Sin autenticación, RBAC ni pantallas de negocio todavía. Las pantallas reales se construyen en `/o/[orgSlug]`, sobre la API y el cliente generado, con el Figma GOOD DOGGY como referencia visual ([AGENTS.md](../AGENTS.md) §11).
+Sin pantallas de negocio todavía. Las pantallas reales se construyen en `/o/[orgSlug]`, sobre la API y el cliente generado, con el Figma GOOD DOGGY como referencia visual ([AGENTS.md](../AGENTS.md) §11).
 
 ## Lenguaje visual (F2-08A, D-F2-7)
 
@@ -64,6 +65,16 @@ orval genera las funciones y los hooks; todos llaman a `apiFetch` (`src/lib/http
 - Cancelación: TanStack Query cancela con su propia señal (cambio de `queryKey`, desmontaje, `cancelQueries`) y eso no llega a la pantalla como error. Con una señal propia, un `abort()` sin motivo se relanza como `AbortError`; un motivo propio o `AbortSignal.timeout` llegan como `NETWORK_ERROR`.
 - `apiErrorKey(error)` (`src/lib/api-errors.ts`) da la clave del mensaje en `messages/es-PE.json` → `errors.api`. Un `code` sin mensaje propio usa el genérico.
 - TanStack Query no repite una respuesta 4xx ni una escritura; reintenta una vez lo que no llegó o falló en el servidor.
+
+## Acceso (F2-08B, ADR-003 §1–3)
+
+- **`/login`:** correo y contraseña contra `POST /api/v1/auth/login/`. La sesión es la cookie `HttpOnly` que pone la API; el formulario no guarda nada. Quien ya tiene sesión pasa al destino en cuanto la API lo confirma: hasta entonces ve el formulario normal; desde la confirmación y hasta que la navegación termina, el botón queda ocupado. El formulario declara `method="post"`: un envío antes de que cargue el JavaScript no pone la contraseña en la URL.
+- **Foco y errores:** sin sesión, el foco va al correo. Si falta un campo, el foco va al primero que falta y su aviso se retira al escribir. Un segundo envío mientras el primero está en curso no cuenta. Sin red, el intento falla enseguida con su mensaje; no queda en cola. Si la API no contesta en 30 segundos, el formulario deja de esperar, lo dice y permite reintentar (la petición abandonada no se cancela: si acaba contestando bien, la sesión queda abierta y el siguiente envío entra). Un error de validación de la API (400) muestra el mensaje general, sin marcar el campo: los campos ya limitan su longitud a la del contrato.
+- **Rechazos:** el mensaje sale del `code` de la API. `INVALID_CREDENTIALS` no dice si falló el correo o la contraseña. `RATE_LIMITED` muestra la espera de `Retry-After`, en minutos hacia arriba.
+- **Destino (`next`):** `safeNext` (`src/lib/next-path.ts`) resuelve el valor como lo haría el navegador y devuelve la ruta ya resuelta, solo si queda en este origen. Se cambian por `/o`: una URL absoluta, `//`, `\`, un carácter de control, una ruta que tras resolver sus puntos empieza por `//` (`/.//otro.sitio`), el propio `/login` y lo que no es una página (`/api/`, `/_next/`). Garantiza que el destino no sale del origen, no que la página exista.
+- **`/o`:** organizaciones del usuario (`GET /api/v1/me/organizations/`). Con una sola entra directamente; con varias, lista para elegir; con ninguna, un estado vacío. `/o?elegir` muestra siempre la lista. Cada cambio de estado se anuncia en una región viva, y al reintentar tras un error el foco va al botón nuevo o a la lista que llegó.
+- **Sesión terminada:** `Providers` es el único punto que trata un 401 de una lectura: navega a `/login?next=…` con la ruta en la que estaba. Es una navegación completa, así que no queda estado en memoria.
+- La lista de organizaciones es la que devuelve la API para la sesión. Elegir una no autoriza nada: lo decide la API en cada petición a `/o/[orgSlug]`.
 
 ## Seguridad del navegador (F2-07)
 
