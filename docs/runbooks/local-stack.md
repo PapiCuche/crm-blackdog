@@ -83,6 +83,6 @@ Pide la contraseña del Owner dos veces y no la muestra. Debe cumplir la políti
 
 - **`ports are not available`:** el puerto del host está ocupado. Define el `*_HOST_PORT` correspondiente.
 - **`Pool overlaps with other one on this address space`:** la subred del stack choca con otra red de Docker. Define `STACK_SUBNET`, `STACK_IP_RANGE` y `STACK_PROXY_IP` en `infra/env/.env`.
-- **El proxy no arranca tras actualizar a F2-03D** (un error de dirección IP o de red): la red del stack cambió de subred. Compose la recrea al hacer `make up`; si no lo hace, `make down` y después `make up`. Los volúmenes se conservan.
+- **`network crm-blackdog_default has active endpoints`** (tras actualizar a F2-03D, o al cambiar entre ramas de antes y de después): la red del stack cambió de subred y Compose no puede recrearla con contenedores conectados. Pasa también en `make check`, que solo levanta `postgres` y `garage`: los deja parados y falla. `make down` y después `make up`; los volúmenes se conservan. Hasta entonces, el stack que sigue en marcha no tiene base de datos.
 - **`crm_test` no existe:** el volumen de PostgreSQL es anterior a F1-10. Reinicia en limpio (`down -v`).
 - **Garage `Invalid RPC secret key`:** `GARAGE_RPC_SECRET` debe tener 64 caracteres hex.
