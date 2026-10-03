@@ -38,7 +38,7 @@ jobs:
           persist-credentials: false
       - name: Tests de la lógica del gate
         working-directory: .github/scripts
-        run: python3 -m unittest -q test_backend_gate
+        run: python3 -m unittest -q test_backend_gate test_stack_proxy
       - name: Detectar cambios de backend (backend/**, .github/workflows/backend.yml)
         id: detect
         working-directory: .github/scripts
@@ -85,6 +85,7 @@ jobs:
         env:
           DJANGO_SETTINGS_MODULE: config.settings.production
           DJANGO_ALLOWED_HOSTS: app.example.com
+          FORWARDED_ALLOW_IPS: 127.0.0.1
           DATABASE_URL: postgres://ci:ci@localhost:5432/ci
         run: |
           DJANGO_SECRET_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(64))')" \
@@ -197,7 +198,7 @@ jobs:
           DJANGO_SECRET_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(64))')" \
             sh ../infra/docker/smoke-image.sh crm-backend:ci 8000 /health/live \
             -e DJANGO_SECRET_KEY -e DJANGO_ALLOWED_HOSTS=app.example.com \
-            -e DATABASE_URL=postgres://ci:ci@127.0.0.1:5432/ci
+            -e FORWARDED_ALLOW_IPS=127.0.0.1 -e DATABASE_URL=postgres://ci:ci@127.0.0.1:5432/ci
 
   gate:
     name: backend gate

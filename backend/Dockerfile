@@ -29,6 +29,7 @@ USER 10001:10001
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD ["python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=3).status == 200 else 1)"]
-# --proxy-headers: confía en X-Forwarded-* solo de FORWARDED_ALLOW_IPS (por defecto 127.0.0.1).
+# --proxy-headers: confía en X-Forwarded-* solo de FORWARDED_ALLOW_IPS, obligatoria con la
+# configuración por defecto de la imagen (production): ver «Dirección del cliente» en el README.
 # --no-access-log: el log de acceso de uvicorn no pasa por el redactor (incluye query strings).
 CMD ["uvicorn", "config.asgi:application", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--no-access-log"]

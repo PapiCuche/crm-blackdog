@@ -10,9 +10,11 @@ MIGRATOR_SECRET = secrets.token_hex(16)  # aleatorio por ejecución
 BASE_ENV: dict[str, str | None] = {
     "DJANGO_SECRET_KEY": GOOD_KEY,
     "DJANGO_ALLOWED_HOSTS": "app.example.com",
+    "FORWARDED_ALLOW_IPS": "10.0.0.2",
     "DATABASE_URL": "postgres://crm_app:secret@db:5432/crm",
     "DATABASE_MIGRATOR_URL": None,
     "CRM_MIGRATOR_PASSWORD": None,
+    "UVICORN_FORWARDED_ALLOW_IPS": None,
     "STORAGE_ENDPOINT_URL": None,
 }
 
@@ -46,6 +48,12 @@ def test_production_loads_with_valid_env(monkeypatch: pytest.MonkeyPatch) -> Non
     # D-F2-2: sesiones en base de datos (revocar es borrar una fila) y 12 horas.
     assert settings.SESSION_ENGINE.endswith(".db")  # type: ignore[attr-defined]
     assert settings.SESSION_COOKIE_AGE == 12 * 60 * 60  # type: ignore[attr-defined]
+    # F2-03D: el proxy de confianza es explícito; una red también vale.
+    assert settings.FORWARDED_ALLOW_IPS == ["10.0.0.2"]  # type: ignore[attr-defined]
+    networks = load_production(monkeypatch, FORWARDED_ALLOW_IPS="10.0.0.0/8, fd00::2, fd00::/16")
+    assert len(networks.FORWARDED_ALLOW_IPS) == 3  # type: ignore[attr-defined]
+    with pytest.raises(ImproperlyConfigured, match="FORWARDED_ALLOW_IPS"):
+        load_production(monkeypatch, FORWARDED_ALLOW_IPS=None)
 
 
 @pytest.mark.parametrize(
@@ -61,6 +69,22 @@ def test_production_loads_with_valid_env(monkeypatch: pytest.MonkeyPatch) -> Non
         {"DATABASE_URL": "mysql://u:p@h/db"},
         {"DJANGO_DEBUG": "true"},
         {"DJANGO_DEBUG": "maybe"},
+        {"FORWARDED_ALLOW_IPS": None},  # sin proxy declarado, todos los clientes son el proxy
+        {"FORWARDED_ALLOW_IPS": " , "},
+        {"FORWARDED_ALLOW_IPS": "*"},  # cualquiera elegiría su dirección
+        {"FORWARDED_ALLOW_IPS": "10.0.0.2, *"},
+        {"FORWARDED_ALLOW_IPS": "*, 10.0.0.2"},
+        {"FORWARDED_ALLOW_IPS": "0.0.0.0/0"},  # lo mismo que `*`
+        {"FORWARDED_ALLOW_IPS": "0.0.0.0/1,128.0.0.0/1"},
+        {"FORWARDED_ALLOW_IPS": "10.0.0.2, ::/0"},
+        {"FORWARDED_ALLOW_IPS": "proxy.internal"},  # uvicorn no confiaría en nadie, sin avisar
+        {"FORWARDED_ALLOW_IPS": "10.0.0.2/24"},  # bits de host: uvicorn tampoco la entiende
+        {"FORWARDED_ALLOW_IPS": "10.0.0.2 10.0.0.3"},
+        {"FORWARDED_ALLOW_IPS": '"10.0.0.2"'},
+        {"FORWARDED_ALLOW_IPS": "10.0.0.0/7"},  # más ancha que /8
+        {"FORWARDED_ALLOW_IPS": "fc00::/15"},  # más ancha que /16
+        {"FORWARDED_ALLOW_IPS": "::ffff:10.0.0.2"},  # nunca casaría con el proxy IPv4
+        {"UVICORN_FORWARDED_ALLOW_IPS": "10.0.0.2"},  # uvicorn la prefiere a la validada
     ],
 )
 def test_production_refuses_insecure_or_missing_config(

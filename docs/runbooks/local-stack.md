@@ -50,6 +50,8 @@ curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8080/api/schema/   # 2
 make check                                               # las verificaciones de CI (ver Makefile)
 ```
 
+Dirección del cliente (F2-03D): tras un login, la fila de `platform_audit_logs` lleva la puerta de enlace de la red del stack (por defecto `172.31.250.128`), nunca `STACK_PROXY_IP`, y una cabecera `X-Forwarded-For` enviada con `curl` no la cambia.
+
 `make check` ejecuta en local los checks de CI del backend, el frontend, `.github/scripts`, `docker compose config` y gitleaks.
 
 - Construye las imágenes de backend y frontend, comprueba el usuario no root y lanza la misma prueba de humo que CI (`infra/docker/smoke-image.sh`: `/health/live` y `/o/ci`). El contenedor usa un puerto libre de 127.0.0.1 y se elimina siempre.
@@ -80,5 +82,7 @@ Pide la contraseña del Owner dos veces y no la muestra. Debe cumplir la políti
 ## 5. Problemas frecuentes
 
 - **`ports are not available`:** el puerto del host está ocupado. Define el `*_HOST_PORT` correspondiente.
+- **`Pool overlaps with other one on this address space`:** la subred del stack choca con otra red de Docker. Define `STACK_SUBNET`, `STACK_IP_RANGE` y `STACK_PROXY_IP` en `infra/env/.env`.
+- **`network crm-blackdog_default has active endpoints`** (tras actualizar a F2-03D, o al cambiar entre ramas de antes y de después): la red del stack cambió de subred y Compose no puede recrearla mientras queden contenedores conectados. Se ha visto en `make check`, que solo levanta `postgres` y `garage`: los deja parados y falla. `make down` y después `make up`; los volúmenes se conservan. Hasta entonces, el stack que sigue en marcha no tiene base de datos.
 - **`crm_test` no existe:** el volumen de PostgreSQL es anterior a F1-10. Reinicia en limpio (`down -v`).
 - **Garage `Invalid RPC secret key`:** `GARAGE_RPC_SECRET` debe tener 64 caracteres hex.
