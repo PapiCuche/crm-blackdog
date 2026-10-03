@@ -116,7 +116,11 @@ LOGGING = {
     "loggers": {  # uvicorn configura handlers de texto antes que Django: se reemplazan
         "uvicorn": {"handlers": ["console"], "propagate": False},
         "uvicorn.error": {"handlers": [], "propagate": True},
-        "uvicorn.access": {"handlers": [], "propagate": True},
+        # El log de acceso lleva la dirección del cliente y la query string, y el redactor solo
+        # tapa patrones de secreto: sin handlers y sin propagar, uvicorn no lo emite (lo decide
+        # con `hasHandlers()`). `--no-access-log` solo no bastaba: propagarlo aquí lo volvía a
+        # encender. Queda `http.request.completed`.
+        "uvicorn.access": {"handlers": [], "propagate": False},
         "celery.app.trace": {"level": "WARNING"},  # "succeeded: <repr(resultado)>"
     },
 }

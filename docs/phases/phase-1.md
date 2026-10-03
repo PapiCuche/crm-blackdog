@@ -110,6 +110,8 @@ Fase 1 ignora `X-Request-ID`/`X-Correlation-ID` entrantes: aún no hay un proxy 
 
 ### OBS-F1-07-2 — Logs de uvicorn y del worker
 El log de acceso de uvicorn no pasa por el redactor, porque incluye el query string. La imagen arranca con `--no-access-log`; el log de peticiones es `http.request.completed`.
+- ✅ Corregido en F2-14 (#78): `LOGGING` propagaba `uvicorn.access` al handler JSON del logger `uvicorn`, y uvicorn volvía a emitir la línea de acceso pese a la opción. La línea pasaba por el redactor, que tapa los patrones de secreto (`token=…`) pero no la dirección del cliente ni el resto de la query string. Ahora ese logger no tiene handlers ni propaga, y un test lo fija.
+- Queda abierto: el handshake de un WebSocket se registra en `uvicorn.error` (INFO) con la dirección del cliente, la ruta y la query string, también tras el redactor. Hoy no hay consumidores reales; el primero que exista debe quitar esa línea o subir el nivel de `uvicorn.error` en el servicio `ws`. Con `--log-level debug`, que la imagen no usa, uvicorn registra además las cabeceras de la petición WebSocket.
 - Los demás loggers de uvicorn se reencaminan al handler JSON en LOGGING.
 - Los mensajes que uvicorn emite **antes** de cargar Django (arranque) conservan su formato hasta que F1-10 defina el arranque (por ejemplo, `--log-config`).
 - Celery no instala su propio logging (receptor de `setup_logging`).

@@ -6,6 +6,7 @@ Los secretos de prueba se construyen en ejecución (gitleaks sin allowlist). Nin
 import io
 import json
 import logging
+import logging.config
 from collections.abc import Iterator
 from typing import Any
 from uuid import UUID, uuid4
@@ -112,6 +113,24 @@ def test_uvicorn_and_celery_trace_loggers_use_the_json_pipeline() -> None:
     assert config["loggers"]["uvicorn"]["handlers"] == ["console"]
     assert config["loggers"]["uvicorn.error"] == {"handlers": [], "propagate": True}
     assert config["loggers"]["celery.app.trace"]["level"] == "WARNING"
+
+
+def test_the_uvicorn_access_log_stays_off() -> None:
+    """Lleva la dirección del cliente y la query string. uvicorn lo emite si el logger tiene
+    algún handler efectivo, propio o heredado: con la configuración del proyecto no lo tiene."""
+    access = logging.getLogger("uvicorn.access")
+    previous = access.handlers[:], access.propagate
+    access.addHandler(logging.StreamHandler())  # lo que uvicorn instala antes de cargar Django
+    try:
+        # Solo la entrada de este logger: `dictConfig` entero es global (cierra y quita los
+        # handlers del root, también los de pytest) y eso no se deshace desde aquí.
+        config: dict[str, Any] = settings.LOGGING
+        configurator = logging.config.DictConfigurator(config)
+        configurator.configure_logger("uvicorn.access", config["loggers"]["uvicorn.access"])
+        assert not access.hasHandlers() and not access.propagate
+        assert logging.getLogger("uvicorn.error").hasHandlers()  # los errores sí se registran
+    finally:
+        access.handlers[:], access.propagate = previous
 
 
 def test_http_request_ids_are_generated_and_do_not_leak(out: Output) -> None:
