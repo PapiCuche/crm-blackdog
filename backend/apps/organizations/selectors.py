@@ -62,5 +62,6 @@ def organizations_for_user(user: Any) -> list[OrganizationSummary]:
         )
     rows = Organization.objects.filter(id__in=ids, status__in=ACCESSIBLE_STATUSES)
     return [
-        OrganizationSummary(*row) for row in rows.order_by("name").values_list("id", "slug", "name")
+        OrganizationSummary(*row)
+        for row in rows.order_by("name", "slug").values_list("id", "slug", "name")
     ]

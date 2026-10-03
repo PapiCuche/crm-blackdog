@@ -99,7 +99,7 @@ Un ADR `Accepted` no se modifica: si una decisión lo contradice o amplía, se p
 - **Motivos:** es simple y durable; PostgreSQL ya lo comparten todas las instancias; revocar es borrar una fila; no añade dependencias (D-F2-4) ni una segunda invalidación en Redis. ADR-003 §2 permite pasar a caché Redis con respaldo en BD más adelante, sin ADR nuevo, si las lecturas de sesión llegan a ser un coste medido.
 - **Tabla:** `django_session` es platform-owned, sin RLS de tenant. F2-03A verifica los privilegios de `crm_app` sobre ella y no usa el rol migrador en el runtime.
 - **Cookie:** `HttpOnly`, `SameSite=Lax`, `Path=/`, sin `Domain`. En producción, `Secure` y nombre `__Host-crm_session`. En local sobre HTTP, nombre `crm_session`: el prefijo `__Host-` solo es válido con HTTPS ([ADR-014](../adr/ADR-014-api-errors-and-authentication.md) §2). Producción no se relaja.
-- **Caducidad:** 12 horas de inactividad y 7 días absolutos. Las filas caducadas se purgan con una tarea de plataforma. Django solo renueva la caducidad al guardar la sesión: F2-03A (#40) solo fija 12 horas desde el inicio de sesión (`SESSION_COOKIE_AGE`); F2-03C (#67) implementa la inactividad con un guardado con umbral (no una escritura por petición) y el límite absoluto con una marca de inicio de sesión, comprobada antes de resolver el tenant. Una petición en curso cuya sesión se borra acaba en 401 `NOT_AUTHENTICATED`.
+- **Caducidad:** 12 horas de inactividad y 7 días absolutos. Las filas caducadas se purgan con una tarea de plataforma. Django solo renueva la caducidad al guardar la sesión: F2-03A (#40) solo fija 12 horas desde el inicio de sesión (`SESSION_COOKIE_AGE`); F2-03C (#67) implementa la inactividad con un guardado con umbral (no una escritura por petición) y el límite absoluto con una marca de inicio de sesión, comprobada antes de resolver el tenant. Una sesión borrada deja de autenticar en la petición siguiente (401 `NOT_AUTHENTICATED`); la que ya había pasado el control de la sesión termina con normalidad. Si la fila desaparece justo cuando se va a renovar, esa petición acaba en 401, no en un error.
 - **Fuera de F2-03A:** el vínculo usuario-sesión para cerrar las demás sesiones y listar las activas (E01-07, E01-11). En base de datos se resuelve con una columna o tabla propia.
 
 Otras decisiones cerradas el 2026-10-02 en [ADR-014](../adr/ADR-014-api-errors-and-authentication.md), que implementan F2-12 (#59) y F2-13 (#64): cuerpo de error único (OBS-F2-05A-5), CSRF en todo método no seguro y clase de autenticación (OBS-F2-05B-1), semántica de 401, 403 y 404, y separación entre rutas de plataforma y de tenant. La política de contraseñas vigente (OBS-F2-01-3) no cambia.
@@ -178,7 +178,19 @@ Una cuenta que ya existe debe estar activa y tener contraseña utilizable. Una c
 El login guarda en la auditoría la IP que resuelve el servidor ASGI (`REMOTE_ADDR`); nunca lee una cabecera. `uvicorn --proxy-headers` solo confía en `X-Forwarded-For` si la conexión viene de `FORWARDED_ALLOW_IPS` (por defecto `127.0.0.1`). En el stack de compose el backend recibe las peticiones de Caddy desde otra dirección, así que hoy la IP auditada es la del proxy.
 - F2-03B (#61) lo resuelve: limita los intentos por IP y necesita la del cliente. Configurar `FORWARDED_ALLOW_IPS` con la dirección del proxy, nunca `*` en un backend alcanzable desde fuera.
 
+### OBS-F2-03C-1 — La caducidad solo se aplica a peticiones HTTP
+`SessionLifetimeMiddleware` es un middleware de Django: una conexión WebSocket (Channels) no pasa por él. Hoy los consumidores reales no existen.
+- El primer consumidor que autentique por sesión debe aplicar las mismas tres reglas al conectar (inactividad, límite absoluto, usuario activo) y cerrar la conexión cuando la sesión deje de valer.
+
+### OBS-F2-03C-2 — Lo que la renovación de la sesión no cubre
+- **Respuesta tardía.** Una petición que renueva la sesión vuelve a emitir su cookie al responder. Si mientras tanto otra pestaña cerró la sesión y abrió otra, esa respuesta devuelve al navegador el identificador que ya no vale: la siguiente petición acaba en 401 y hay que entrar de nuevo. No expone nada (el identificador está muerto); Django tiene la misma carrera en cualquier vista que guarde la sesión.
+- **Reloj.** Las marcas de inicio y de actividad usan el reloj del servidor de aplicación y solo las escribe el servidor. Con relojes desfasados entre nodos, el límite de 7 días se alarga lo que dure el desfase, y una marca de actividad adelantada retrasa la renovación.
+- **Fallo pasajero de la base de datos al renovar.** La petición acaba en 500 y la sesión sigue valiendo. Solo se cierra cuando la fila ya no existe.
+- **Toda ruta.** El middleware actúa en cualquier ruta que reciba la cookie, no solo bajo `/api/`: lee la sesión y el usuario también ahí.
+
 ### OBS-F2-03A-2 — La sesión de un usuario desactivado se ignora, no se destruye
+✅ Resuelta en F2-03C (#67): el middleware de caducidad destruye la sesión al detectarla. Lo que sigue describe el estado anterior.
+
 Con el usuario desactivado o borrado, su sesión deja de autenticar (401 `NOT_AUTHENTICATED`, también en rutas de tenant), pero la fila de `django_session` y la cookie siguen ahí: si el usuario se reactiva antes de que caduque, la misma cookie vuelve a valer. ADR-003 §2 pide que desactivar revoque las sesiones.
 - F2-03C (#67) la destruye al detectarla, en el mismo middleware que aplica la caducidad. El cierre de todas las sesiones de un usuario al desactivarlo necesita el vínculo usuario-sesión (E01-07, E01-11).
 

@@ -43,7 +43,7 @@ from core.api.permissions import Authenticated, Public
 from core.tenancy.middleware import TENANT_PATH
 from core.tenancy.scope import tenant_scope
 from tests import urls as legacy_urls
-from tests.factories import TEST_PASSWORD
+from tests.factories import TEST_PASSWORD, sign_in
 from tests.tenancy_app.models import Widget
 from tests.test_access import NEW_PERMISSION
 from tests.test_authorization import VIEW, give, world  # noqa: F401 — `world` es una fixture
@@ -53,7 +53,8 @@ pytestmark = [pytest.mark.usefixtures("tenant_db"), pytest.mark.urls(__name__)]
 MANAGE = "widgets.manage"  # segundo permiso de prueba con alcance
 TENANT = "api/v1/o/<slug:org_slug>/"
 PLATFORM = frozenset(  # rutas de plataforma del proyecto: otra frontera (ADR-014 §4)
-    {"api/schema/"} | {f"api/v1/auth/{name}/" for name in ("csrf", "login", "session")}
+    {"api/schema/", "api/v1/me/organizations/"}
+    | {f"api/v1/auth/{name}/" for name in ("csrf", "login", "logout", "session")}
 )
 PREFIX = "api/v1/o/"  # las rutas de tenant, como `TENANT_PATH` en el middleware
 API = "api/"  # todo lo que hay debajo es contrato: o es de tenant o figura en `PLATFORM`
@@ -456,7 +457,7 @@ def api(
                 insert + "VALUES (%s, %s, %s, %s)", [ids[name], base_world.a, name, owner]
             )
         client = Client()
-        client.force_login(base_world.ana)
+        sign_in(client, base_world.ana)
         yield SimpleNamespace(**vars(base_world), **ids, client=client)
     finally:
         drop()
@@ -616,7 +617,7 @@ def test_custom_role_and_renamed_owner_count_only_by_their_grants(api: Any) -> N
 def test_platform_staff_gets_no_bypass_and_platform_routes_are_excluded_by_route(api: Any) -> None:
     staff = User.objects.create_superuser("ops@example.com", TEST_PASSWORD)
     client = Client()
-    client.force_login(staff)
+    sign_in(client, staff)
     for target in (url(), detail(api.mine), url("members/"), url("undeclared/")):
         assert send(client, "GET", target) == (404, b'{"code":"NOT_FOUND"}')  # sin membresía
     membership = join(api.a, staff)

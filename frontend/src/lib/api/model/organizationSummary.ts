@@ -6,9 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export * from "./error";
-export * from "./errorFields";
-export * from "./loginRequest";
-export * from "./organizationSummary";
-export * from "./session";
-export * from "./user";
+export interface OrganizationSummary {
+  id: string;
+  slug: string;
+  name: string;
+}

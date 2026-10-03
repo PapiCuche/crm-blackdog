@@ -1,15 +1,17 @@
 """Acceso por sesión (F2-03A; ADR-003 §2, ADR-013 §5, ADR-014 §3).
 
-`login` es una operación de plataforma: ocurre antes de elegir organización, no abre
-`tenant_scope` y se audita en `platform_audit_logs`.
+`login` y `logout` son operaciones de plataforma: ocurren antes de elegir organización, no
+abren `tenant_scope` y se auditan en `platform_audit_logs`.
 """
 
 import ipaddress
 import logging
+import time
 from typing import Any
 
 from django.contrib.auth import SESSION_KEY, authenticate
 from django.contrib.auth import login as django_login
+from django.contrib.auth import logout as django_logout
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.http import HttpRequest
@@ -23,6 +25,8 @@ from core.observability import reporting
 
 logger = logging.getLogger(__name__)
 INVALID_CREDENTIALS = "INVALID_CREDENTIALS"
+AUTH_AT = "auth_at"  # cuándo se inició la sesión: límite absoluto (ADR-003 §2)
+SEEN_AT = "seen_at"  # última renovación de la caducidad por inactividad
 
 
 def _client(request: HttpRequest) -> dict[str, Any]:
@@ -34,6 +38,16 @@ def _client(request: HttpRequest) -> dict[str, Any]:
     except ValueError:
         remote = ""
     return {"ip": remote or None, "user_agent": request.META.get("HTTP_USER_AGENT")}
+
+
+def _unaudited(error: Exception, action: str) -> None:
+    """ADR-013 §5: un evento de acceso que no se pudo auditar va al log y al reporte de errores,
+    solo con el nombre de la acción (nunca el identificador). Nada de esto cambia la respuesta."""
+    logger.exception("%s sin auditar", action)
+    try:
+        reporting.reporter().capture_exception(error, {"action": action})
+    except Exception:
+        logger.exception("%s: no se pudo reportar", action)
 
 
 def _audit_failure(email: str, client: dict[str, Any]) -> None:
@@ -58,11 +72,7 @@ def _audit_failure(email: str, client: dict[str, Any]) -> None:
             **client,
         )
     except Exception as error:  # nada de la auditoría cambia la respuesta de un acceso rechazado
-        logger.exception("auth.login.failed sin auditar")
-        try:  # ADR-013 §5: también al reporte de errores; solo la acción, nunca el identificador
-            reporting.reporter().capture_exception(error, {"action": "auth.login.failed"})
-        except Exception:
-            logger.exception("auth.login.failed: no se pudo reportar")
+        _unaudited(error, "auth.login.failed")
 
 
 def login(request: HttpRequest, *, email: str, password: str) -> User:
@@ -78,7 +88,18 @@ def login(request: HttpRequest, *, email: str, password: str) -> User:
         if SESSION_KEY in request.session:  # ya autenticada: `django_login` conservaría su ID
             request.session.clear()  # vacía: la clave nueva se crea antes de borrar la anterior
         django_login(request, user)  # rota el ID de sesión y el token CSRF
+        request.session[AUTH_AT] = request.session[SEEN_AT] = int(time.time())
         platform.record(
             "auth.login.succeeded", actor_type=platform.Actor.USER, actor_id=user.pk, **client
         )
     return user
+
+
+def logout(request: HttpRequest) -> None:
+    """Cierra la sesión y después audita: un fallo de auditoría nunca la mantiene viva."""
+    user_id, client = request.user.pk, _client(request)
+    django_logout(request)  # borra la fila de la sesión
+    try:
+        platform.record("auth.logout", actor_type=platform.Actor.USER, actor_id=user_id, **client)
+    except Exception as error:
+        _unaudited(error, "auth.logout")

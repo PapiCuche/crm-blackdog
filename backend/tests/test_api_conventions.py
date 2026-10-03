@@ -28,6 +28,7 @@ from core.api.middleware import API_CSP
 from core.api.permissions import Authenticated, Public
 from core.api.schema import errors
 from tests import test_access_api, test_authorization
+from tests.factories import sign_in
 from tests.tenancy_app.models import Widget
 from tests.test_access_api import MANAGE, TENANT, WidgetDetail, WidgetList, detail, url
 from tests.test_authorization import VIEW, give
@@ -288,7 +289,7 @@ def test_a_tenant_request_that_ends_in_error_writes_nothing(
 ) -> None:
     give(api.a, api.membership, {MANAGE: "ORGANIZATION"})
     client = Client(raise_request_exception=False)
-    client.force_login(api.ana)
+    sign_in(client, api.ana)
 
     def written() -> tuple[int, ...]:
         tables = ("tenancy_app_widget", "outbox_events", "audit_logs")
@@ -386,7 +387,7 @@ def test_html_errors_are_rewritten_with_clean_headers(api: Any) -> None:
 def test_unsafe_methods_need_a_csrf_token_with_or_without_session(api: Any) -> None:
     give(api.a, api.membership, {VIEW: "ORGANIZATION", MANAGE: "ORGANIZATION"})
     anonymous, member = Client(enforce_csrf_checks=True), Client(enforce_csrf_checks=True)
-    member.force_login(api.ana)
+    sign_in(member, api.ana)
     for client in (anonymous, member):
         failed = post(client, "/api/v1/notes/", {"title": "ok", "size": 1})
         assert reply(failed) == CSRF_FAILED and failed.headers["Content-Security-Policy"] == API_CSP
@@ -422,7 +423,7 @@ def test_only_a_trusted_origin_passes_and_a_rejection_is_logged(
     local = importlib.import_module("config.settings.local")
     assert "http://localhost:3000" in local.CSRF_TRUSTED_ORIGINS
     client = Client(enforce_csrf_checks=True, headers={"host": "127.0.0.1:8000"})
-    client.force_login(api.ana)
+    sign_in(client, api.ana)
     token, note = with_token(client), {"title": "ok", "size": 1}
     trusted = post(client, "/api/v1/notes/", note, {"Origin": "http://localhost:3000", **token})
     assert trusted.status_code == 201
@@ -436,7 +437,7 @@ def test_only_a_trusted_origin_passes_and_a_rejection_is_logged(
 
 def test_the_csrf_token_travels_only_in_the_header_and_the_body_is_not_read(api: Any) -> None:
     client = Client(enforce_csrf_checks=True)
-    client.force_login(api.ana)
+    sign_in(client, api.ana)
     token = with_token(client)
     form = client.post("/api/v1/notes/", {"csrfmiddlewaretoken": TOKEN, "title": "ok"})
     assert reply(form) == CSRF_FAILED  # el campo de formulario no vale: solo la cabecera
@@ -456,7 +457,7 @@ def test_the_csrf_token_travels_only_in_the_header_and_the_body_is_not_read(api:
 
 def test_a_drf_view_outside_the_api_prefix_refuses_unsafe_methods(api: Any) -> None:
     anonymous, client = Client(enforce_csrf_checks=True), Client(enforce_csrf_checks=True)
-    client.force_login(api.ana)
+    sign_in(client, api.ana)
     assert client.get("/outside/notes/").status_code == 200
     for sender in (anonymous, client):  # con sesión o sin ella
         for headers in (None, with_token(sender)):  # ni con token: fuera de /api/ no hay control
@@ -486,6 +487,7 @@ def test_no_session_is_401_and_platform_classes_never_authorize_a_tenant(api: An
     type(api.ana).objects.filter(pk=api.ana.pk).update(is_active=False)
     assert api.client.get("/api/v1/auth/session/").status_code == 401  # usuario desactivado
     type(api.ana).objects.filter(pk=api.ana.pk).update(is_active=True)
+    sign_in(api.client, api.ana)  # la sesión anterior se destruyó al detectarla
     assert reply(api.client.get(url("public/"))) == (403, b'{"code":"PERMISSION_DENIED"}')
     tenant = Client().get(url("public/"))  # el 401 del middleware es el mismo que el de DRF
     assert reply(tenant) == reply(anonymous)

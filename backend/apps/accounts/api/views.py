@@ -47,6 +47,20 @@ class LoginView(APIView):
         return Response(_session(request))
 
 
+class LogoutView(APIView):
+    permission_classes = [Authenticated]
+
+    @extend_schema(
+        operation_id="auth_logout",
+        tags=["auth"],
+        request=None,
+        responses={204: None, **errors(401, 403)},
+    )
+    def post(self, request: Request) -> Response:
+        services.logout(request._request)
+        return Response(status=204)
+
+
 class SessionView(APIView):
     permission_classes = [Authenticated]
 
