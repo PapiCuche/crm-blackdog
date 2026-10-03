@@ -34,7 +34,7 @@ from rest_framework.views import APIView
 import config.urls
 from apps.access.catalog import BY_CODE, PermissionDef
 from apps.access.models import MembershipRole, Role, RolePermission
-from apps.access.permissions import HasPermission, ScopeFilter
+from apps.access.permissions import HasPermission, IsMember, ScopeFilter
 from apps.access.services import clone_role_templates
 from apps.accounts.models import User
 from apps.organizations.models import OrganizationMembership
@@ -56,6 +56,7 @@ PLATFORM = frozenset(  # rutas de plataforma del proyecto: otra frontera (ADR-01
     {"api/schema/", "api/v1/me/organizations/"}
     | {f"api/v1/auth/{name}/" for name in ("csrf", "login", "logout", "session")}
 )
+MEMBER = frozenset({TENANT + "me/"})  # rutas de tenant abiertas a todo miembro activo (F2-11)
 PREFIX = "api/v1/o/"  # las rutas de tenant, como `TENANT_PATH` en el middleware
 API = "api/"  # todo lo que hay debajo es contrato: o es de tenant o figura en `PLATFORM`
 DYNAMIC = re.compile(r"^.*\||.?[?*{]|[<(\[\\.+]")  # donde una ruta deja de ser texto literal
@@ -171,8 +172,41 @@ class OwnAuthentication(Members):
         """No autentica."""
 
 
+class MemberWrites(Members):
+    permission_classes = [IsMember]
+
+    def post(self, request: Any, **kwargs: Any) -> Response:
+        return Response({"ok": True})
+
+
+class MemberHead(Members):
+    permission_classes = [IsMember]
+
+    def head(self, request: Any, **kwargs: Any) -> Response:
+        return Response()
+
+
+class MemberSet(viewsets.ViewSet):
+    permission_classes = [IsMember]
+
+    def list(self, request: Any, **kwargs: Any) -> Response:
+        return Response({"ok": True})
+
+    def other(self, request: Any, **kwargs: Any) -> Response:
+        return Response()
+
+
+class LaxMember(IsMember):
+    """Una subclase no es `IsMember`: puede aflojar la regla."""
+
+
 def plain(request: Any) -> HttpResponse:
     return HttpResponse("ok")
+
+
+def member_view(**initkwargs: Any) -> Any:
+    """La vista de solo membresía que cumple."""
+    return Members.as_view(permission_classes=[IsMember], **initkwargs)
 
 
 secure = [
@@ -181,10 +215,19 @@ secure = [
     path(TENANT + "widgets/<uuid:pk>/described/", Described.as_view()),
     path(TENANT + "members/", Members.as_view()),
     path(TENANT + "documented/", Documented.as_view()),
+    path(TENANT + "self/", member_view()),
     path("api/platform/open/", Open.as_view()),
     path("api/v1/auth/session/", Members.as_view(permission_classes=[Authenticated])),
 ]
 SECURE_PLATFORM = frozenset({"api/platform/open/", "api/v1/auth/session/"})
+# Rutas de solo membresía: `self/` cumple; las otras figuran en la lista y aun así fallan.
+MEMBERS_ONLY = frozenset(
+    TENANT + f"self{name}/"
+    for name in (
+        "", "-writes", "-list", "-perm", "-dup", "-plain", "-head", "-set-head", "-sub", "-both",
+        "-hook", "-noauth", "-cached", "-handler",
+    )
+)  # fmt: skip
 # Rutas de plataforma listadas que aun así no cumplen: la lista no las salva.
 LISTED = frozenset(
     {"api/platform/any/", "api/platform/both/", "api/platform/noauth/", "api/v1/auth/plain/"}
@@ -262,6 +305,38 @@ FLAWED: list[tuple[Any, str]] = [  # ruta y motivo que debe dar la auditoría
         path("api/platform/own-auth/", OwnAuthentication.as_view(permission_classes=[Public])),
         "redefine perform_authentication",
     ),
+    # F2-11: `IsMember` solo vale en una ruta listada, de solo lectura y sin queryset.
+    (path(TENANT + "kw-member/", Members.as_view(permission_classes=[IsMember])), "sin Has"),
+    (path(TENANT + "self-writes/", MemberWrites.as_view()), "solo lee"),
+    (path(TENANT + "self-list/", WidgetList.as_view(permission_classes=[IsMember])), "solo lee"),
+    (path(TENANT + "self-perm/", Members.as_view()), "sin IsMember"),
+    (path(TENANT + "self-sub/", Members.as_view(permission_classes=[LaxMember])), "sin IsMember"),
+    (
+        path(TENANT + "self-both/", Members.as_view(permission_classes=[IsMember, AllowAny])),
+        "sin IsMember",  # exactamente `[IsMember]`: ni acompañada
+    ),
+    (path(TENANT + "self-head/", MemberHead.as_view()), "HEAD propio"),
+    (
+        path(TENANT + "self-set-head/", MemberSet.as_view({"get": "list", "head": "other"})),
+        "HEAD propio",
+    ),
+    # La primera que casa responde también aquí: la gemela correcta no borra el motivo.
+    (path(TENANT + "self-dup/", MemberWrites.as_view()), "solo lee"),
+    (path(TENANT + "self-plain/", plain), "no es una vista de DRF"),
+    # Y las reglas comunes a toda vista valen igual con `IsMember`.
+    (
+        path(TENANT + "self-hook/", OwnPermissions.as_view(permission_classes=[IsMember])),
+        "redefine get_permissions",
+    ),
+    (
+        path(TENANT + "self-noauth/", member_view(authentication_classes=[])),
+        "autenticación",
+    ),
+    (path(TENANT + "self-cached/", cache_page(300)(member_view())), "decorador"),
+    (
+        path(TENANT + "self-handler/", CachedHandler.as_view(permission_classes=[IsMember])),
+        "manejador decorado",
+    ),
     # Rutas que pueden casar con `TENANT_PATH` sin empezar por el prefijo literal:
     (path("api/<str:version>/o/<slug:org_slug>/dynamic/", Open.as_view()), "ruta dinámica"),
     (re_path(r"^apis?/v1/o/(?P<org_slug>[-\w]+)/optional/$", Open.as_view()), "ruta dinámica"),
@@ -275,6 +350,8 @@ urlpatterns = [
     *secure,
     *(entry for entry, _ in FLAWED),
     path("api/platform/dup/", Open.as_view()),  # la gemela correcta de `dup/`, que nunca responde
+    path(TENANT + "self-dup/", member_view()),  # y las de las rutas de solo membresía
+    path(TENANT + "self-plain/", member_view()),
 ]
 
 
@@ -289,7 +366,9 @@ def routes(patterns: Any, prefix: str = "") -> Iterator[tuple[str, Any]]:
             yield route + (".*" if regex and not text.endswith("$") else ""), entry.callback
 
 
-def insecure(patterns: Any, platform: frozenset[str]) -> dict[str, str]:
+def insecure(
+    patterns: Any, platform: frozenset[str], member: frozenset[str] = frozenset()
+) -> dict[str, str]:
     """Auditoría del URLconf: `{ruta: motivo}` de cada ruta que no puede llegar a `main`.
 
     Una ruta de tenant debe ser una vista de DRF con `HasPermission`, un permiso del catálogo
@@ -299,8 +378,9 @@ def insecure(patterns: Any, platform: frozenset[str]) -> dict[str, str]:
     que figurar en `platform`, y su ruta debe apartarse de `api/v1/o/` en su parte literal, antes
     de cualquier segmento dinámico (por exceso: un router de plataforma va bajo su propio prefijo).
     Es estática: una vista que consulte por su cuenta debe usar `scoped()` (OBS-F2-05B-2).
+    `member` son las rutas de tenant que solo exigen ser miembro activo (`IsMember`).
     """
-    found = dict.fromkeys(platform, STALE)
+    found = dict.fromkeys(platform | member, STALE)
     for route, callback in routes(patterns):
         cls: Any = getattr(callback, "cls", None)
         drf = isinstance(cls, type) and issubclass(cls, APIView)
@@ -321,6 +401,11 @@ def insecure(patterns: Any, platform: frozenset[str]) -> dict[str, str]:
                 del found[route]  # solo la marca de obsoleta: un motivo ya escrito no se borra
         elif not drf:
             found[route] = "no es una vista de DRF"
+        elif route in member:
+            if reason := member_flaw(callback):
+                found[route] = reason
+            elif found.get(route) == STALE:
+                del found[route]  # solo la marca de obsoleta, como en plataforma
         elif not uses(effective(callback, "permission_classes"), HasPermission):
             found[route] = "sin HasPermission"
         elif reason := view_flaw(callback):
@@ -350,6 +435,20 @@ def platform_flaw(callback: Any, drf: bool) -> str | None:
         return "no es una vista de DRF"
     if effective(callback, "permission_classes") not in ([Public], [Authenticated]):
         return "sin una clase de plataforma (Public o Authenticated)"
+    return view_flaw(callback)
+
+
+def member_flaw(callback: Any) -> str | None:
+    """Una ruta de tenant abierta a todo miembro activo: solo lee el contexto propio."""
+    if effective(callback, "permission_classes") != [IsMember]:
+        return "sin IsMember"
+    if implemented(callback) != {"GET"} or issubclass(callback.cls, generics.GenericAPIView):
+        return "una ruta de solo membresía solo lee el contexto propio: GET y sin queryset"
+    actions = getattr(callback, "actions", None) or {}  # DRF añade `head` al atender: se compara
+    if hasattr(callback.cls, "head") or actions.get("head", actions.get("get")) != actions.get(
+        "get"
+    ):
+        return "una ruta de solo membresía solo lee el contexto propio: HEAD propio"
     return view_flaw(callback)
 
 
@@ -481,11 +580,17 @@ def test_engine_denies_what_a_lax_resolver_lets_through(api: Any, settings: Any)
     settings.TENANCY_MEMBERSHIP_RESOLVER = f"{__name__}.anyone"
     give(api.a, api.membership, {VIEW: "ORGANIZATION"})
     assert api.client.get(url()).status_code == 200
+    assert api.client.get(url("self/")).status_code == 200  # IsMember: basta la membresía activa
+    assert api.client.head(url("self/")).status_code == 200
+    for method in ("OPTIONS", "POST", "PUT", "PATCH", "DELETE"):
+        assert send(api.client, method, url("self/"))[0] == 403, method  # y solo lee
+        assert send(api.client, method, url("self/", org="org-b"))[0] == 404, method
+    assert api.client.get(url("self/", org="org-b")).status_code == 404
     assert api.client.get(url(org="org-b")).status_code == 404  # sin membresía en B
     assert api.client.get(url("undeclared/", org="org-b")).status_code == 404  # y no 403
     with tenant_scope(ctx(api.a)):
         OrganizationMembership.objects.update(status="SUSPENDED")
-    targets = (url(), detail(api.mine), detail(uuid4()))
+    targets = (url(), detail(api.mine), detail(uuid4()), url("self/"))
     replies = {send(api.client, "GET", target) for target in targets}
     assert len(replies) == 1 and replies.pop()[0] == 404  # suspendida: como si no existiera
 
@@ -577,6 +682,7 @@ def test_object_check_is_a_second_barrier_and_nothing_passes_without_tenant(api:
         none = ScopeFilter().filter_queryset(get, Widget.objects.all(), Undeclared())
         assert none.query.is_empty()  # sin declaración, ninguna fila
     assert not HasPermission().has_permission(get, WidgetList())  # sin contexto de tenant
+    assert not IsMember().has_permission(get, Members())  # tampoco la de solo membresía
     assert not check(get, WidgetDetail(), mine)
     none = ScopeFilter().filter_queryset(get, Widget._base_manager.all(), WidgetList())
     assert none.query.is_empty()
@@ -633,18 +739,19 @@ def test_platform_staff_gets_no_bypass_and_platform_routes_are_excluded_by_route
 
 
 def test_every_tenant_route_declares_its_permissions(api: Any) -> None:
-    assert insecure(config.urls.urlpatterns, PLATFORM) == {}  # el proyecto real
-    assert insecure(secure, SECURE_PLATFORM) == {}
+    assert insecure(config.urls.urlpatterns, PLATFORM, MEMBER) == {}  # el proyecto real
+    assert insecure(secure, SECURE_PLATFORM, frozenset({TENANT + "self/"})) == {}
     assert TENANT_PATH.match("/api/v1/o/org-a/") and not TENANT_PATH.match("/api/v1/x/org-a/")
 
 
 def test_audit_flags_every_insecure_route(api: Any) -> None:
-    found = insecure(urlpatterns, SECURE_PLATFORM | LISTED)
+    found = insecure(urlpatterns, SECURE_PLATFORM | LISTED, MEMBERS_ONLY)
     flawed = {route: reason for entry, reason in FLAWED for route, _ in routes([entry])}
     assert set(found) == set(flawed) and len(flawed) == len(FLAWED)
     for route, reason in flawed.items():
         assert reason in found[route], route
-    legacy = insecure(legacy_urls.urlpatterns, PLATFORM)  # vistas de Django tras un `include()`
+    legacy = insecure(legacy_urls.urlpatterns, PLATFORM, MEMBER)  # vistas de Django en `include()`
     assert len(legacy) == 2 and set(legacy.values()) == {"no es una vista de DRF"}
-    stale = insecure(config.urls.urlpatterns, PLATFORM | {"ya/no/existe/"})
-    assert stale == {"ya/no/existe/": "exclusión de plataforma obsoleta"}
+    gone = TENANT + "ya-no/"  # una exclusión que ya no corresponde a ninguna ruta se retira
+    stale = insecure(config.urls.urlpatterns, PLATFORM | {"ya/no/existe/"}, MEMBER | {gone})
+    assert stale == {"ya/no/existe/": STALE, gone: STALE}

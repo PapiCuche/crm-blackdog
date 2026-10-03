@@ -71,6 +71,18 @@ class HasPermission(BasePermission):
         return True
 
 
+class IsMember(BasePermission):
+    """Cualquier membresía activa, sin permiso del catálogo. Solo para leer el contexto propio
+    (`GET …/me/`): la vista que la use no puede servir datos del tenant más allá de la propia
+    membresía ni aceptar escrituras, y su ruta figura en `MEMBER` de la auditoría del URLconf.
+
+    La membresía se mira primero: sin ella la respuesta es 404 con cualquier método, como en
+    el resto de las rutas de tenant. Con ella solo pasan `GET` y su `HEAD`."""
+
+    def has_permission(self, request: Any, view: Any) -> bool:
+        return request_context(request) is not None and request.method in ("GET", "HEAD")
+
+
 class ScopeFilter(BaseFilterBackend):
     """Listados y `get_object()`: solo las filas dentro del alcance, filtradas en SQL."""
 

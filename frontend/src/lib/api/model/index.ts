@@ -8,7 +8,13 @@
 
 export * from "./error";
 export * from "./errorFields";
+export * from "./grant";
 export * from "./loginRequest";
+export * from "./memberOrganization";
+export * from "./memberUser";
 export * from "./organizationSummary";
+export * from "./roleName";
+export * from "./scopesEnum";
+export * from "./selfContext";
 export * from "./session";
 export * from "./user";

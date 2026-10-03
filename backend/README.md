@@ -166,7 +166,7 @@ class ContactDetail(generics.RetrieveUpdateAPIView):
 
 Las vistas de plataforma son las rutas fuera de `/api/v1/o/<slug>/`. Se excluyen por la ruta, nunca por el actor: declaran sus propias `permission_classes` (y `filter_backends` si son genéricas: sin tenant, `ScopeFilter` devuelve vacío) y se añaden a `PLATFORM` en `tests/test_access_api.py`. Ser staff de plataforma no abre ninguna ruta de tenant.
 
-Ese test recorre todo el URLconf y falla si una ruta de tenant no es una vista de DRF con `HasPermission`, un permiso del catálogo por cada método que implementa y, si es genérica, `ScopeFilter`, o si aparece una vista de DRF de plataforma que no está en `PLATFORM`. Mira lo que usa cada ruta (también `as_view(...)` y `@action(...)`). Exige las dos clases tal cual: una subclase o una composición (`A | B`) se rechazan y se revisan a mano. Rechaza también las vistas que redefinen `get_permissions`, `check_permissions`, `permission_denied`, `initial` o `dispatch`, las genéricas que redefinen `get_object` o `filter_queryset`, y las envueltas en un decorador (`cache_page`, por ejemplo). Una ruta fuera de `api/v1/o/` que pueda casar con una ruta de tenant (segmento dinámico antes del prefijo, o `re_path` sin `^`) también falla. Es una auditoría estática: no sustituye a la revisión de una vista con consultas o escrituras propias.
+Ese test recorre todo el URLconf y falla si una ruta de tenant no es una vista de DRF con `HasPermission`, un permiso del catálogo por cada método que implementa y, si es genérica, `ScopeFilter` (salvo las rutas listadas en `MEMBER`, que declaran `IsMember`: ver «Contexto propio en una organización»), o si aparece una vista de DRF de plataforma que no está en `PLATFORM`. Mira lo que usa cada ruta (también `as_view(...)` y `@action(...)`). Exige las dos clases tal cual: una subclase o una composición (`A | B`) se rechazan y se revisan a mano. Rechaza también las vistas que redefinen `get_permissions`, `check_permissions`, `permission_denied`, `initial` o `dispatch`, las genéricas que redefinen `get_object` o `filter_queryset`, y las envueltas en un decorador (`cache_page`, por ejemplo). Una ruta fuera de `api/v1/o/` que pueda casar con una ruta de tenant (segmento dinámico antes del prefijo, o `re_path` sin `^`) también falla. Es una auditoría estática: no sustituye a la revisión de una vista con consultas o escrituras propias.
 
 `HasPermission` comprueba además cada objeto que pase por `check_object_permissions` y responde 404. Es una red de seguridad, no un sustituto de `scoped()`: su cuerpo puede diferir del de un objeto inexistente.
 
@@ -244,6 +244,28 @@ La auditoría del URLconf falla si:
 - **Mis organizaciones.** No abre `tenant_scope`: lee las membresías del propio usuario dentro de `user_scope` (ADR-002 §3.2). No devuelve roles ni permisos: eso es `GET /api/v1/o/{slug}/me/` (F2-11).
 - **Purga.** `accounts.purge_expired_sessions` (tarea de plataforma, una vez al día a hora fija en beat) borra las filas caducadas de `django_session`.
 - **En tests:** `tests.factories.sign_in(client, user)` en lugar de `client.force_login(user)`, que no pone la marca de inicio.
+
+## Contexto propio en una organización (F2-11, ADR-003 §5)
+
+`GET /api/v1/o/{slug}/me/` responde quién es el usuario en esa organización y qué puede hacer. La interfaz lo usa para construir la navegación. **Informa, no autoriza:** cada ruta sigue comprobando su permiso.
+
+```json
+{
+  "user": {"id": "…", "email": "ana@acme.pe", "first_name": "Ana", "last_name": "López"},
+  "organization": {"id": "…", "slug": "acme", "name": "Acme SAC"},
+  "membership_id": "…",
+  "roles": [{"code": "seller", "name": "Vendedor"}],
+  "permissions": [{"code": "organization.view", "scopes": []}]
+}
+```
+
+- **Permisos efectivos:** la unión de las concesiones de todos los roles de la membresía, leída en la propia petición (sin caché: un cambio de rol se ve en la siguiente). Van ordenados por código.
+- **`scopes`:** vacío significa que el permiso no admite alcance. Si lo admite, trae los alcances concedidos en orden alfabético (`BRANCH`, `ORGANIZATION`, `OWN`, `TEAM`); con varios roles, la unión. El catálogo actual no tiene permisos con alcance: llegan con los módulos de negocio.
+- **Roles:** solo código y nombre, para mostrar, ordenados por nombre y luego por código. El código es la clave de la lista (el nombre no es único en la organización) y no identifica al rol Owner: en una organización cuyo rol Owner tenga otro código, un rol propio puede llamarse `owner`. La marca de Owner (`is_owner_role`) no sale. La interfaz decide qué mostrar por `permissions`, nunca por el rol.
+- **Quién lo lee:** cualquier miembro activo, también sin roles (recibe listas vacías). La clase es `apps.access.permissions.IsMember`, no `HasPermission`: no hay un permiso del catálogo para "leer mi propio contexto".
+- **`IsMember` está acotada:** solo admite `GET` (y su `HEAD`); `OPTIONS` y las escrituras responden 403. La auditoría del URLconf solo la acepta en las rutas listadas en `MEMBER` (`tests/test_access_api.py`), en vistas no genéricas, que solo atienden `GET` y que no redefinen los ganchos de DRF. Fuera de esa lista, una vista de tenant sin `HasPermission` falla el test.
+- **Lo que la auditoría no ve:** es estática. No detecta una consulta escrita a mano dentro del manejador. Tampoco ve una vista que redefina `setup` o `http_method_not_allowed` para atender otro método. Una vista de `MEMBER` solo puede leer el contexto de ejecución, la organización de ese contexto, los roles de la propia membresía (código y nombre) y `request.user`; eso se revisa en el PR que añade la ruta.
+- Sin sesión, 401; sin membresía activa, en otra organización o con un slug inexistente, el mismo 404 con cualquier método; escribir siendo miembro, 403.
 
 ## Cambios de RBAC sin escalada (F2-05C, ADR-003 §5)
 

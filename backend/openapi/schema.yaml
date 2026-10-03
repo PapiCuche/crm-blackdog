@@ -121,6 +121,47 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
           description: ''
+  /api/v1/o/{org_slug}/me/:
+    get:
+      operationId: me_context
+      description: |-
+        Quién es el usuario en esta organización y qué puede hacer. Informa: no autoriza. La
+        interfaz lo usa para construir la navegación; cada ruta sigue comprobando su permiso.
+      parameters:
+      - in: path
+        name: org_slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - me
+      security:
+      - sessionCookie: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SelfContext'
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+        '403':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+          description: ''
 components:
   schemas:
     Error:
@@ -138,6 +179,19 @@ components:
           description: 'Solo en VALIDATION_ERROR: errores por campo (`_`: generales).'
       required:
       - code
+    Grant:
+      type: object
+      properties:
+        code:
+          type: string
+        scopes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScopesEnum'
+          description: Alcances concedidos. Vacío si el permiso no admite alcance.
+      required:
+      - code
+      - scopes
     LoginRequest:
       type: object
       properties:
@@ -153,6 +207,37 @@ components:
       required:
       - email
       - password
+    MemberOrganization:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        name:
+          type: string
+      required:
+      - id
+      - name
+      - slug
+    MemberUser:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        first_name:
+          type: string
+        last_name:
+          type: string
+      required:
+      - email
+      - first_name
+      - id
+      - last_name
     OrganizationSummary:
       type: object
       properties:
@@ -167,6 +252,53 @@ components:
       - id
       - name
       - slug
+    RoleName:
+      type: object
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+      required:
+      - code
+      - name
+    ScopesEnum:
+      enum:
+      - OWN
+      - TEAM
+      - BRANCH
+      - ORGANIZATION
+      type: string
+      description: |-
+        * `OWN` - Own
+        * `TEAM` - Team
+        * `BRANCH` - Branch
+        * `ORGANIZATION` - Organization
+    SelfContext:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/MemberUser'
+        organization:
+          $ref: '#/components/schemas/MemberOrganization'
+        membership_id:
+          type: string
+          format: uuid
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoleName'
+          description: 'Solo para mostrar: no autorizan nada.'
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Grant'
+      required:
+      - membership_id
+      - organization
+      - permissions
+      - roles
+      - user
     Session:
       type: object
       properties:

@@ -21,7 +21,7 @@ import type {
   UseQueryResult,
 } from "@tanstack/react-query";
 
-import type { Error, LoginRequest, OrganizationSummary, Session } from "./model";
+import type { Error, LoginRequest, OrganizationSummary, SelfContext, Session } from "./model";
 
 import { apiFetch } from "../http";
 import type { ErrorType } from "../http";
@@ -511,6 +511,128 @@ export function useMeOrganizations<
   queryClient?: QueryClient,
 ): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
   const queryOptions = getMeOrganizationsQueryOptions(options);
+
+  const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export const getMeContextUrl = (orgSlug: string) => {
+  return `/api/v1/o/${orgSlug}/me/`;
+};
+
+/**
+ * Quién es el usuario en esta organización y qué puede hacer. Informa: no autoriza. La
+ * interfaz lo usa para construir la navegación; cada ruta sigue comprobando su permiso.
+ */
+export const meContext = async (
+  orgSlug: string,
+  options?: Parameters<typeof apiFetch>[1],
+): Promise<SelfContext> => {
+  return apiFetch<SelfContext>(getMeContextUrl(orgSlug), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getMeContextQueryKey = (orgSlug: string) => {
+  return [`/api/v1/o/${orgSlug}/me/`] as const;
+};
+
+export const getMeContextQueryOptions = <
+  TData = Awaited<ReturnType<typeof meContext>>,
+  TError = ErrorType<Error>,
+>(
+  orgSlug: string,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof meContext>>, TError, TData>>;
+    request?: SecondParameter<typeof apiFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getMeContextQueryKey(orgSlug);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof meContext>>> = ({ signal }) =>
+    meContext(orgSlug, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: orgSlug !== null && orgSlug !== undefined,
+    ...queryOptions,
+  } as UseQueryOptions<Awaited<ReturnType<typeof meContext>>, TError, TData> & {
+    queryKey: DataTag<QueryKey, TData, TError>;
+  };
+};
+
+export type MeContextQueryResult = NonNullable<Awaited<ReturnType<typeof meContext>>>;
+export type MeContextQueryError = ErrorType<Error>;
+
+export function useMeContext<
+  TData = Awaited<ReturnType<typeof meContext>>,
+  TError = ErrorType<Error>,
+>(
+  orgSlug: string,
+  options: {
+    query: Partial<UseQueryOptions<Awaited<ReturnType<typeof meContext>>, TError, TData>> &
+      Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof meContext>>,
+          TError,
+          Awaited<ReturnType<typeof meContext>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof apiFetch>;
+  },
+  queryClient?: QueryClient,
+): DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useMeContext<
+  TData = Awaited<ReturnType<typeof meContext>>,
+  TError = ErrorType<Error>,
+>(
+  orgSlug: string,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof meContext>>, TError, TData>> &
+      Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof meContext>>,
+          TError,
+          Awaited<ReturnType<typeof meContext>>
+        >,
+        "initialData"
+      >;
+    request?: SecondParameter<typeof apiFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+export function useMeContext<
+  TData = Awaited<ReturnType<typeof meContext>>,
+  TError = ErrorType<Error>,
+>(
+  orgSlug: string,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof meContext>>, TError, TData>>;
+    request?: SecondParameter<typeof apiFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+export function useMeContext<
+  TData = Awaited<ReturnType<typeof meContext>>,
+  TError = ErrorType<Error>,
+>(
+  orgSlug: string,
+  options?: {
+    query?: Partial<UseQueryOptions<Awaited<ReturnType<typeof meContext>>, TError, TData>>;
+    request?: SecondParameter<typeof apiFetch>;
+  },
+  queryClient?: QueryClient,
+): UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+  const queryOptions = getMeContextQueryOptions(orgSlug, options);
 
   const query = useQuery(queryOptions, queryClient) as UseQueryResult<TData, TError> & {
     queryKey: DataTag<QueryKey, TData, TError>;

@@ -19,7 +19,7 @@ from django.core.exceptions import PermissionDenied
 from django.db.models import Model, QuerySet
 
 from apps.access.catalog import BY_CODE, PermissionDef, Scope
-from apps.access.models import RolePermission
+from apps.access.models import Role, RolePermission
 from apps.access.scopes import policy_for
 from core.db.models import TenantModel
 from core.tenancy.context import ActorType, TenantContext, TenantContextError
@@ -146,3 +146,21 @@ def scoped[M: Model](ectx: ExecutionContext, code: str, queryset: QuerySet[M]) -
     if Scope.ORGANIZATION in scopes:
         return queryset
     return queryset.filter(reduce(or_, (policy.q(s, ectx) for s in scopes if s is not None)))
+
+
+def role_names(ectx: ExecutionContext) -> list[dict[str, str]]:
+    """Roles de la membresía, para mostrar. Nunca para decidir: eso son los permisos."""
+    _bound(ectx)
+    roles = Role.objects.using(require_scope(ectx.tenant))
+    held = roles.filter(assignments__membership_id=ectx.membership_id)
+    return list(held.order_by("name", "code").values("code", "name"))
+
+
+def organization_of(ectx: ExecutionContext) -> dict[str, object]:
+    """Identidad de la organización del contexto (tabla platform-owned, sin datos de negocio)."""
+    _bound(ectx)
+    organizations = apps.get_model("organizations", "Organization")._default_manager
+    found: dict[str, object] = organizations.values("id", "slug", "name").get(
+        pk=ectx.tenant.organization_id
+    )
+    return found

@@ -178,6 +178,17 @@ Una cuenta que ya existe debe estar activa y tener contraseña utilizable. Una c
 El login guarda en la auditoría la IP que resuelve el servidor ASGI (`REMOTE_ADDR`); nunca lee una cabecera. `uvicorn --proxy-headers` solo confía en `X-Forwarded-For` si la conexión viene de `FORWARDED_ALLOW_IPS` (por defecto `127.0.0.1`). En el stack de compose el backend recibe las peticiones de Caddy desde otra dirección, así que hoy la IP auditada es la del proxy.
 - F2-03B (#61) lo resuelve: limita los intentos por IP y necesita la del cliente. Configurar `FORWARDED_ALLOW_IPS` con la dirección del proxy, nunca `*` en un backend alcanzable desde fuera.
 
+### OBS-F2-11-1 — `IsMember`: una ruta de tenant sin permiso del catálogo
+`GET /api/v1/o/{slug}/me/` lo lee cualquier miembro activo, también sin roles: no existe un permiso para "leer mi propio contexto" y exigir uno dejaría sin interfaz a quien tenga un rol propio sin él. La vista declara `IsMember` en lugar de `HasPermission`.
+- La auditoría del URLconf la limita: solo en las rutas de `MEMBER`, solo `GET` (y su `HEAD`), en vistas no genéricas y sin redefinir ganchos. Cada ruta nueva en esa lista se justifica en su PR.
+- La auditoría es estática: no ve una consulta escrita a mano en el manejador, ni una vista que redefina `setup` o `http_method_not_allowed` para atender otro método (el mismo punto ciego que en las rutas con `HasPermission`). Una vista de `MEMBER` solo lee el contexto de ejecución, la organización de ese contexto, los roles de la propia membresía (código y nombre) y `request.user`; lo comprueba la revisión del PR.
+- Los roles de la respuesta son etiquetas. El código de un rol no identifica al Owner (si el rol Owner de la organización tiene otro código, un rol propio puede llamarse `owner`): la interfaz decide por `permissions`.
+- La respuesta es una foto de la petición. La interfaz la usa para mostrar u ocultar; la API vuelve a decidir en cada llamada.
+
+### OBS-F2-11-2 — El arnés de aislamiento T7 y las rutas reales
+`test_t7_every_tenant_route_hides_other_tenant` recorre todas las rutas de tenant con un miembro simulado (sin fila en `organization_memberships`). Las rutas reales del proyecto usan la membresía de la tabla y le responden el 404 común; su aislamiento lo prueban sus propios tests con el stack real.
+- Cada ruta de tenant nueva necesita su test de aislamiento con el stack real: el arnés ya no lo da por sí solo.
+
 ### OBS-F2-03C-1 — La caducidad solo se aplica a peticiones HTTP
 `SessionLifetimeMiddleware` es un middleware de Django: una conexión WebSocket (Channels) no pasa por él. Hoy los consumidores reales no existen.
 - El primer consumidor que autentique por sesión debe aplicar las mismas tres reglas al conectar (inactividad, límite absoluto, usuario activo) y cerrar la conexión cuando la sesión deje de valer.
