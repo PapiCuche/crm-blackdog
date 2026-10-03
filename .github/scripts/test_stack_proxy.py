@@ -41,7 +41,7 @@ class StackProxy(unittest.TestCase):
     def test_caddy_replaces_the_header_a_client_sends(self):
         caddyfile = (ROOT / "infra/docker/proxy/Caddyfile").read_text()
         self.assertNotIn("trusted_proxies", caddyfile)  # con ella conservaría la del cliente
-        self.assertNotRegex(caddyfile, r"(?i)header_up\s+X-Forwarded-For")
+        self.assertNotRegex(caddyfile, r"(?i)header_up\s+\S*X-Forwarded-For")  # ni `+` ni `-`
 
 
 if __name__ == "__main__":

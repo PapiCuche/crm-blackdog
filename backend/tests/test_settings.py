@@ -81,7 +81,10 @@ def test_production_loads_with_valid_env(monkeypatch: pytest.MonkeyPatch) -> Non
         {"FORWARDED_ALLOW_IPS": "10.0.0.2/24"},  # bits de host: uvicorn tampoco la entiende
         {"FORWARDED_ALLOW_IPS": "10.0.0.2 10.0.0.3"},
         {"FORWARDED_ALLOW_IPS": '"10.0.0.2"'},
-        {"UVICORN_FORWARDED_ALLOW_IPS": "*"},  # uvicorn la prefiere a la validada
+        {"FORWARDED_ALLOW_IPS": "10.0.0.0/7"},  # más ancha que /8
+        {"FORWARDED_ALLOW_IPS": "fc00::/15"},  # más ancha que /16
+        {"FORWARDED_ALLOW_IPS": "::ffff:10.0.0.2"},  # nunca casaría con el proxy IPv4
+        {"UVICORN_FORWARDED_ALLOW_IPS": "10.0.0.2"},  # uvicorn la prefiere a la validada
     ],
 )
 def test_production_refuses_insecure_or_missing_config(
